@@ -19,6 +19,7 @@ class NfcLinkFlow {
     this.mode = 'scan'; // 'scan' | 'confirm' (waiting for the overwrite answer)
     this.pending = null;
     this.approvedSerial = null;
+    this.reassignFrom = null; // the pet that loses this tag once the user agrees to swap it
     this.bind();
   }
 
@@ -66,6 +67,7 @@ class NfcLinkFlow {
     this.pending = null;
     this.approvedSerial = null;
     this.resumeUid = null;
+    this.reassignFrom = null;
     if (this.abort) this.abort.abort();
     const pet = document.getElementById('nfc-link-pet');
     if (pet) {
@@ -110,6 +112,7 @@ class NfcLinkFlow {
   back() {
     // Cancel on the overwrite question: keep the screen and go back to waiting for a tag
     if (this.mode === 'confirm' || this.approvedSerial !== null) {
+      this.reassignFrom = null;
       this.mode = 'scan';
       this.pending = null;
       this.approvedSerial = null;
@@ -281,6 +284,7 @@ class NfcLinkFlow {
     if (!info) return;
     this.mode = 'scan';
     this.pending = null;
+    if (info.current) this.reassignFrom = info.current; // swap agreed
     // The tag has usually left the phone while the question was open. write() waits for it to come back,
     // so show the tap prompt now and let link() carry on once the tag is there.
     if (!info.simulated && info.writer) {
@@ -289,6 +293,41 @@ class NfcLinkFlow {
       this.setButtons({ start: '', demo: false, back: true, backLabel: this.t('nfc.cancel', 'Cancel') });
     }
     this.link({ ...info, existing: [], confirmed: true, waitForTag: true });
+  }
+
+  // One of the signed-in owner's pets that already uses this tag (by tag ID or hardware serial), or null
+  async ownPetOnTag(client, uid, serial) {
+    for (const [column, value] of [['nfc_tag', uid], ['nfc_serial', serial]]) {
+      if (!value || !client) continue;
+      const { data } = await client.from('registered_pets').select('id, name').ilike(column, value).limit(1);
+      if (data && data[0]) return { id: data[0].id, name: data[0].name };
+    }
+    const local = window.pawStore.getPets().find((p) =>
+      (uid && p.nfcTag && p.nfcTag.toUpperCase() === uid.toUpperCase()) ||
+      (serial && p.nfcSerial && p.nfcSerial.toLowerCase() === serial.toLowerCase()));
+    return local ? { id: local.id, name: local.name } : null;
+  }
+
+  askReassign(info) {
+    this.pending = info;
+    this.mode = 'confirm';
+    this.linking = false;
+    this.setState('warn', this.t('nfc.linkedTo', 'This tag is linked to {old}', { old: info.current.name }),
+      this.t('nfc.linkedToDetail', 'Link it to {name} instead? {old} will lose this tag and will need a new one.',
+        { name: this.draft.name, old: info.current.name }));
+    this.setButtons({ start: this.t('nfc.changeIt', 'Yes, change it'), demo: false, back: true, backLabel: this.t('nfc.cancel', 'Cancel') });
+    if (window.nfcScanner) window.nfcScanner.playErrorBuzz();
+  }
+
+  // Removes the old pet's link to the tag, in the database and in the saved copy on this device
+  async unlinkPet(client, pet) {
+    if (client) {
+      const { error } = await client.from('registered_pets').update({ nfc_tag: null, nfc_serial: null }).eq('id', pet.id);
+      if (error) throw new Error(error.message);
+    }
+    if (window.pawStore.getPetById(pet.id)) {
+      window.pawStore.savePet({ id: pet.id, nfcTag: '', nfcSerial: null, nfcUrl: '' });
+    }
   }
 
   // The tag left the phone before the write finished: keep the session and wait for it to be tapped again
@@ -321,6 +360,7 @@ class NfcLinkFlow {
     this.busy = false;
     this.linking = false;
     this.resumeUid = null;
+    this.reassignFrom = null;
     this.mode = 'scan';
     this.pending = null;
     this.approvedSerial = null;
@@ -337,7 +377,7 @@ class NfcLinkFlow {
     return data && data[0] ? data[0] : null;
   }
 
-  async link({ serial, existingUid, writer, simulated = false, existing = [], confirmed = false, waitForTag = false }) {
+  async link({ serial, existingUid, writer, simulated = false, existing = [], confirmed = false, waitForTag = false, reassignFrom = null }) {
     const draft = this.draft;
     this.busy = true;
     this.linking = true;
@@ -355,20 +395,25 @@ class NfcLinkFlow {
         return;
       }
 
-      // A tag that already belongs to a pet must never be overwritten
-      if (existingUid && existingUid !== this.resumeUid) { // an ID this session just generated cannot belong to a pet yet
-        const owner = await this.lookupTag(existingUid);
-        if (owner) {
-          this.fail(this.t('nfc.taken', 'This tag is already linked to another pet'),
-            this.t('nfc.takenDetail', 'Use a different tag, or unlink it from the other pet first.'));
+      // A tag already linked to one of your own pets can be moved to this pet once you agree.
+      // A tag linked to someone else's pet is never touched.
+      let current = reassignFrom || this.reassignFrom;
+      if (!current) {
+        current = await this.ownPetOnTag(client, existingUid, serial);
+        if (current) {
+          this.askReassign({ serial, existingUid, writer, simulated, existing, current });
           return;
         }
+        if (existingUid && existingUid !== this.resumeUid) { // an ID this session just generated cannot belong to a pet yet
+          const owner = await this.lookupTag(existingUid);
+          if (owner) {
+            this.fail(this.t('nfc.taken', 'This tag is already linked to another pet'),
+              this.t('nfc.takenDetail', 'Use a different tag, or unlink it from the other pet first.'));
+            return;
+          }
+        }
       }
-      if (serial && window.pawStore.getPets().some((p) => p.nfcSerial && p.nfcSerial.toLowerCase() === serial.toLowerCase())) {
-        this.fail(this.t('nfc.taken', 'This tag is already linked to another pet'),
-          this.t('nfc.takenDetail', 'Use a different tag, or unlink it from the other pet first.'));
-        return;
-      }
+      this.reassignFrom = current || null;
 
       // Anything already on the tag is only replaced after the user says so
       if (existing.length && !confirmed) {
@@ -378,7 +423,8 @@ class NfcLinkFlow {
 
       let saved = null;
       // A fresh ID is reused if a previous attempt wrote it to the tag but the save failed
-      let uid = existingUid || this.newTagId();
+      // When a tag moves to a new pet it gets a new ID, so the old link stops working
+      let uid = current ? (this.resumeUid || this.newTagId()) : (existingUid || this.newTagId());
       for (let attempt = 0; attempt < 3 && !saved; attempt++) {
         const url = this.tagUrl(uid);
         if (writer && !simulated) {
@@ -390,6 +436,11 @@ class NfcLinkFlow {
             if (this.isTagLost(writeErr)) { this.awaitTap(serial, uid); return; }
             throw writeErr;
           }
+        }
+        // The old pet must let go of the tag first: a tag ID and a hardware serial can each belong to one pet
+        if (current && !current.released) {
+          await this.unlinkPet(client, current);
+          current.released = true;
         }
         const result = await this.saveToDatabase(uid, serial);
         if (result.conflict === 'tag') { uid = this.newTagId(); continue; }
@@ -421,7 +472,7 @@ class NfcLinkFlow {
         registeredDate: new Date().toISOString().split('T')[0]
       });
 
-      this.onLinked(pet, saved, simulated);
+      this.onLinked(pet, saved, simulated, current ? current.name : '');
     } catch (err) {
       console.warn('[NFC link]', err);
       const denied = err && err.name === 'NotAllowedError';
@@ -505,11 +556,12 @@ class NfcLinkFlow {
     });
   }
 
-  onLinked(pet, saved, simulated) {
+  onLinked(pet, saved, simulated, replacedName = '') {
     this.done = true;
     this.busy = false;
     this.linking = false;
     this.resumeUid = null;
+    this.reassignFrom = null;
     if (this.abort) this.abort.abort();
     this.setState('done', this.t('nfc.done', 'Tag linked to {name}', { name: pet.name }),
       this.t('nfc.doneDetail', 'Anyone who taps this tag will open {name}\'s page and can alert you.', { name: pet.name }));
@@ -531,7 +583,8 @@ class NfcLinkFlow {
       const note = saved.offline
         ? ' Saved on this device only: sign in again so other phones can open the tag.'
         : (simulated ? ' (demo scan, nothing was written to a tag)' : '');
-      window.notifManager.showToast(`${pet.name} is registered with tag ${saved.uid}.${note}`, saved.offline ? 'warning' : 'success', 6000);
+      const swapped = replacedName ? ` ${replacedName} no longer uses this tag.` : '';
+      window.notifManager.showToast(`${pet.name} is registered with tag ${saved.uid}.${swapped}${note}`, saved.offline ? 'warning' : 'success', 6000);
     }
   }
 }
