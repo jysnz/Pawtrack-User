@@ -288,8 +288,15 @@ class NfcLinkFlow {
     // The tag has usually left the phone while the question was open. write() waits for it to come back,
     // so show the tap prompt now and let link() carry on once the tag is there.
     if (!info.simulated && info.writer) {
-      this.setState('scanning', this.t('nfc.tapAgain', 'Tap the tag again to overwrite it'),
-        this.t('nfc.tapAgainDetail', 'Hold it against your phone until it finishes.'));
+      if (info.current) {
+        // Moving a tag to a new pet: just carry on. If the tag is still against the phone this finishes at once;
+        // only if it has really gone does link() fall back to asking for another tap.
+        this.setState('linking', this.t('nfc.linking', 'Linking tag to {name}...', { name: this.draft.name }),
+          this.t('nfc.linkingDetail', 'Keep the tag against your phone while the pet page is written to it.'));
+      } else {
+        this.setState('scanning', this.t('nfc.tapAgain', 'Tap the tag again to overwrite it'),
+          this.t('nfc.tapAgainDetail', 'Hold it against your phone until it finishes.'));
+      }
       this.setButtons({ start: '', demo: false, back: true, backLabel: this.t('nfc.cancel', 'Cancel') });
     }
     this.link({ ...info, existing: [], confirmed: true, waitForTag: true });
