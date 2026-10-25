@@ -403,6 +403,7 @@ class Store {
       this.eventSource = new EventSource(sseUrl);
 
       this.eventSource.onopen = () => {
+        this.sseFailures = 0;
         this.syncStatus = 'live_sse';
         this.notify('connection_open');
       };
@@ -422,6 +423,15 @@ class Store {
         try { this.eventSource.close(); } catch (e) {}
         this.eventSource = null;
         this.syncStatus = 'reconnecting';
+        this.sseFailures = (this.sseFailures || 0) + 1;
+
+        // Serverless hosts (Vercel) have no /api/events stream: fall back to polling.
+        if (this.sseFailures >= 3) {
+          if (!this.pollTimer) {
+            this.pollTimer = setInterval(() => this.syncFromBackend(), 10000);
+          }
+          return;
+        }
 
         clearTimeout(this.reconnectTimer);
         this.reconnectTimer = setTimeout(async () => {

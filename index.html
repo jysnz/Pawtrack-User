@@ -39,6 +39,7 @@
   <!-- PawTrack Stylesheets -->
   <link rel="stylesheet" href="css/main.css" />
   <link rel="stylesheet" href="css/components.css" />
+  <link rel="stylesheet" href="css/nfc.css" />
 </head>
 
 <body>
@@ -346,6 +347,20 @@
             </div>
           </div>
 
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label" for="reg-pet-age" data-i18n="modal.regAge">Age *</label>
+              <input type="number" id="reg-pet-age" min="0" max="50" step="1" inputmode="numeric" placeholder="e.g. 3" data-i18n-placeholder="modal.regAgePh" required />
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="reg-pet-age-unit" data-i18n="modal.regAgeUnit">Unit</label>
+              <select id="reg-pet-age-unit">
+                <option value="years" data-i18n="modal.ageYears">Years</option>
+                <option value="months" data-i18n="modal.ageMonths">Months</option>
+              </select>
+            </div>
+          </div>
+
           <div class="form-group">
             <label class="form-label" data-i18n="modal.regColor">Color & Markings</label>
             <input type="text" id="reg-pet-color" placeholder="e.g. Golden brown with white chest patch" data-i18n-placeholder="modal.regColorPh" />
@@ -417,18 +432,45 @@
             </span>
           </div>
 
-          <div class="form-group">
-            <label class="form-label" data-i18n="modal.regMedical">Medical / Vaccination / Microchip Details</label>
-            <textarea id="reg-pet-notes" rows="2"
-              placeholder="Vaccine records, allergies, microchip number..." data-i18n-placeholder="modal.regMedicalPh"></textarea>
-          </div>
         </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-outline"
             onclick="window.notifManager.closeModal('register-pet-modal')" data-i18n="modal.cancel">Cancel</button>
-          <button type="submit" class="btn btn-primary" data-i18n="modal.saveReg">Save & Issue Digital Tag</button>
+          <button type="submit" class="btn btn-primary" id="reg-next-btn"><span data-i18n="modal.next">Next</span> <i data-lucide="arrow-right" style="width:16px; height:16px;"></i></button>
         </div>
       </form>
+    </div>
+  </div>
+
+  <!-- 1b. Link NFC Tag Modal (step 2 of pet registration) -->
+  <div class="modal-overlay" id="nfc-link-modal">
+    <div class="modal-box nfc-link-box">
+      <div class="modal-header">
+        <h3 style="display:flex; align-items:center; gap:0.5rem;">
+          <i data-lucide="nfc" style="color:var(--primary); width:20px; height:20px;"></i> <span data-i18n="nfc.linkTitle">Scan an NFC Tag</span>
+        </h3>
+        <button type="button" class="btn-outline btn-sm" id="nfc-link-close" aria-label="Close">&times;</button>
+      </div>
+      <div class="modal-body nfc-link-body">
+        <div class="nfc-link-pet" id="nfc-link-pet"></div>
+        <div class="nfc-radar" id="nfc-radar" data-state="idle" aria-hidden="true">
+          <span class="nfc-radar-ring"></span><span class="nfc-radar-ring"></span><span class="nfc-radar-ring"></span>
+          <div class="nfc-radar-core"><i data-lucide="nfc" style="width:34px; height:34px;"></i></div>
+        </div>
+        <div class="nfc-link-status" id="nfc-link-status" role="status" aria-live="polite">
+          <strong id="nfc-link-headline" data-i18n="nfc.holdTag">Hold the NFC tag to the back of your phone</strong>
+          <span id="nfc-link-detail" data-i18n="nfc.holdTagDetail">Tap Start scanning, then touch the tag from your pet's collar to your phone.</span>
+        </div>
+        <div class="nfc-link-result" id="nfc-link-result" hidden>
+          <div class="nfc-link-result-row"><span data-i18n="nfc.tagId">Tag ID</span><code id="nfc-link-uid">-</code></div>
+          <div class="nfc-link-result-row"><span data-i18n="nfc.tagLink">Linked page</span><code id="nfc-link-url">-</code></div>
+        </div>
+      </div>
+      <div class="modal-footer nfc-link-footer">
+        <button type="button" class="btn btn-outline" id="nfc-link-back"><i data-lucide="arrow-left" style="width:16px; height:16px;"></i> <span data-i18n="nfc.back">Back</span></button>
+        <button type="button" class="btn btn-outline" id="nfc-link-demo" data-i18n="nfc.simulate">Simulate scan</button>
+        <button type="button" class="btn btn-primary" id="nfc-link-start" data-i18n="nfc.start">Start scanning</button>
+      </div>
     </div>
   </div>
 
@@ -2243,11 +2285,16 @@
     </div>
   </div>
 
+  <!-- NFC tap landing page (shown when a tag link is opened) -->
+  <div id="found-page" class="found-page" hidden></div>
+
   <!-- PawTrack Core & View Scripts (Loaded at bottom of DOM) -->
   <script src="js/i18n.js"></script>
   <script src="js/legacy-nfc.js"></script>
   <script src="js/store.js"></script>
   <script src="js/nfc-scanner.js"></script>
+  <script src="js/nfc-link.js"></script>
+  <script src="js/found-page.js"></script>
   <script src="js/notifications.js"></script>
   <script src="js/views/owner-view.js"></script>
   <script src="js/views/public-view.js"></script>

@@ -501,10 +501,6 @@ class OwnerView {
     if (form) {
       if (prefillNfc) {
         form.dataset.prefillNfc = prefillNfc;
-        const notes = document.getElementById('reg-pet-notes');
-        if (notes && !notes.value) {
-          notes.value = `Assigned Tag UID: ${prefillNfc}`;
-        }
       } else {
         delete form.dataset.prefillNfc;
       }

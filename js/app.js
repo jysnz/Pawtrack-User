@@ -108,6 +108,14 @@ class App {
     if (hasScanParam || isReportAction) {
       this.setGuestMode(true);
       const scannedTag = searchParams.get('nfc') || searchParams.get('rfid') || searchParams.get('tag') || '';
+
+      // A tapped pet tag opens the pet's own page instead of the generic report form
+      if (scannedTag && window.foundPage) {
+        // pawApp (and its Supabase client) is assigned once this constructor returns
+        setTimeout(() => window.foundPage.show(scannedTag), 0);
+        return;
+      }
+
       window.location.hash = 'owner';
 
       // Clean query parameters from URL address bar seamlessly
@@ -665,6 +673,12 @@ class App {
         sessionStorage.removeItem(FRESH_SIGNIN_KEY);
       } catch (e) {}
       if (isFresh) window.notifManager.showToast(`Signed in as ${guardian.full_name}.`, 'success');
+
+      this.syncFoundAlerts();
+      if (!this.foundAlertTimer) {
+        this.foundAlertTimer = setInterval(() => this.syncFoundAlerts(), 60000);
+        document.addEventListener('visibilitychange', () => { if (!document.hidden) this.syncFoundAlerts(); });
+      }
     };
 
     // First Google sign-in: ask for the name and phone shelters need
@@ -1510,6 +1524,43 @@ class App {
     }
   }
 
+  // Pulls "your pet was found" alerts that finders sent from the tap page (stored in Supabase) into the notification list
+  async syncFoundAlerts() {
+    if (!this.supabase || !window.pawStore || !window.pawStore.getGoogleUser()) return;
+    const { data, error } = await this.supabase
+      .from('notifications')
+      .select('id, title, message, pet_name, location, created_at')
+      .eq('type', 'sighting_verification')
+      .order('created_at', { ascending: false })
+      .limit(20);
+    if (error || !data) return;
+
+    const known = new Set(window.pawStore.getNotifications().map((n) => n.id));
+    const fresh = data.filter((row) => !known.has('sb-' + row.id)).reverse(); // oldest first so the newest ends on top
+    fresh.forEach((row) => {
+      const phone = (row.message.match(/Finder phone: ([^.]+)/) || [])[1] || '';
+      const note = (row.message.match(/Message: "([^"]*)"/) || [])[1] || '';
+      const pet = window.pawStore.getPets().find((p) => p.name === row.pet_name);
+      window.pawStore.addNotification({
+        id: 'sb-' + row.id,
+        title: row.title,
+        message: row.message,
+        type: 'pet_found_match',
+        petId: pet ? pet.id : undefined,
+        petName: row.pet_name,
+        nfcTag: pet ? pet.nfcTag : undefined,
+        finderName: 'Community Good Samaritan',
+        finderPhone: phone.trim(),
+        finderNotes: note,
+        location: row.location,
+        timestamp: row.created_at
+      });
+    });
+    if (fresh.length && window.notifManager) {
+      window.notifManager.showToast(`${fresh[fresh.length - 1].title}`, 'success', 7000);
+    }
+  }
+
   updateNotifBadge() {
     const notifs = window.pawStore.getNotifications();
     const unread = notifs.filter(n => !n.read).length;
@@ -1579,12 +1630,21 @@ class App {
           return;
         }
 
-        const name = document.getElementById('reg-pet-name')?.value || 'Pet';
+        const name = (document.getElementById('reg-pet-name')?.value || '').trim() || 'Pet';
         const species = document.getElementById('reg-pet-species')?.value || 'Dog';
-        const breed = document.getElementById('reg-pet-breed')?.value || 'Mixed';
+        const breed = (document.getElementById('reg-pet-breed')?.value || '').trim() || 'Mixed';
         const gender = document.getElementById('reg-pet-gender')?.value || 'Male';
-        const color = document.getElementById('reg-pet-color')?.value || 'Brown';
-        const notes = document.getElementById('reg-pet-notes')?.value || '';
+        const color = (document.getElementById('reg-pet-color')?.value || '').trim() || 'Brown';
+
+        const ageValue = parseInt(document.getElementById('reg-pet-age')?.value, 10);
+        const ageUnit = document.getElementById('reg-pet-age-unit')?.value === 'months' ? 'months' : 'years';
+        if (!Number.isFinite(ageValue) || ageValue < 0 || ageValue > 50) {
+          window.notifManager.showToast("Please enter your pet's age (0 to 50).", 'warning', 3500);
+          document.getElementById('reg-pet-age')?.focus();
+          return;
+        }
+        const ageMonths = ageUnit === 'years' ? ageValue * 12 : ageValue;
+        const age = `${ageValue} ${ageValue === 1 ? ageUnit.slice(0, -1) : ageUnit}`;
 
         const user = window.pawStore.getGoogleUser();
         const ownerName = document.getElementById('reg-owner-name')?.value || (user ? user.name : 'Pet Guardian');
@@ -1592,43 +1652,25 @@ class App {
         const ownerEmail = (user ? user.email : 'guardian@pawtrack.com');
         const ownerAddress = document.getElementById('reg-owner-address')?.value || 'Metro Manila, Philippines';
 
-        const nfcTag = regForm.dataset.prefillNfc || ('NFC-' + Math.floor(100000 + Math.random() * 900000));
-        delete regForm.dataset.prefillNfc;
-
         const defaultPhotos = {
           Dog: 'https://images.unsplash.com/photo-1543466835-00a7907e9de1?auto=format&fit=crop&w=600&q=80',
           Cat: 'https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?auto=format&fit=crop&w=600&q=80',
           Other: 'https://images.unsplash.com/photo-1548767797-d8c844163c4c?auto=format&fit=crop&w=600&q=80'
         };
 
-        const newPet = {
+        // Step 2: the pet is only saved once an NFC tag has been scanned and linked to it
+        document.getElementById('register-pet-modal')?.classList.remove('active');
+        window.nfcLink.open({
           name,
           species,
           breed,
           gender,
           color,
-          nfcTag,
-          microchipNo: '98514100' + Math.floor(1000000 + Math.random() * 9000000),
-          status: 'safe',
-          medicalNotes: notes,
+          age,
+          ageMonths,
           photoUrl: document.getElementById('reg-pet-photo')?.value || defaultPhotos[species] || defaultPhotos.Dog,
-          owner: {
-            name: ownerName,
-            phone: ownerPhone,
-            email: ownerEmail,
-            address: ownerAddress
-          },
-          registeredDate: new Date().toISOString().split('T')[0]
-        };
-
-        window.pawStore.savePet(newPet);
-        regForm.reset();
-        this.clearPhotoUpload();
-        window.notifManager.closeModal('register-pet-modal');
-
-        if (window.notifManager) {
-          window.notifManager.showToast(`Pet "${name}" registered successfully with ${nfcTag}!`, 'success', 4000);
-        }
+          owner: { name: ownerName, phone: ownerPhone, email: ownerEmail, address: ownerAddress }
+        });
       });
     }
 
