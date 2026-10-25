@@ -112,7 +112,8 @@ class ReportManager {
     });
   }
 
-  openReportModal(type = 'found', petId = null, prefill = {}) {
+  openReportModal(type = 'missing', petId = null, prefill = {}) {
+    type = 'missing'; // this form only reports missing pets; there is no found-pet tab any more
     this.currentType = type;
     const modal = document.getElementById('report-pet-modal');
     if (!modal) return;
@@ -122,6 +123,8 @@ class ReportManager {
     this.setViewMode('map');
     this.populatePetsDropdown(petId);
     this.populateFoundPetsDropdown(petId);
+    this.showKnownPet(type === 'missing' ? petId : null);
+    this.fillMissingPhone();
 
     if (prefill && prefill.nfcTag && window.pawStore) {
       const matched = window.pawStore.getPetByNFC(prefill.nfcTag);
@@ -257,6 +260,17 @@ class ReportManager {
     }
   }
 
+  // The hint over the map tells people to drag the pin
+  updateMapHelper() {
+    const key = this.currentType === 'missing' ? 'report.mapHelperMissing' : 'report.mapHelper';
+    const fallback = this.currentType === 'missing' ? 'Drag the pin to where your pet was last seen' : 'Tap or drag pin to mark exact location';
+    const helper = document.querySelector('#report-map-view-container .report-map-overlay-helper span');
+    if (helper) {
+      helper.textContent = window.pawI18n ? window.pawI18n.t(key, fallback) : fallback;
+      helper.setAttribute('data-i18n', key);
+    }
+  }
+
   setViewMode(mode) {
     this.currentViewMode = mode;
     const mapBtn = document.getElementById('report-mode-map-btn');
@@ -271,9 +285,12 @@ class ReportManager {
       if (mapContainer) mapContainer.style.display = 'flex';
       if (uploadContainer) uploadContainer.style.display = 'none';
       if (headerTitle) {
-        headerTitle.textContent = window.pawI18n ? window.pawI18n.t('report.pinnedLoc', 'Pinned Location:') : 'Pinned Location:';
-        headerTitle.setAttribute('data-i18n', 'report.pinnedLoc');
+        const key = this.currentType === 'missing' ? 'report.lastSeenHeader' : 'report.pinnedLoc';
+        const fallback = this.currentType === 'missing' ? 'Last seen location' : 'Pinned Location:';
+        headerTitle.textContent = window.pawI18n ? window.pawI18n.t(key, fallback) : fallback;
+        headerTitle.setAttribute('data-i18n', key);
       }
+      this.updateMapHelper();
       setTimeout(() => {
         if (this.map) this.map.invalidateSize();
       }, 80);
@@ -301,12 +318,13 @@ class ReportManager {
     const modalSub = document.getElementById('report-modal-sub');
     const modeToggle = document.getElementById('report-view-mode-toggle');
 
-    if (modeToggle) modeToggle.style.display = 'flex';
+    if (modeToggle) modeToggle.style.display = type === 'missing' ? 'none' : 'flex';
+    if (type === 'missing') this.setViewMode('map');
 
     if (type === 'found') {
       tabFound?.classList.add('active');
       tabMissing?.classList.remove('active');
-      if (fieldsFound) fieldsFound.style.display = 'block';
+      if (fieldsFound) fieldsFound.style.display = ''; // stylesheet decides (grid on phones)
       if (fieldsMissing) fieldsMissing.style.display = 'none';
 
       // Set HTML5 required on Found fields, unset on Missing fields
@@ -352,7 +370,7 @@ class ReportManager {
       tabMissing?.classList.add('active');
       tabFound?.classList.remove('active');
       if (fieldsFound) fieldsFound.style.display = 'none';
-      if (fieldsMissing) fieldsMissing.style.display = 'block';
+      if (fieldsMissing) fieldsMissing.style.display = ''; // stylesheet decides (grid on phones)
 
       // Set HTML5 required on Missing fields, unset on Found fields
       const foundPet = document.getElementById('report-found-pet-select');
@@ -378,7 +396,7 @@ class ReportManager {
       if (missingPhone) missingPhone.required = true;
 
       if (modalTitle) {
-        modalTitle.textContent = window.pawI18n ? window.pawI18n.t('report.modalTitleMissing', 'Report Pet as Missing') : 'Report Pet as Missing';
+        modalTitle.textContent = window.pawI18n ? window.pawI18n.t('report.modalTitleMissing', 'Report a missing pet') : 'Report a missing pet';
         modalTitle.setAttribute('data-i18n', 'report.modalTitleMissing');
       }
       if (modalSub) {
@@ -425,7 +443,7 @@ class ReportManager {
 
       pets.forEach((p, idx) => {
         const isSelected = !isCustomSelected && (targetPetId === String(p.id) || (!targetPetId && idx === 0));
-        options += `<option value="${p.id}" ${isSelected ? 'selected' : ''}>${registeredLabel}: ${p.name} (${p.breed || p.species} - ${p.nfcTag})</option>`;
+        options += `<option value="${p.id}" ${isSelected ? 'selected' : ''}>${registeredLabel}: ${p.name} (${p.breed || p.species})</option>`;
       });
 
       options += `<option value="custom" ${isCustomSelected ? 'selected' : ''}>${unregisteredLabel}</option>`;
@@ -434,18 +452,81 @@ class ReportManager {
       const activeVal = select.value || (isCustomSelected ? 'custom' : pets[0].id);
       this.handlePetSelect(activeVal);
     } else {
-      options += `<option value="registered" ${!isCustomSelected ? 'selected' : ''}>${registeredLabel}</option>`;
-      options += `<option value="custom" ${isCustomSelected ? 'selected' : ''}>${unregisteredLabel}</option>`;
+      options += `<option value="custom" selected>${unregisteredLabel}</option>`;
       select.innerHTML = options;
 
-      this.handlePetSelect(isCustomSelected ? 'custom' : 'registered');
+      this.handlePetSelect('custom');
     }
+  }
+
+  // Opened for a specific pet: show it instead of asking which pet is missing
+  showKnownPet(petId) {
+    const wrap = document.getElementById('report-missing-pet-select-wrap');
+    const card = document.getElementById('report-missing-pet-card');
+    if (!wrap || !card) return;
+    const pet = petId && petId !== 'custom' && petId !== 'unregistered' && window.pawStore ? window.pawStore.getPetById(petId) : null;
+    if (!pet) {
+      wrap.style.display = '';
+      card.hidden = true;
+      card.innerHTML = '';
+      return;
+    }
+    const esc = (v) => String(v == null ? '' : v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const photo = pet.photoUrl || pet.photo;
+    card.innerHTML = `${photo ? `<img src="${esc(photo)}" alt="" />` : ''}
+      <div><span class="report-pet-card-label">Reporting missing</span><strong>${esc(pet.name)}</strong>
+      <small>${esc([pet.breed, pet.species].filter(Boolean).join(' · '))}</small></div>`;
+    const select = document.getElementById('report-missing-pet-select');
+    if (select) select.value = String(pet.id);
+    wrap.style.display = 'none';
+    card.hidden = false;
+  }
+
+  // The emergency contact starts as the number registered on the account
+  fillMissingPhone() {
+    const input = document.getElementById('report-missing-phone');
+    const user = window.pawStore && window.pawStore.getGoogleUser();
+    if (input && user && user.phone && !input.value.trim()) input.value = user.phone;
+  }
+
+  // Pets as photo chips (a native list cannot show pictures); the hidden select keeps the value
+  renderPetPicker() {
+    const picker = document.getElementById('report-missing-pet-picker');
+    const select = document.getElementById('report-missing-pet-select');
+    if (!picker || !select) return;
+    const esc = (v) => String(v == null ? '' : v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const pets = window.pawStore ? window.pawStore.getPets() : [];
+    const current = select.value;
+    const chip = (value, label, inner, selected) =>
+      `<button type="button" class="pet-pick${selected ? ' is-selected' : ''}" role="radio" aria-checked="${selected}" data-value="${esc(value)}" title="${esc(label)}">${inner}<span class="pet-pick-name">${esc(label)}</span></button>`;
+    const avatar = (pet) => {
+      const photo = pet.photoUrl || pet.photo;
+      return photo ? `<img class="pet-pick-img" src="${esc(photo)}" alt="" loading="lazy" decoding="async" />`
+        : '<span class="pet-pick-img pet-pick-blank"><svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M12 10.5c1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3 1.34 3 3 3zm-6 2c1.38 0 2.5-1.12 2.5-2.5S7.38 7.5 6 7.5 3.5 8.62 3.5 10s1.12 2.5 2.5 2.5zm12 0c1.38 0 2.5-1.12 2.5-2.5S19.38 7.5 18 7.5s-2.5 1.12-2.5 2.5 1.12 2.5 2.5 2.5zM12 12c-2.76 0-5 2.24-5 5 0 2.21 1.79 4 4 4 1.1 0 2-.9 2-2 0 1.1.9 2 2 2 2.21 0 4-1.79 4-4 0-2.76-2.24-5-5-5z"/></svg></span>';
+    };
+    const other = '<span class="pet-pick-img pet-pick-other"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></span>';
+    picker.innerHTML = pets.map((p) => chip(p.id, p.name, avatar(p), String(current) === String(p.id))).join('')
+      + chip('custom', 'Other pet', other, current === 'custom' || current === 'unregistered');
+    picker.querySelectorAll('.pet-pick').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        select.value = btn.dataset.value;
+        this.handlePetSelect(select.value);
+      });
+    });
   }
 
   handlePetSelect(petId) {
     const customWrap = document.getElementById('report-missing-custom-name-wrap');
     const customInput = document.getElementById('report-missing-custom-name');
     const isUnregistered = petId === 'custom' || petId === 'unregistered';
+
+    const select = document.getElementById('report-missing-pet-select');
+    if (select && select.value !== String(petId) && petId) select.value = String(petId);
+    this.renderPetPicker();
+    // A photo can only be added for a pet that is not registered: registered pets already have theirs
+    const photoRow = document.getElementById('report-missing-photo-row');
+    if (photoRow) photoRow.style.display = isUnregistered ? '' : 'none';
+    if (isUnregistered) this.removeUploadedPhoto(false);
 
     if (isUnregistered) {
       if (customWrap) customWrap.style.display = 'block';
@@ -580,7 +661,7 @@ class ReportManager {
     } else {
       statusText.textContent = 'No photo attached';
       statusText.style.color = 'var(--text-muted, #a89f91)';
-      if (statusBtn) statusBtn.textContent = 'Attach / Upload Photo';
+      if (statusBtn) statusBtn.textContent = 'Upload photo';
     }
   }
 
@@ -612,12 +693,21 @@ class ReportManager {
       autoPan: true
     }).addTo(this.map);
 
+    const mapEl = () => document.getElementById('report-pin-map');
+    this.marker.on('dragstart', () => {
+      mapEl()?.classList.add('is-pin-dragging');
+      this.pinDragging = true;
+    });
     this.marker.on('dragend', (e) => {
       const pos = e.target.getLatLng();
+      mapEl()?.classList.remove('is-pin-dragging');
       this.updatePinnedCoords(pos.lat, pos.lng);
+      // The map also reports a click when a drag ends; ignore that one so the pin is not dropped twice
+      setTimeout(() => { this.pinDragging = false; }, 250);
     });
 
     this.map.on('click', (e) => {
+      if (this.pinDragging) return;
       this.updatePinnedCoords(e.latlng.lat, e.latlng.lng);
       if (this.marker) {
         this.marker.setLatLng(e.latlng);
@@ -744,7 +834,8 @@ class ReportManager {
     return window.L.divIcon({
       className: 'custom-report-pin',
       html: `
-        <div class="pin-drop" style="position:relative; transform:translate(-50%, -100%); cursor:grab;">
+        <div class="pin-drop" style="position:relative; transform:translate(-50%, -100%); cursor:grab; touch-action:none; -webkit-user-select:none; user-select:none;">
+          <div style="position:absolute; left:-14px; right:-14px; top:-14px; bottom:-14px;"></div>
           <div style="width:38px; height:38px; border-radius:50% 50% 50% 0; background:${bgGradient}; transform:rotate(-45deg); display:flex; align-items:center; justify-content:center; box-shadow:0 8px 18px rgba(0,0,0,0.5); border:2px solid #ffffff;">
             <div style="transform:rotate(45deg); display:flex; align-items:center; justify-content:center;">${iconSvg}</div>
           </div>
@@ -1130,6 +1221,8 @@ class ReportManager {
     if (placeholder) placeholder.style.display = 'none';
     if (previewWrap) previewWrap.style.display = 'block';
     if (previewImg) previewImg.src = dataUrl;
+    const thumb = document.getElementById('report-missing-photo-thumb');
+    if (thumb) { thumb.src = dataUrl; thumb.hidden = false; }
 
     this.updateMissingPhotoStatus();
   }
@@ -1147,6 +1240,8 @@ class ReportManager {
     if (previewImg) previewImg.src = '';
     if (previewWrap) previewWrap.style.display = 'none';
     if (placeholder) placeholder.style.display = 'flex';
+    const thumb = document.getElementById('report-missing-photo-thumb');
+    if (thumb) { thumb.removeAttribute('src'); thumb.hidden = true; }
 
     this.updateMissingPhotoStatus();
 
@@ -1437,6 +1532,9 @@ class ReportManager {
     if (window.notifManager) {
       window.notifManager.showToast(`Emergency Alert Broadcasted for "${petName}". Pinned on Incident Map.`, 'danger', 5000);
     }
+
+    // Save the missing status to the database too, so the pet's tap page shows the missing alert
+    if (pet && window.petsView) window.petsView.setStatus(pet.id, 'missing');
 
     this.closeModal();
 

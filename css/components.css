@@ -9008,3 +9008,102 @@ div.owner-summary-stat:hover {
   }
   .glass-card { transition: none; }
 }
+
+/* ==========================================================================
+   Report modal on tablets and desktops: the whole form fits in one frame, no scrolling. Phones scroll normally.
+   The box is capped to the screen height; the map takes whatever room is left.
+   ========================================================================== */
+@media (min-width: 769px) {
+  #report-pet-modal { overflow: hidden; }
+
+  #report-pet-modal .report-modal-box {
+    display: flex;
+    flex-direction: column;
+    max-height: calc(100vh - 16px);
+    max-height: calc(100dvh - 16px);
+    overflow: hidden !important;
+  }
+
+  #report-pet-modal .report-modal-box > .modal-header { flex: none; padding: 10px 16px !important; }
+  #report-pet-modal #report-modal-title { font-size: 1.08rem !important; }
+  #report-pet-modal #report-modal-sub { margin-top: 1px !important; font-size: 0.74rem !important; line-height: 1.25 !important; }
+  #report-pet-modal .report-type-toggle-bar { flex: none; padding: 8px 16px 0; }
+  #report-pet-modal .report-type-tab-btn { padding: 7px 12px; font-size: 0.82rem; }
+  #report-pet-modal .report-instructions-panel { flex: none; max-height: 30vh; overflow-y: auto; }
+
+  #report-pet-modal #report-pet-form {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+
+  #report-pet-modal .report-modal-layout {
+    flex: 1 1 auto;
+    min-height: 0;
+    padding: 10px 16px 0;
+    gap: 12px;
+    align-items: stretch;
+  }
+
+  #report-pet-modal .report-map-column { min-height: 0; gap: 6px; }
+  #report-pet-modal .report-panel-container { flex: 1 1 auto; min-height: 0; }
+  #report-pet-modal .report-map-wrapper { flex: 1 1 auto; height: auto; min-height: 90px; }
+
+  #report-pet-modal .report-form-column { min-height: 0; gap: 4px; justify-content: flex-start; }
+  #report-pet-modal .report-form-column .form-group { margin-bottom: 6px !important; }
+  #report-pet-modal .report-form-column .form-label { font-size: 0.72rem !important; margin-bottom: 2px; }
+  #report-pet-modal .report-form-column .form-control { padding: 5px 9px !important; font-size: 0.82rem !important; }
+  #report-pet-modal .report-form-column textarea.form-control { height: 52px; min-height: 52px; resize: none !important; }
+  #report-pet-modal .report-field-section { margin: 0 0 4px; font-size: 0.66rem; }
+  #report-pet-modal .report-field-section:not(:first-child) { margin-top: 8px; padding-top: 6px; }
+
+  #report-pet-modal .modal-footer {
+    flex: none;
+    margin-top: 8px !important;
+    padding: 8px 16px 10px !important;
+  }
+}
+
+/* Report modal on phones: it scrolls normally. The header and the action buttons stay pinned so the frame stays tidy. */
+@media (max-width: 768px) {
+  #report-pet-modal { padding: 8px; align-items: flex-start; }
+  #report-pet-modal .report-modal-box {
+    width: 100% !important;
+    max-height: calc(100vh - 16px);
+    max-height: calc(100dvh - 16px);
+    border-radius: 18px !important;
+  }
+  #report-pet-modal .report-modal-box > .modal-header {
+    position: sticky;
+    top: 0;
+    z-index: 6;
+    padding: 10px 12px !important;
+    background: var(--bg-surface-elevated, #23130a);
+    border-radius: 18px 18px 0 0;
+  }
+  [data-theme="light"] #report-pet-modal .report-modal-box > .modal-header { background: #ffffff; }
+  #report-pet-modal .report-modal-icon-badge { display: none; }
+  #report-pet-modal .modal-header > div:first-child { flex: 1; min-width: 0; }
+  #report-pet-modal #report-modal-title { font-size: 1.05rem !important; line-height: 1.2; }
+  #report-pet-modal #report-modal-sub {
+    font-size: 0.74rem !important;
+    line-height: 1.3 !important;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  #report-pet-modal .modal-close-squircle-btn { align-self: flex-start; flex: none; }
+  #report-pet-modal .report-type-toggle-bar { padding: 8px 12px 0; }
+  #report-pet-modal .report-modal-layout { padding: 10px 12px 0; }
+  #report-pet-modal .modal-footer {
+    position: sticky;
+    bottom: 0;
+    z-index: 6;
+    padding: 10px 12px calc(10px + env(safe-area-inset-bottom)) !important;
+    background: var(--bg-surface-elevated, #23130a);
+    border-radius: 0 0 18px 18px;
+  }
+  [data-theme="light"] #report-pet-modal .modal-footer { background: #ffffff; }
+}

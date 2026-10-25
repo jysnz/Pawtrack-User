@@ -256,7 +256,7 @@ class FoundPage {
     return {
       name: r.name, species: r.species, breed: r.breed, gender: r.gender, color: r.color,
       age: this.formatAge(r.age_months), status: r.status, photo: r.photo_url,
-      registered: r.registered_on, area: r.community
+      registered: r.registered_on, area: r.community, description: r.description
     };
   }
 
@@ -359,6 +359,7 @@ class FoundPage {
 
         <section class="fp-card">
           <h2>${this.s('about', { name: this.esc(p.name) })}</h2>
+          ${p.description ? `<p class="fp-desc">${this.esc(p.description)}</p>` : ''}
           <dl class="fp-facts">
             ${this.fact(this.s('species'), p.species, 'paw-print')}
             ${this.fact(this.s('breed'), p.breed, 'dna')}

@@ -424,6 +424,18 @@
             </div>
           </div>
 
+          <div class="form-group reg-desc-group">
+            <div class="reg-desc-head">
+              <label class="form-label" for="reg-pet-description">Description</label>
+              <button type="button" class="btn btn-outline btn-sm" id="reg-ai-btn" onclick="window.petAI.fillRegisterForm()">
+                <i data-lucide="sparkles"></i> Write with AI
+              </button>
+            </div>
+            <textarea id="reg-pet-description" rows="3" maxlength="600"
+              placeholder="Written by AI from your pet's details and photo. You can edit it."></textarea>
+            <small class="reg-ai-status" id="reg-ai-status" role="status" aria-live="polite"></small>
+          </div>
+
           <!-- Guardian Emergency Contact (Confidential - Visible only to Admin/Shelter Officers) -->
           <div style="background: var(--bg-surface-elevated, #f8fafc); border: 1px solid var(--border-subtle, #e2e8f0); border-radius: 12px; padding: 12px 14px; margin-bottom: 12px;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
@@ -1214,7 +1226,7 @@
           </div>
           <div>
             <div style="display: flex; align-items: center; gap: 8px;">
-              <h3 id="report-modal-title" style="margin: 0; font-size: 1.25rem; font-weight: 800; letter-spacing: -0.01em;" data-i18n="report.modalTitleFound">Found this pet?</h3>
+              <h3 id="report-modal-title" style="margin: 0; font-size: 1.25rem; font-weight: 800; letter-spacing: -0.01em;" data-i18n="report.modalTitleMissing">Report a missing pet</h3>
               <button type="button" class="report-help-btn" id="report-help-btn" onclick="window.reportManager ? window.reportManager.toggleInstructionGuide() : null" title="How to report instructions & guide" aria-label="Reporting instructions" data-i18n-title="report.helpBtnTitle">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                   <circle cx="12" cy="12" r="10"></circle>
@@ -1223,8 +1235,8 @@
                 </svg>
               </button>
             </div>
-            <p id="report-modal-sub" style="margin: 2px 0 0; font-size: 0.8rem; color: var(--text-muted); line-height: 1.35;" data-i18n="report.modalSubFound">
-              Drop a pin at the spot where you found the pet, add a quick note if you'd like, and notify the owner.
+            <p id="report-modal-sub" style="margin: 2px 0 0; font-size: 0.8rem; color: var(--text-muted); line-height: 1.35;" data-i18n="report.modalSubMissing">
+              Drop a pin where the pet was last seen, add details, and broadcast an emergency alert to shelters and public map.
             </p>
           </div>
         </div>
@@ -1254,16 +1266,6 @@
         <div class="report-instructions-grid" id="report-instructions-content">
           <!-- Dynamically populated via reportManager.updateInstructionsContent() -->
         </div>
-      </div>
-
-      <!-- Report Type Selector Toggle Tabs -->
-      <div class="report-type-toggle-bar">
-        <button type="button" class="report-type-tab-btn active" id="report-tab-found" onclick="window.reportManager.setType('found')">
-          <span data-i18n="report.tabFound">I Found a Pet</span>
-        </button>
-        <button type="button" class="report-type-tab-btn" id="report-tab-missing" onclick="window.reportManager.setType('missing')">
-          <span data-i18n="report.tabMissing">My Pet Is Missing</span>
-        </button>
       </div>
 
       <!-- Main Form with Two-Column Map & Form Layout -->
@@ -1460,12 +1462,29 @@
             <!-- SECTION B: Missing Pet Alert Fields -->
             <div id="report-fields-missing" style="display: none;">
               <div class="report-field-section" data-i18n="report.sectionPet">About the pet</div>
-              <div class="form-group" style="margin-bottom: 8px;">
+              <div class="form-group" id="report-missing-pet-select-wrap" style="margin-bottom: 8px;">
                 <label class="form-label" style="font-size: 0.78rem;" data-i18n="report.selectPetMissing">Which pet is missing? *</label>
-                <select class="form-control" id="report-missing-pet-select" style="padding: 7px 10px; font-size: 0.85rem;" onchange="window.reportManager.handlePetSelect(this.value)">
+                <select class="form-control" id="report-missing-pet-select" style="display: none;" aria-hidden="true" tabindex="-1" onchange="window.reportManager.handlePetSelect(this.value)">
                   <option value="registered" selected data-i18n="report.registered">Registered</option>
                   <option value="custom" data-i18n="report.unregistered">Unregistered</option>
                 </select>
+                <!-- Pets with their photos; the select above keeps the chosen value for the rest of the form -->
+                <div class="pet-picker" id="report-missing-pet-picker" role="radiogroup" aria-label="Which pet is missing?"></div>
+              </div>
+
+              <!-- Shown instead of the pet list when the pet is already known (opened from My Pets) -->
+              <div class="report-pet-card" id="report-missing-pet-card" hidden></div>
+
+              <div class="form-group" id="report-missing-photo-row" style="display: none; margin-bottom: 8px;">
+                <label class="form-label" style="font-size: 0.78rem;">Photo of the pet</label>
+                <div class="report-photo-inline">
+                  <img id="report-missing-photo-thumb" alt="" hidden />
+                  <span class="report-photo-inline-text" id="report-missing-photo-status-text">No photo attached</span>
+                  <button type="button" class="btn btn-outline btn-sm" id="report-missing-photo-status-btn" onclick="window.reportManager.triggerUploadPhoto()">Upload photo</button>
+                  <button type="button" class="btn btn-outline btn-sm" onclick="window.reportManager.triggerTakePhoto()" title="Take photo" aria-label="Take photo">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+                  </button>
+                </div>
               </div>
 
               <div class="form-group" id="report-missing-custom-name-wrap" style="display: none; margin-bottom: 8px;">
@@ -2329,6 +2348,7 @@
   <script src="js/legacy-nfc.js"></script>
   <script src="js/store.js"></script>
   <script src="js/nfc-scanner.js"></script>
+  <script src="js/pet-ai.js"></script>
   <script src="js/nfc-link.js"></script>
   <script src="js/found-page.js"></script>
   <script src="js/notifications.js"></script>

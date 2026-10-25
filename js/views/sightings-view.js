@@ -29,7 +29,6 @@ class SightingsView {
     if (!this.container) return;
 
     const t = (k, d) => (window.pawI18n ? window.pawI18n.t(k, d) : d);
-    const pets = window.pawStore ? (window.pawStore.getPets() || []) : [];
     const sightings = window.pawStore ? (window.pawStore.getSightings() || []) : [];
     const stats = this._buildStats(sightings);
 
@@ -91,34 +90,6 @@ class SightingsView {
       <div id="sightings-grid" style="margin-bottom: 2.5rem;">
         ${this._renderGrid(sightings)}
       </div>
-
-      <!-- Registered Pets Section (Placed Below Sightings, collapsible) -->
-      <details class="registered-pets-section ux-collapsible is-plain" style="margin-top: 2rem; margin-bottom: 2.25rem;" ${this._petsOpen() ? 'open' : ''} ontoggle="window.sightingsView._setPetsOpen(this.open)">
-        <summary>
-          <div>
-            <h2 id="registered-pets-heading" style="font-size:1.35rem; margin-bottom:0.25rem; display:flex; align-items:center; gap:0.5rem;">
-              <span>${t('owner.registeredHeading', 'Registered Pets')}</span>
-              <span class="badge badge-outline" style="font-size:0.8rem; font-weight:700;">(${pets.length})</span>
-            </h2>
-            <div class="ux-collapsible-hint">
-              Track NFC collar statuses, report missing pets, or view pending founder matches.
-            </div>
-          </div>
-          <i data-lucide="chevron-down" class="ux-collapsible-chevron"></i>
-        </summary>
-
-        <div class="pets-grid ux-collapsible-body">
-          ${pets.length === 0 ? `
-            <div class="glass-card" style="grid-column: 1 / -1; text-align:center; padding: 3rem 1.5rem; display:flex; flex-direction:column; align-items:center; gap: 0.75rem; border: 1.5px dashed var(--border-subtle, #cbd5e1);">
-              <div style="width: 56px; height: 56px; border-radius: 50%; background: var(--bg-surface-elevated, #f8fafc); display:flex; align-items:center; justify-content:center; color:var(--primary);">
-                <i data-lucide="shield-plus" style="width:28px; height:28px;"></i>
-              </div>
-              <h3 style="font-size: 1.15rem; font-weight: 700; margin:0;">${t('owner.noPetsTitle', 'No Registered Pets Yet')}</h3>
-              <p style="font-size: 0.85rem; color: var(--text-muted, #64748b); max-width: 420px; margin:0; line-height: 1.45;">${t('owner.noPetsDesc', 'Register your pet with an NFC collar tag and microchip to enable municipal protection and real-time impoundment alerts.')}</p>
-            </div>
-          ` : pets.map(pet => (window.ownerView ? window.ownerView.renderPetCard(pet) : this.renderPetCard(pet))).join('')}
-        </div>
-      </details>
     `;
 
     if (window.lucide) window.lucide.createIcons({ root: this.container });
@@ -486,21 +457,6 @@ class SightingsView {
   // ─────────────────────────────────────────────────
   // UTILITIES
   // ─────────────────────────────────────────────────
-  // Registered Pets stays open unless this viewer collapsed it
-  _petsOpen() {
-    try {
-      return localStorage.getItem('pawtrack_sightings_pets_open') !== '0';
-    } catch (e) {
-      return true;
-    }
-  }
-
-  _setPetsOpen(open) {
-    try {
-      localStorage.setItem('pawtrack_sightings_pets_open', open ? '1' : '0');
-    } catch (e) { /* storage unavailable */ }
-  }
-
   _timeAgo(value) {
     if (!value) return 'Unknown time';
     const mins = Math.max(1, Math.round((Date.now() - new Date(value).getTime()) / 60000));

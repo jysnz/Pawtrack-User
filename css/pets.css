@@ -85,3 +85,52 @@
 @media (prefers-reduced-motion: reduce) {
   .pet-card, .pet-card-skeleton { transition: none; animation: none; }
 }
+
+.pet-detail-actions { display: flex; gap: 8px; margin: 0 0 14px; }
+.pet-detail-actions .btn { flex: 1; justify-content: center; }
+.pet-missing-note { display: flex; gap: 10px; align-items: flex-start; margin-bottom: 10px; padding: 11px 12px; border-radius: var(--radius-md); background: var(--danger-light); border: 1px solid var(--danger); font-size: 0.84rem; line-height: 1.4; }
+.pet-missing-note svg, .pet-missing-note i { flex: none; width: 18px; height: 18px; color: var(--danger); margin-top: 1px; }
+.pet-detail-actions .btn[disabled] { opacity: 0.6; pointer-events: none; }
+
+/* Missing-pet report: the pet is shown instead of picked, and the photo is a normal field */
+.report-pet-card { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; padding: 9px 11px; border-radius: var(--radius-md); background: var(--danger-light); border: 1px solid var(--danger); }
+.report-pet-card[hidden] { display: none; }
+.report-pet-card img { width: 46px; height: 46px; border-radius: 12px; object-fit: cover; flex: none; }
+.report-pet-card strong { display: block; font-size: 1rem; }
+.report-pet-card small { display: block; font-size: 0.74rem; color: var(--text-muted); }
+.report-pet-card-label { display: block; font-size: 0.64rem; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: var(--danger); }
+
+/* AI description */
+.reg-desc-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 6px; }
+.reg-desc-head .form-label { margin: 0; }
+.reg-desc-head .btn i, .reg-desc-head .btn svg { width: 14px; height: 14px; }
+.reg-ai-status { display: block; min-height: 1.1em; margin-top: 4px; font-size: 0.74rem; color: var(--text-muted); }
+.reg-ai-status[data-kind="error"] { color: var(--danger); font-weight: 600; }
+.reg-ai-status[data-kind="ok"] { color: #15803d; }
+.pet-detail-desc { margin: 0 0 14px; padding: 11px 13px; border-radius: var(--radius-md); background: var(--bg-surface-elevated); font-size: 0.88rem; line-height: 1.5; }
+
+/* Pin being dragged: lifted, bigger shadow, grabbing cursor */
+#report-pin-map .pin-drop { transition: transform 0.12s ease, filter 0.12s ease; }
+#report-pin-map.is-pin-dragging .pin-drop { transform: translate(-50%, -112%) scale(1.12) !important; filter: drop-shadow(0 12px 10px rgba(0, 0, 0, 0.35)); cursor: grabbing; }
+
+/* Pet chooser in the missing report: photo chips instead of a plain list */
+.pet-picker { display: flex; gap: 10px; overflow-x: auto; padding: 4px 2px 6px; scroll-snap-type: x proximity; }
+.pet-pick { flex: none; width: 66px; display: grid; justify-items: center; gap: 4px; padding: 0; border: 0; background: transparent; color: var(--text-main); font: inherit; cursor: pointer; scroll-snap-align: start; }
+.pet-pick-img { width: 52px; height: 52px; border-radius: 50%; object-fit: cover; display: grid; place-items: center; border: 2px solid transparent; outline: 2px solid var(--border-glass); outline-offset: 1px; background: var(--bg-surface-elevated); color: var(--primary); transition: outline-color 0.15s ease, transform 0.15s ease; }
+.pet-pick-other { border: 2px dashed var(--border-glass); outline: none; }
+.pet-pick:hover .pet-pick-img { transform: translateY(-1px); }
+.pet-pick.is-selected .pet-pick-img { outline: 3px solid var(--primary); }
+.pet-pick.is-selected .pet-pick-name { color: var(--primary); font-weight: 800; }
+.pet-pick-name { max-width: 100%; font-size: 0.7rem; font-weight: 600; line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pet-pick:focus-visible .pet-pick-img { outline: 3px solid var(--border-focus); }
+
+.report-photo-inline { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 8px 10px; border: 1px solid var(--border-glass); border-radius: var(--radius-md); background: var(--bg-main); }
+.report-photo-inline img { width: 40px; height: 40px; border-radius: 10px; object-fit: cover; flex: none; }
+.report-photo-inline img[hidden] { display: none; }
+.report-photo-inline-text { flex: 1 1 120px; min-width: 0; font-size: 0.78rem; overflow-wrap: anywhere; }
+
+/* Missing report: when a pet is not registered the form grows, so the right column scrolls inside the frame instead of hiding behind the buttons */
+#report-pet-modal .report-form-column { overflow-y: auto; overscroll-behavior: contain; padding-right: 2px; }
+#report-pet-modal .report-photo-inline { flex-wrap: nowrap; padding: 6px 8px; gap: 6px; }
+#report-pet-modal .report-photo-inline-text { flex: 1 1 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 0.74rem; }
+#report-pet-modal .report-photo-inline .btn { flex: none; white-space: nowrap; }

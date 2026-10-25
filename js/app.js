@@ -1654,7 +1654,7 @@ class App {
     // Register Pet Form Submission
     const regForm = document.getElementById('register-pet-form');
     if (regForm) {
-      regForm.addEventListener('submit', (e) => {
+      regForm.addEventListener('submit', async (e) => {
         e.preventDefault();
 
         if (!window.pawStore.isLoggedIn()) {
@@ -1684,6 +1684,16 @@ class App {
         const ageMonths = ageUnit === 'years' ? ageValue * 12 : ageValue;
         const age = `${ageValue} ${ageValue === 1 ? ageUnit.slice(0, -1) : ageUnit}`;
 
+        // No description yet: let the AI write one before moving on (a failure just leaves it empty)
+        const descBox = document.getElementById('reg-pet-description');
+        const nextBtn = document.getElementById('reg-next-btn');
+        if (descBox && !descBox.value.trim() && window.petAI) {
+          const label = nextBtn ? nextBtn.innerHTML : '';
+          if (nextBtn) { nextBtn.disabled = true; nextBtn.textContent = 'Writing description...'; }
+          await window.petAI.fillRegisterForm({ auto: true });
+          if (nextBtn) { nextBtn.disabled = false; nextBtn.innerHTML = label; if (window.lucide) window.lucide.createIcons({ root: nextBtn }); }
+        }
+
         const user = window.pawStore.getGoogleUser();
         const ownerName = document.getElementById('reg-owner-name')?.value || (user ? user.name : 'Pet Guardian');
         const ownerPhone = document.getElementById('reg-owner-phone')?.value || '+63 917 555 3829';
@@ -1706,6 +1716,7 @@ class App {
           color,
           age,
           ageMonths,
+          description: (document.getElementById('reg-pet-description')?.value || '').trim().slice(0, 600),
           photoUrl: document.getElementById('reg-pet-photo')?.value || defaultPhotos[species] || defaultPhotos.Dog,
           owner: { name: ownerName, phone: ownerPhone, email: ownerEmail, address: ownerAddress }
         });
