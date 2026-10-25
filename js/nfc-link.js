@@ -65,6 +65,7 @@ class NfcLinkFlow {
     this.mode = 'scan';
     this.pending = null;
     this.approvedSerial = null;
+    this.resumeUid = null;
     if (this.abort) this.abort.abort();
     const pet = document.getElementById('nfc-link-pet');
     if (pet) {
@@ -162,11 +163,28 @@ class NfcLinkFlow {
     return out;
   }
 
+  // Brave exposes NDEFReader but does not deliver tag reads, so a scan there never finishes and the phone opens the tag's link itself
+  isBrave() {
+    return !!(navigator.brave && typeof navigator.brave.isBrave === 'function');
+  }
+
+  async nfcPermission() {
+    try {
+      return (await navigator.permissions.query({ name: 'nfc' })).state;
+    } catch (e) {
+      return 'unknown';
+    }
+  }
+
   async startScan(auto = false) {
     if (this.busy) return;
-    if (!('NDEFReader' in window)) {
+    if (!('NDEFReader' in window) || this.isBrave()) {
+      if (auto) return;
+      const brave = this.isBrave();
       this.setState('error', this.t('nfc.unsupported', 'This device cannot read NFC tags'),
-        this.t('nfc.unsupportedDetail', 'Web NFC works on Android Chrome over HTTPS. Use Simulate scan to try the flow here.'));
+        brave
+          ? this.t('nfc.braveDetail', 'Brave does not support NFC scanning. Open this page in Chrome on Android to scan and write tags.')
+          : this.t('nfc.unsupportedDetail', 'Web NFC works on Android Chrome over HTTPS. Use Simulate scan to try the flow here.'));
       this.setButtons({ start: this.t('nfc.retry', 'Scan again'), demo: true, back: true });
       return;
     }
@@ -179,11 +197,32 @@ class NfcLinkFlow {
 
     try {
       const reader = new NDEFReader();
-      await reader.scan({ signal: this.abort.signal });
+      // scan() waits for the NFC permission prompt; if nothing happens, say so instead of showing Scanning forever
+      const permission = await this.nfcPermission();
+      if (permission === 'denied') {
+        this.fail(this.t('nfc.failed', 'Could not link the tag'), this.t('nfc.denied', 'NFC permission was denied. Allow NFC for this site and try again.'));
+        return;
+      }
+      const started = reader.scan({ signal: this.abort.signal });
+      started.catch(() => {}); // a late rejection after the timeout below is already handled
+      if (permission === 'granted') {
+        // With permission in place scanning starts at once; if not, NFC is switched off on the phone
+        const timedOut = await Promise.race([started.then(() => false), new Promise((resolve) => setTimeout(() => resolve(true), 5000))]);
+        if (timedOut) {
+          this.fail(this.t('nfc.noStart', 'NFC scanning did not start'),
+            this.t('nfc.noStartDetail', 'Turn NFC on in your phone settings, then press Scan again. Use Chrome on Android.'));
+          return;
+        }
+      } else {
+        await started; // waits for the user to answer the permission prompt
+      }
       reader.addEventListener('reading', (event) => this.onTagRead(event, reader));
       reader.addEventListener('readingerror', () => {
-        if (this.linking) return;
-        this.fail(this.t('nfc.failed', 'Could not link the tag'), this.t('nfc.unreadable', 'The tag could not be read. Hold it flat against the phone and try again.'));
+        if (this.linking || this.mode === 'confirm') return;
+        // Brushing the tag past the antenna is common: keep the session open and ask for a steadier hold
+        this.setState('scanning', this.t('nfc.readHiccup', 'Could not read the tag'),
+          this.t('nfc.readHiccupDetail', 'Hold it flat against the back of your phone, near the NFC area, and keep still.'));
+        if (navigator.vibrate) navigator.vibrate(80);
       });
     } catch (err) {
       this.busy = false;
@@ -217,10 +256,12 @@ class NfcLinkFlow {
         return;
       }
       this.approvedSerial = null;
-      this.link({ serial, existingUid, writer: reader, existing: [], confirmed: true });
+      if (navigator.vibrate) navigator.vibrate(30);
+      this.link({ serial, existingUid: this.resumeUid || existingUid, writer: reader, existing: [], confirmed: true });
       return;
     }
 
+    if (navigator.vibrate) navigator.vibrate(30);
     this.link({ serial, existingUid, writer: reader, existing: this.describeRecords(event.message) });
   }
 
@@ -240,15 +281,29 @@ class NfcLinkFlow {
     if (!info) return;
     this.mode = 'scan';
     this.pending = null;
-    if (info.simulated || !info.writer) {
-      this.link({ ...info, existing: [], confirmed: true });
-      return;
+    // The tag has usually left the phone while the question was open. write() waits for it to come back,
+    // so show the tap prompt now and let link() carry on once the tag is there.
+    if (!info.simulated && info.writer) {
+      this.setState('scanning', this.t('nfc.tapAgain', 'Tap the tag again to overwrite it'),
+        this.t('nfc.tapAgainDetail', 'Hold it against your phone until it finishes.'));
+      this.setButtons({ start: '', demo: false, back: true, backLabel: this.t('nfc.cancel', 'Cancel') });
     }
-    // The tag has usually moved away while the question was open, so ask for one more tap before writing
-    this.approvedSerial = info.serial;
-    this.setState('scanning', this.t('nfc.tapAgain', 'Tap the tag again to overwrite it'),
-      this.t('nfc.tapAgainDetail', 'Hold it against your phone until it finishes.'));
+    this.link({ ...info, existing: [], confirmed: true, waitForTag: true });
+  }
+
+  // The tag left the phone before the write finished: keep the session and wait for it to be tapped again
+  awaitTap(serial, uid) {
+    this.linking = false;
+    this.approvedSerial = serial;
+    this.resumeUid = uid;
+    this.setState('scanning', this.t('nfc.tagMoved', 'Keep the tag against your phone'),
+      this.t('nfc.tagMovedDetail', 'The tag moved before it finished. Hold it steady and tap it again.'));
     this.setButtons({ start: '', demo: false, back: true, backLabel: this.t('nfc.cancel', 'Cancel') });
+    if (navigator.vibrate) navigator.vibrate(80);
+  }
+
+  isTagLost(err) {
+    return !!err && ['NetworkError', 'TimeoutError', 'AbortError', 'NotReadableError', 'InvalidStateError'].includes(err.name);
   }
 
   simulate() {
@@ -265,6 +320,7 @@ class NfcLinkFlow {
   fail(headline, detail) {
     this.busy = false;
     this.linking = false;
+    this.resumeUid = null;
     this.mode = 'scan';
     this.pending = null;
     this.approvedSerial = null;
@@ -281,16 +337,26 @@ class NfcLinkFlow {
     return data && data[0] ? data[0] : null;
   }
 
-  async link({ serial, existingUid, writer, simulated = false, existing = [], confirmed = false }) {
+  async link({ serial, existingUid, writer, simulated = false, existing = [], confirmed = false, waitForTag = false }) {
     const draft = this.draft;
     this.busy = true;
     this.linking = true;
-    this.setState('linking', this.t('nfc.linking', 'Linking tag to {name}...', { name: draft.name }),
-      this.t('nfc.linkingDetail', 'Writing the pet page to the tag and saving it to the database.'));
+    // After Overwrite the screen keeps its "tap the tag again" prompt while write() waits for the tag
+    if (!(waitForTag && writer && !simulated)) this.setState('linking', this.t('nfc.linking', 'Linking tag to {name}...', { name: draft.name }),
+      this.t('nfc.linkingDetail', 'Keep the tag against your phone while the pet page is written to it.'));
 
     try {
+      // Pets live in the database, so check the sign-in before anything is written to the tag
+      const client = window.pawApp && window.pawApp.supabase;
+      const { data: session } = client ? await client.auth.getUser() : { data: null };
+      if (!(session && session.user)) {
+        this.fail(this.t('nfc.signIn', 'Please sign in again'),
+          this.t('nfc.signInDetail', 'Your pet is saved to the database, which needs you to be signed in. Sign in, then register the pet again.'));
+        return;
+      }
+
       // A tag that already belongs to a pet must never be overwritten
-      if (existingUid) {
+      if (existingUid && existingUid !== this.resumeUid) { // an ID this session just generated cannot belong to a pet yet
         const owner = await this.lookupTag(existingUid);
         if (owner) {
           this.fail(this.t('nfc.taken', 'This tag is already linked to another pet'),
@@ -316,7 +382,14 @@ class NfcLinkFlow {
       for (let attempt = 0; attempt < 3 && !saved; attempt++) {
         const url = this.tagUrl(uid);
         if (writer && !simulated) {
-          await writer.write({ records: [{ recordType: 'url', data: url }] }, { overwrite: true });
+          try {
+            const signal = typeof AbortSignal !== 'undefined' && AbortSignal.timeout ? AbortSignal.timeout(waitForTag ? 20000 : 6000) : undefined;
+            await writer.write({ records: [{ recordType: 'url', data: url }] }, { overwrite: true, signal });
+          } catch (writeErr) {
+            if (this.abort && this.abort.signal.aborted) throw writeErr; // the user went back
+            if (this.isTagLost(writeErr)) { this.awaitTap(serial, uid); return; }
+            throw writeErr;
+          }
         }
         const result = await this.saveToDatabase(uid, serial);
         if (result.conflict === 'tag') { uid = this.newTagId(); continue; }
@@ -436,6 +509,7 @@ class NfcLinkFlow {
     this.done = true;
     this.busy = false;
     this.linking = false;
+    this.resumeUid = null;
     if (this.abort) this.abort.abort();
     this.setState('done', this.t('nfc.done', 'Tag linked to {name}', { name: pet.name }),
       this.t('nfc.doneDetail', 'Anyone who taps this tag will open {name}\'s page and can alert you.', { name: pet.name }));
