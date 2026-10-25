@@ -566,7 +566,6 @@ class NfcLinkFlow {
     this.setState('done', this.t('nfc.done', 'Tag linked to {name}', { name: pet.name }),
       this.t('nfc.doneDetail', 'Anyone who taps this tag will open {name}\'s page and can alert you.', { name: pet.name }));
     document.getElementById('nfc-link-uid').textContent = saved.uid;
-    document.getElementById('nfc-link-url').innerHTML = `<a href="${this.esc(saved.url)}" target="_blank" rel="noopener">${this.esc(saved.url.replace(/^https?:\/\//, ''))}</a>`;
     document.getElementById('nfc-link-result').hidden = false;
     this.setButtons({ start: this.t('nfc.finish', 'Done'), demo: false, back: false });
 
