@@ -116,11 +116,19 @@ class NfcLinkFlow {
       this.mode = 'scan';
       this.pending = null;
       this.approvedSerial = null;
-      if (this.abort) this.abort.abort();
+      // The scan session stays open while this screen is up, so a tap never opens the tag's website
+      if (this.abort && !this.abort.signal.aborted) {
+        this.busy = true;
+        this.setState('scanning', this.t('nfc.scanning', 'Scanning... keep the tag against your phone'),
+          this.t('nfc.scanningDetail', 'Do not move the tag until the scan finishes.'));
+        this.setButtons({ start: '', demo: false, back: true });
+        return;
+      }
       this.busy = false;
       this.setState('idle', this.t('nfc.holdTag', 'Hold the NFC tag to the back of your phone'),
         this.t('nfc.holdTagDetail', 'Keep this screen open and touch the tag from your pet\'s collar to your phone. While it scans, an existing link on the tag will not open.'));
       this.setButtons({ start: this.t('nfc.start', 'Start scanning'), demo: true, back: true });
+      this.startScan(true);
       return;
     }
     if (this.abort) this.abort.abort();
@@ -131,6 +139,7 @@ class NfcLinkFlow {
   }
 
   finish() {
+    if (this.abort) this.abort.abort(); // the screen is closing: tags may open their website again
     document.getElementById('nfc-link-modal')?.classList.remove('active');
   }
 
@@ -193,6 +202,7 @@ class NfcLinkFlow {
     }
 
     this.busy = true;
+    if (this.abort) this.abort.abort(); // never run two sessions at once
     this.abort = new AbortController();
     this.setState('scanning', this.t('nfc.scanning', 'Scanning... keep the tag against your phone'),
       this.t('nfc.scanningDetail', 'Do not move the tag until the scan finishes.'));
@@ -371,7 +381,7 @@ class NfcLinkFlow {
     this.mode = 'scan';
     this.pending = null;
     this.approvedSerial = null;
-    if (this.abort) this.abort.abort();
+    // Keep the scan session running behind the error: while this screen is open a tap must not open the website
     this.setState('error', headline, detail);
     this.setButtons({ start: this.t('nfc.retry', 'Scan again'), demo: true, back: true });
     if (window.nfcScanner) window.nfcScanner.playErrorBuzz();
@@ -569,7 +579,7 @@ class NfcLinkFlow {
     this.linking = false;
     this.resumeUid = null;
     this.reassignFrom = null;
-    if (this.abort) this.abort.abort();
+    // The scan session keeps running until Done is pressed, so tapping the tag again does not open the website
     this.setState('done', this.t('nfc.done', 'Tag linked to {name}', { name: pet.name }),
       this.t('nfc.doneDetail', 'Anyone who taps this tag will open {name}\'s page and can alert you.', { name: pet.name }));
     document.getElementById('nfc-link-uid').textContent = saved.uid;
