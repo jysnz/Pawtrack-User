@@ -56,13 +56,14 @@
   <link rel="stylesheet" href="css/main.css" />
   <link rel="stylesheet" href="css/components.css" />
   <link rel="stylesheet" href="css/nfc.css" />
+  <link rel="stylesheet" href="css/pets.css" />
 </head>
 
 <body>
   <!-- Sidebar: logo (home), navigation, account -->
   <aside class="app-sidebar" id="app-sidebar" aria-label="Sidebar">
     <div class="sidebar-brand">
-      <a href="#owner" class="brand-logo" title="PawTrack Home">
+      <a href="#pets" class="brand-logo" title="PawTrack Home">
         <div class="logo-icon-box">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
             <path
@@ -77,7 +78,14 @@
     </div>
 
     <nav class="role-tabs sidebar-nav" aria-label="Main Navigation">
-      <a href="#owner" class="role-tab-btn active" data-view="owner" title="Home" aria-label="Home">
+      <a href="#pets" class="role-tab-btn active" data-view="pets" title="Pets" aria-label="Pets">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="11" cy="4" r="2"/><circle cx="18" cy="8" r="2"/><circle cx="20" cy="16" r="2"/>
+          <path d="M9 10a5 5 0 0 1 5 5v3.5a3.5 3.5 0 0 1-6.84 1.045Q6.52 17.48 4.46 16.84A3.5 3.5 0 0 1 5.5 10Z"/>
+        </svg>
+        <span data-i18n="nav.pets">Pets</span>
+      </a>
+      <a href="#owner" class="role-tab-btn" data-view="owner" title="Home" aria-label="Home">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
           <polyline points="9 22 9 12 15 12 15 22"/>
@@ -222,7 +230,7 @@
         <button type="button" class="sidebar-toggle-btn" id="sidebar-toggle-btn" aria-label="Open menu" aria-controls="app-sidebar" aria-expanded="false">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/></svg>
         </button>
-        <a href="#owner" class="brand-logo header-mobile-brand" title="PawTrack Home">
+        <a href="#pets" class="brand-logo header-mobile-brand" title="PawTrack Home">
           <div class="logo-icon-box">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
               <path d="M12 10.5c1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3 1.34 3 3 3zm-6 2c1.38 0 2.5-1.12 2.5-2.5S7.38 7.5 6 7.5 3.5 8.62 3.5 10s1.12 2.5 2.5 2.5zm12 0c1.38 0 2.5-1.12 2.5-2.5S19.38 7.5 18 7.5s-2.5 1.12-2.5 2.5 1.12 2.5 2.5 2.5zM12 12c-2.76 0-5 2.24-5 5 0 2.21 1.79 4 4 4 1.1 0 2-.9 2-2 0 1.1.9 2 2 2 2.21 0 4-1.79 4-4 0-2.76-2.24-5-5-5z" />
@@ -455,6 +463,19 @@
           <button type="submit" class="btn btn-primary" id="reg-next-btn"><span data-i18n="modal.next">Next</span> <i data-lucide="arrow-right" style="width:16px; height:16px;"></i></button>
         </div>
       </form>
+    </div>
+  </div>
+
+  <!-- Pet detail + vaccination records -->
+  <div class="modal-overlay" id="pet-detail-modal">
+    <div class="modal-box pet-detail-box">
+      <div class="modal-header">
+        <h3 style="display:flex; align-items:center; gap:0.5rem;">
+          <i data-lucide="paw-print" style="color:var(--primary); width:20px; height:20px;"></i> <span>Pet details</span>
+        </h3>
+        <button type="button" class="btn-outline btn-sm" onclick="window.petsView.close()" aria-label="Close">&times;</button>
+      </div>
+      <div class="modal-body" id="pet-detail-body"></div>
     </div>
   </div>
 
@@ -2311,6 +2332,7 @@
   <script src="js/nfc-link.js"></script>
   <script src="js/found-page.js"></script>
   <script src="js/notifications.js"></script>
+  <script src="js/views/pets-view.js"></script>
   <script src="js/views/owner-view.js"></script>
   <script src="js/views/public-view.js"></script>
   <script src="js/views/cases-view.js"></script>

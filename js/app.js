@@ -6,6 +6,7 @@ class App {
   constructor() {
     this.currentView = 'owner';
     this.views = {
+      pets: window.petsView,
       owner: window.ownerView,
       map: window.publicView,
       cases: window.casesView,
@@ -673,6 +674,12 @@ class App {
       }));
       this.setGuestMode(false);
       this.updateGoogleAuthUI();
+      // Pets is the main page: land there once after signing in (not on every token refresh)
+      if (!this.landedOnPets) {
+        this.landedOnPets = true;
+        const hash = window.location.hash;
+        if (!hash || hash === '#owner') window.location.hash = '#pets';
+      }
       this.renderCurrentView();
       this.hideStartScreen();
       window.notifManager.closeModal('register-dialog-modal');
@@ -1510,7 +1517,7 @@ class App {
     }
 
     if (!hash || !this.views[hash]) {
-      hash = 'owner';
+      hash = isLoggedIn ? 'pets' : 'owner';
     }
 
     this.currentView = hash;

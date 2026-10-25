@@ -142,3 +142,16 @@ body.found-mode > *:not(#found-page):not(script):not(.toast-container):not(#toas
 @media (prefers-reduced-motion: reduce) {
   .fp-status.is-missing, .fp-check, .fp-spinner { animation: none; }
 }
+
+/* vaccinations on the tap page */
+.fp-h-icon { width: 18px; height: 18px; vertical-align: -3px; margin-right: 7px; color: var(--primary); }
+.fp-vax-list { list-style: none; display: grid; gap: 8px; }
+.fp-vax-item { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; padding: 11px 12px; border-radius: var(--radius-md); background: var(--bg-surface-elevated); }
+.fp-vax-item strong { display: block; font-size: 0.95rem; overflow-wrap: anywhere; }
+.fp-vax-item span { font-size: 0.78rem; color: var(--text-muted); }
+.fp-vax-item .fp-vax-chip { padding: 4px 10px; border-radius: var(--radius-full); font-size: 0.72rem; font-weight: 700; white-space: nowrap; }
+.fp-vax-chip.is-ok { background: rgba(22, 163, 74, 0.16); color: #15803d; }
+.fp-vax-chip.is-soon { background: rgba(217, 119, 6, 0.18); color: #b45309; }
+.fp-vax-chip.is-overdue { background: var(--danger-light); color: var(--danger); }
+[data-theme="dark"] .fp-vax-chip.is-ok { color: #4ade80; }
+[data-theme="dark"] .fp-vax-chip.is-soon { color: #fbbf24; }

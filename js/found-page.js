@@ -41,6 +41,14 @@ const FOUND_STRINGS = {
     notify: 'Notify owner',
     sending: 'Sending...',
     privacy: 'Your number is shared only with the owner. The owner\'s details stay private.',
+    vaccinesTitle: 'Vaccinations',
+    vaccinesSub: 'Records kept by the owner.',
+    vaxGiven: 'Given {date}',
+    vaxOverdue: 'Overdue by {n} {unit}',
+    vaxDueToday: 'Due today',
+    vaxDueIn: 'Due in {n} {unit}',
+    vaxNextDue: 'Next due {date}',
+    day: 'day', days: 'days',
     sentTitle: 'Owner notified',
     sentText: 'We sent {name}\'s owner your location and phone number. They will contact you soon.',
     sentWhere: 'Location', sentPhone: 'Your phone',
@@ -88,6 +96,14 @@ const FOUND_STRINGS = {
     notify: 'Abisuhan ang may-ari',
     sending: 'Ipinapadala...',
     privacy: 'Ang numero mo ay makikita lamang ng may-ari. Pribado ang detalye ng may-ari.',
+    vaccinesTitle: 'Mga bakuna',
+    vaccinesSub: 'Mga talang iningatan ng may-ari.',
+    vaxGiven: 'Naibigay noong {date}',
+    vaxOverdue: 'Lampas na ng {n} {unit}',
+    vaxDueToday: 'Ngayon ang susunod',
+    vaxDueIn: 'Susunod sa loob ng {n} {unit}',
+    vaxNextDue: 'Susunod sa {date}',
+    day: 'araw', days: 'araw',
     sentTitle: 'Naabisuhan na ang may-ari',
     sentText: 'Naipadala na namin sa may-ari ni {name} ang lokasyon at numero mo. Kokontakin ka nila agad.',
     sentWhere: 'Lokasyon', sentPhone: 'Iyong numero',
@@ -145,8 +161,65 @@ class FoundPage {
       this.renderError();
       return;
     }
-    if (!this.pet) this.renderUnknown();
-    else this.renderPet();
+    if (!this.pet) { this.renderUnknown(); return; }
+    this.renderPet();
+
+    // Vaccinations load after the page is up; a failure just leaves the card out
+    this.vaccines = [];
+    if (this.source === 'db') {
+      try {
+        this.vaccines = await this.fetchVaccines(this.tag);
+        // Insert the card in place so anything the finder has started typing is kept
+        if (this.vaccines.length && !this.sent && !this.root.querySelector('#fp-vaccines')) {
+          this.root.querySelector('#fp-notify')?.insertAdjacentHTML('beforebegin', this.vaccinesHtml());
+          this.icons();
+        }
+      } catch (err) {
+        console.warn('[Found page] vaccinations unavailable', err);
+      }
+    }
+  }
+
+  async fetchVaccines(tag) {
+    const client = window.pawApp && window.pawApp.supabase;
+    if (!client) return [];
+    const { data, error } = await client.rpc('get_pet_vaccinations_by_nfc', { p_tag: tag });
+    if (error) throw new Error(error.message);
+    return data || [];
+  }
+
+  fmtDate(value) {
+    const d = new Date(value + 'T00:00:00');
+    return Number.isNaN(d.getTime()) ? '' : d.toLocaleDateString(this.lang() === 'tl' ? 'fil-PH' : [], { dateStyle: 'medium' });
+  }
+
+  vaxStatus(nextDue) {
+    if (!nextDue) return null;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const days = Math.round((new Date(nextDue + 'T00:00:00') - today) / 86400000);
+    const unit = (n) => this.s(n === 1 ? 'day' : 'days');
+    if (days < 0) return { cls: 'overdue', label: this.s('vaxOverdue', { n: -days, unit: unit(-days) }) };
+    if (days === 0) return { cls: 'soon', label: this.s('vaxDueToday') };
+    if (days <= 30) return { cls: 'soon', label: this.s('vaxDueIn', { n: days, unit: unit(days) }) };
+    return { cls: 'ok', label: this.s('vaxNextDue', { date: this.fmtDate(nextDue) }) };
+  }
+
+  vaccinesHtml() {
+    if (!this.vaccines || !this.vaccines.length) return '';
+    const rows = this.vaccines.map((v) => {
+      const st = this.vaxStatus(v.next_due_date);
+      return `<li class="fp-vax-item">
+          <div><strong>${this.esc(v.vaccine_name)}</strong><span>${this.s('vaxGiven', { date: this.fmtDate(v.date_given) })}</span></div>
+          ${st ? `<span class="fp-vax-chip is-${st.cls}">${this.esc(st.label)}</span>` : ''}
+        </li>`;
+    }).join('');
+    return `
+        <section class="fp-card" id="fp-vaccines">
+          <h2><i data-lucide="syringe" class="fp-h-icon"></i>${this.s('vaccinesTitle')}</h2>
+          <p class="fp-sub">${this.s('vaccinesSub')}</p>
+          <ul class="fp-vax-list">${rows}</ul>
+        </section>`;
   }
 
   async fetchPet(tag) {
@@ -296,6 +369,8 @@ class FoundPage {
             ${this.fact(this.s('registeredOn'), registered, 'calendar-check')}
           </dl>
         </section>
+
+        ${this.vaccinesHtml()}
 
         <section class="fp-card fp-notify" id="fp-notify">
           ${showSent && this.sent ? this.sentHtml() : this.formHtml()}
