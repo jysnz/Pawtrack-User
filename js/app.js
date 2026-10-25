@@ -7,7 +7,6 @@ class App {
     this.currentView = 'owner';
     this.views = {
       owner: window.ownerView,
-      shelter: window.shelterView,
       map: window.publicView,
       cases: window.casesView,
       impounded: window.impoundedView,

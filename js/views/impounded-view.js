@@ -68,12 +68,6 @@ class ImpoundedView {
             ${t('impounded.subtitle', 'Real-time municipal animal shelter holding ledger, legal countdown monitor, and pet redemption gateway.')}
           </div>
         </div>
-        <div style="display:flex; gap:0.65rem; flex-wrap:wrap;">
-          <a href="#shelter" class="btn btn-outline btn-sm">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21h18"/><path d="M5 21V7l8-4 8 4v14"/><path d="M9 10a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v11H9z"/></svg>
-            <span data-i18n="impounded.terminalBtn">${t('impounded.terminalBtn', 'Shelter Intake Terminal')}</span>
-          </a>
-        </div>
       </div>
 
       <!-- Compact Summary Strip -->

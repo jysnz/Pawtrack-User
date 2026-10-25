@@ -2101,6 +2101,69 @@ class ReportManager {
     }
   }
 
+  // Copies a submitted sighting into the Supabase community_sightings table (best effort; the local copy is the source of truth for the app)
+  async saveSightingToSupabase(sighting, matchedPet) {
+    const client = window.pawApp && window.pawApp.supabase;
+    if (!client) return;
+    try {
+      // Photo: shrink the data URL, then store it in the public sighting-photos bucket
+      let photoUrl = null;
+      if (sighting.photoUrl && sighting.photoUrl.startsWith('data:')) {
+        const blob = await this.shrinkImage(sighting.photoUrl);
+        const path = `${sighting.id}-${Math.random().toString(36).slice(2, 8)}.jpg`;
+        const { error: upErr } = await client.storage.from('sighting-photos').upload(path, blob, { contentType: 'image/jpeg' });
+        if (!upErr) photoUrl = client.storage.from('sighting-photos').getPublicUrl(path).data.publicUrl;
+      }
+
+      // Link to the missing_pets row with the same pet name, if there is one
+      let missingPetId = null;
+      if (matchedPet && matchedPet.name) {
+        const { data } = await client.from('missing_pets').select('id').ilike('pet_name', matchedPet.name).limit(1);
+        missingPetId = data && data[0] ? data[0].id : null;
+      }
+
+      const { error } = await client.from('community_sightings').insert({
+        missing_pet_id: missingPetId,
+        species: ['Dog', 'Cat', 'Other'].includes(sighting.species) ? sighting.species : 'Dog',
+        breed: sighting.breed || null,
+        color: sighting.color || null,
+        photo_url: photoUrl,
+        location: sighting.location,
+        lat: sighting.lat,
+        lng: sighting.lng,
+        seen_at: new Date(sighting.dateTimeSeen).toISOString(),
+        notes: (sighting.notes || '').slice(0, 1000) || null,
+        reporter_name: (sighting.reporterName || 'Anonymous').slice(0, 80),
+        status: 'possible_sighting'
+      });
+      if (error) {
+        console.warn('[Sighting] Could not save to Supabase:', error.message);
+        if (/rate limit/i.test(error.message) && window.notifManager) {
+          window.notifManager.showToast('You have sent several sightings recently, so this one was not added to the public list. The owner was still notified.', 'warning', 6000);
+        }
+      }
+    } catch (err) {
+      console.warn('[Sighting] Could not save to Supabase:', err);
+    }
+  }
+
+  // Downscales an image data URL to at most 1280px on the long side and returns a JPEG blob
+  shrinkImage(dataUrl) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => {
+        const scale = Math.min(1, 1280 / Math.max(img.width, img.height));
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.round(img.width * scale);
+        canvas.height = Math.round(img.height * scale);
+        canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+        canvas.toBlob(b => (b ? resolve(b) : reject(new Error('Image conversion failed'))), 'image/jpeg', 0.82);
+      };
+      img.onerror = () => reject(new Error('Could not read the photo'));
+      img.src = dataUrl;
+    });
+  }
+
   submitCommunitySighting(e) {
     if (e && e.preventDefault) e.preventDefault();
 
@@ -2198,6 +2261,7 @@ class ReportManager {
     };
 
     window.pawStore.addSighting(sighting);
+    this.saveSightingToSupabase(sighting, matchedPet);
 
     // Trigger In-App Notification specifically for the pet owner
     const petDisplayName = matchedPet ? matchedPet.name : 'COMMUNITY PET';

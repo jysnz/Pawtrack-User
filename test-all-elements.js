@@ -14,13 +14,12 @@ const storeJs = fs.readFileSync(path.join(__dirname, 'js', 'store.js'), 'utf8');
 const appJs = fs.readFileSync(path.join(__dirname, 'js', 'app.js'), 'utf8');
 const notifJs = fs.readFileSync(path.join(__dirname, 'js', 'notifications.js'), 'utf8');
 const ownerJs = fs.readFileSync(path.join(__dirname, 'js', 'views', 'owner-view.js'), 'utf8');
-const shelterJs = fs.readFileSync(path.join(__dirname, 'js', 'views', 'shelter-view.js'), 'utf8');
 const publicJs = fs.readFileSync(path.join(__dirname, 'js', 'views', 'public-view.js'), 'utf8');
 const casesJs = fs.readFileSync(path.join(__dirname, 'js', 'views', 'cases-view.js'), 'utf8');
 const hwJs = fs.readFileSync(path.join(__dirname, 'js', 'views', 'hardware-view.js'), 'utf8');
 const reportJs = fs.readFileSync(path.join(__dirname, 'js', 'report-manager.js'), 'utf8');
 
-const allJs = i18nJs + '\n' + storeJs + '\n' + appJs + '\n' + notifJs + '\n' + ownerJs + '\n' + shelterJs + '\n' + publicJs + '\n' + casesJs + '\n' + hwJs + '\n' + reportJs;
+const allJs = i18nJs + '\n' + storeJs + '\n' + appJs + '\n' + notifJs + '\n' + ownerJs + '\n' + publicJs + '\n' + casesJs + '\n' + hwJs + '\n' + reportJs;
 const allHtmlAndJs = indexHtml + '\n' + allJs;
 
 // Check 1: Modals Defined in index.html
@@ -80,7 +79,7 @@ console.log(`  ✓ ${passedFunctions} handler methods verified in JS code.`);
 
 // Check 3: Role Tabs & Router Views
 console.log('\n[Check 3] Verifying Router Views & Role Tabs:');
-const expectedViews = ['owner', 'shelter', 'cases', 'impounded', 'sightings'];
+const expectedViews = ['owner', 'cases', 'impounded', 'sightings'];
 expectedViews.forEach(v => {
   const inNav = indexHtml.includes(`data-view="${v}"`);
   const inRouter = appJs.includes(`${v}: window.`);

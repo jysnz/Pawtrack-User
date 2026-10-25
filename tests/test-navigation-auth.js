@@ -14,7 +14,7 @@ const appJs = fs.readFileSync(path.join(__dirname, '..', 'js', 'app.js'), 'utf8'
 const indexHtml = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
 
 // 1. Verify index.html navigation items
-const navTabs = ['owner', 'shelter', 'map', 'cases', 'impounded', 'report'];
+const navTabs = ['owner', 'map', 'cases', 'impounded', 'report'];
 navTabs.forEach(tab => {
   assert(indexHtml.includes(`data-view="${tab}"`), `Tab data-view="${tab}" must exist in index.html`);
   console.log(`[PASS] Found tab [data-view="${tab}"] in index.html`);
@@ -69,7 +69,6 @@ global.window = {
     showToast: (msg, type) => { toasts.push({ msg, type }); }
   },
   ownerView: { render: () => {} },
-  shelterView: { render: () => {} },
   publicView: { render: () => {} },
   casesView: { render: () => {} },
   hardwareView: { render: () => {} },
@@ -94,7 +93,6 @@ class TestApp {
     this.currentView = 'owner';
     this.views = {
       owner: window.ownerView,
-      shelter: window.shelterView,
       map: window.publicView,
       cases: window.casesView,
       impounded: window.impoundedView,
@@ -191,12 +189,12 @@ console.log('Visible tabs when logged out:', visibleTabsLoggedOut);
 console.log('Hidden tabs when logged out:', hiddenTabsLoggedOut);
 
 assert.deepStrictEqual(visibleTabsLoggedOut, ['owner', 'report'], 'Only owner and report tabs must be visible when logged out');
-assert.deepStrictEqual(hiddenTabsLoggedOut, ['shelter', 'map', 'cases', 'impounded'], 'Shelter, map, cases, and impounded must be hidden when logged out');
+assert.deepStrictEqual(hiddenTabsLoggedOut, ['map', 'cases', 'impounded'], 'Map, cases, and impounded must be hidden when logged out');
 console.log('[PASS] Logged-out tab visibility correct!');
 
 // TEST 2: Logged-out Route Protection
 console.log('\n--- Test 2: Logged-Out Route Protection ---');
-['shelter', 'map', 'cases', 'impounded', 'hardware'].forEach(protectedView => {
+['map', 'cases', 'impounded', 'hardware'].forEach(protectedView => {
   window.location.hash = '#' + protectedView;
   app.handleRoute();
   assert.strictEqual(window.location.hash, '#owner', `Hash should redirect to #owner when attempting #${protectedView}`);
@@ -216,7 +214,7 @@ console.log('Visible tabs when logged in:', visibleTabsLoggedIn);
 assert.strictEqual(visibleTabsLoggedIn.length, 6, 'All 6 tabs must be visible when logged in');
 console.log('[PASS] Logged-in tabs all visible!');
 
-['shelter', 'map', 'cases', 'impounded', 'hardware'].forEach(view => {
+['map', 'cases', 'impounded', 'hardware'].forEach(view => {
   window.location.hash = '#' + view;
   app.handleRoute();
   assert.strictEqual(window.location.hash, '#' + view, `Logged-in user can access #${view}`);

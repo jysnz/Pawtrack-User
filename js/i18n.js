@@ -11,7 +11,6 @@
       // Navigation
       'nav.brandSub': 'NFC RECOVERY',
       'nav.owner': 'Pet Owner Portal',
-      'nav.shelter': 'Shelter Terminal',
       'nav.map': 'Incident Map',
       'nav.cases': 'Cases & Analytics',
       'nav.impounded': 'Impounded',
@@ -147,17 +146,6 @@
       'guide.phase3Step4Title': 'Post-Reunion Health Check & Collar Inspection',
       'guide.phase3Step4Text': 'Inspect your pet\'s NFC collar tag for secure fit and wear. Update any recent veterinary treatments, vaccinations, or address changes in the portal to keep your pet continuously protected.',
 
-      // Shelter Terminal
-      'shelter.title': 'Shelter Intake Terminal',
-      'shelter.subtitle': 'Scan a collar tag to look up the owner, log the intake, and alert them by SMS.',
-      'shelter.scannerTitle': 'Live NFC Transponder Intake Scanner',
-      'shelter.scannerSub': 'Hold an NFC collar tag to the scanner or select a test tag to view registry data and trigger notifications.',
-      'shelter.scanBtn': 'Simulate NFC Tag Scan',
-      'shelter.impoundedHeading': 'Active Impounded Pets',
-      'shelter.holdingActive': 'Holding Period Active',
-      'shelter.processIntake': 'Process Intake',
-      'shelter.releasePet': 'Authorize Release',
-
       // Incident Map
       'map.title': 'Missing & Found Pets Near You',
       'map.subtitle': 'Tap a pet to see where it was last seen.',
@@ -209,7 +197,6 @@
       // Impounded View
       'impounded.title': 'Impounded Pets',
       'impounded.subtitle': 'Animals in municipal holding. Owners have 72 hours to claim them.',
-      'impounded.terminalBtn': 'Shelter Intake Terminal',
       'impounded.statActiveTitle': 'Active Impounded Animals',
       'impounded.statActive': 'Animals in Holding Bay',
       'impounded.statClaimedTitle': 'Successfully Redeemed',
@@ -412,7 +399,6 @@
       // Navigation
       'nav.brandSub': 'PAGHAHANAP NG ALAGA',
       'nav.owner': 'May-ari ng Alaga',
-      'nav.shelter': 'Pound Terminal',
       'nav.map': 'Mapa ng mga Alaga',
       'nav.cases': 'Mga Kaso at Ulat',
       'nav.impounded': 'Impounded',
@@ -548,17 +534,6 @@
       'guide.phase3Step4Title': 'I-check ang NFC Collar at Kalusugan ng Alaga',
       'guide.phase3Step4Text': 'Suriin kung mahigpit at maayos pa ang NFC collar tag. I-update ang bakuna o address kung may pagbabago para tuloy-tuloy ang proteksyon.',
 
-      // Shelter Terminal
-      'shelter.title': 'Terminal ng Shelter Intake',
-      'shelter.subtitle': 'I-scan ang collar tag para makita ang may-ari, itala ang intake, at padalhan sila ng SMS.',
-      'shelter.scannerTitle': 'Live Scanner ng NFC Collar at Microchip',
-      'shelter.scannerSub': 'Itapat ang NFC tag o pumili ng test tag para makita ang datos ng alaga at magpadala ng alerto.',
-      'shelter.scanBtn': 'Subukan ang Pag-scan ng Tag',
-      'shelter.impoundedHeading': 'Mga Alagang Kasalukuyang Nasa Pound',
-      'shelter.holdingActive': 'Kasalukuyang Nasa Holding Period',
-      'shelter.processIntake': 'I-proseso ang Intake',
-      'shelter.releasePet': 'Pahintulutan ang Pag-release',
-
       // Incident Map
       'map.title': 'Mga Nawawala at Nakitang Alaga sa Paligid Mo',
       'map.subtitle': 'Pindutin ang alaga para makita kung saan ito huling nakita.',
@@ -610,7 +585,6 @@
       // Impounded View (Filipino)
       'impounded.title': 'Pasilidad ng Munisipyo para sa mga Nahuling Hayop',
       'impounded.subtitle': 'Mga hayop na nasa pound. May 72 oras ang may-ari para kunin sila.',
-      'impounded.terminalBtn': 'Terminal sa Pagtanggap ng Shelter',
       'impounded.statActiveTitle': 'Mga Aktibong Nahuling Alaga',
       'impounded.statActive': 'Mga Alagang Nasa Holding Bay',
       'impounded.statClaimedTitle': 'Matagumpay na Natubos',

@@ -17,7 +17,6 @@ const requiredFiles = [
   'js/nfc-scanner.js',
   'js/notifications.js',
   'js/views/owner-view.js',
-  'js/views/shelter-view.js',
   'js/views/public-view.js',
   'js/views/hardware-view.js',
   'js/app.js'
@@ -122,7 +121,6 @@ requiredIds.forEach(id => {
 // 4. Verify View Button Methods & Handlers
 console.log('\n--- Checking Button Method Bindings ---');
 const ownerViewCode = fs.readFileSync(path.join(__dirname, 'views', 'owner-view.js'), 'utf8');
-const shelterViewCode = fs.readFileSync(path.join(__dirname, 'views', 'shelter-view.js'), 'utf8');
 const publicViewCode = fs.readFileSync(path.join(__dirname, 'views', 'public-view.js'), 'utf8');
 const hardwareViewCode = fs.readFileSync(path.join(__dirname, 'views', 'hardware-view.js'), 'utf8');
 const appCode = fs.readFileSync(path.join(__dirname, 'app.js'), 'utf8');
@@ -135,10 +133,6 @@ const checks = [
   { name: 'Owner: simulateClaim', pass: ownerViewCode.includes('simulateClaim') },
   { name: 'Owner: openDirections', pass: ownerViewCode.includes('openDirections') },
   { name: 'Owner: showDigitalTagPass', pass: ownerViewCode.includes('showDigitalTagPass') },
-  { name: 'Shelter: triggerDemoScan', pass: shelterViewCode.includes('triggerDemoScan') },
-  { name: 'Shelter: handleManualScan', pass: shelterViewCode.includes('handleManualScan') },
-  { name: 'Shelter: clearScan', pass: shelterViewCode.includes('clearScan') },
-  { name: 'Shelter: submitIntake', pass: shelterViewCode.includes('submitIntake') },
   { name: 'Public: openFoundPetModal', pass: publicViewCode.includes('openFoundPetModal') },
   { name: 'Public: setFilter', pass: publicViewCode.includes('setFilter') },
   { name: 'Public: handleSearch', pass: publicViewCode.includes('handleSearch') },
