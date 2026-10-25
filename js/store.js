@@ -313,10 +313,14 @@ class Store {
       list.push(window.location.origin);
     }
     list.push(''); // relative
-    list.push('http://localhost:3000'); // Owner server
-    list.push('http://localhost:8080'); // Admin server
-    list.push('http://127.0.0.1:3000');
-    list.push('http://127.0.0.1:8080');
+    const host = (typeof window !== 'undefined' && window.location && window.location.hostname) || '';
+    const devHost = !host || host === 'localhost' || host === '127.0.0.1' || /^(10|192\.168|172\.(1[6-9]|2\d|3[01]))\./.test(host);
+    if (devHost) {
+      list.push('http://localhost:3000'); // Owner server
+      list.push('http://localhost:8080'); // Admin server
+      list.push('http://127.0.0.1:3000');
+      list.push('http://127.0.0.1:8080');
+    }
     return Array.from(new Set(list));
   }
 
@@ -356,31 +360,24 @@ class Store {
         }
       };
 
-      if (shouldApplyCollection(STORAGE_KEYS.PETS, db.pets)) {
-        localStorage.setItem(STORAGE_KEYS.PETS, JSON.stringify(db.pets));
-      }
-      if (shouldApplyCollection(STORAGE_KEYS.IMPOUNDMENTS, db.impoundments)) {
-        localStorage.setItem(STORAGE_KEYS.IMPOUNDMENTS, JSON.stringify(db.impoundments));
-      }
-      if (shouldApplyCollection(STORAGE_KEYS.NOTIFICATIONS, db.notifications)) {
-        localStorage.setItem(STORAGE_KEYS.NOTIFICATIONS, JSON.stringify(db.notifications));
-      }
-      if (shouldApplyCollection(STORAGE_KEYS.SIGHTINGS, db.sightings)) {
-        localStorage.setItem(STORAGE_KEYS.SIGHTINGS, JSON.stringify(db.sightings));
-      }
-      if (shouldApplyCollection(STORAGE_KEYS.CASES, db.cases)) {
-        localStorage.setItem(STORAGE_KEYS.CASES, JSON.stringify(db.cases));
-      }
-      if (shouldApplyCollection(STORAGE_KEYS.MISSING_REPORTS, db.missingReports)) {
-        localStorage.setItem(STORAGE_KEYS.MISSING_REPORTS, JSON.stringify(db.missingReports));
-      }
-      if (Array.isArray(db.shelters) && db.shelters.length > 0) {
-        localStorage.setItem(STORAGE_KEYS.SHELTERS, JSON.stringify(db.shelters));
-      }
-      if (Array.isArray(db.nfcTags) && db.nfcTags.length > 0) {
-        localStorage.setItem(STORAGE_KEYS.NFC_TAGS, JSON.stringify(db.nfcTags));
-      }
-      this.notify(source);
+      // Re-render only when something actually changed: a poll that returns the same data must not rebuild the view
+      let changed = false;
+      const store = (key, collection) => {
+        const next = JSON.stringify(collection);
+        if (localStorage.getItem(key) === next) return;
+        localStorage.setItem(key, next);
+        changed = true;
+      };
+
+      if (shouldApplyCollection(STORAGE_KEYS.PETS, db.pets)) store(STORAGE_KEYS.PETS, db.pets);
+      if (shouldApplyCollection(STORAGE_KEYS.IMPOUNDMENTS, db.impoundments)) store(STORAGE_KEYS.IMPOUNDMENTS, db.impoundments);
+      if (shouldApplyCollection(STORAGE_KEYS.NOTIFICATIONS, db.notifications)) store(STORAGE_KEYS.NOTIFICATIONS, db.notifications);
+      if (shouldApplyCollection(STORAGE_KEYS.SIGHTINGS, db.sightings)) store(STORAGE_KEYS.SIGHTINGS, db.sightings);
+      if (shouldApplyCollection(STORAGE_KEYS.CASES, db.cases)) store(STORAGE_KEYS.CASES, db.cases);
+      if (shouldApplyCollection(STORAGE_KEYS.MISSING_REPORTS, db.missingReports)) store(STORAGE_KEYS.MISSING_REPORTS, db.missingReports);
+      if (Array.isArray(db.shelters) && db.shelters.length > 0) store(STORAGE_KEYS.SHELTERS, db.shelters);
+      if (Array.isArray(db.nfcTags) && db.nfcTags.length > 0) store(STORAGE_KEYS.NFC_TAGS, db.nfcTags);
+      if (changed) this.notify(source);
     } catch (e) {
       console.error('Error applying db state:', e);
     }
@@ -428,7 +425,7 @@ class Store {
         // Serverless hosts (Vercel) have no /api/events stream: fall back to polling.
         if (this.sseFailures >= 3) {
           if (!this.pollTimer) {
-            this.pollTimer = setInterval(() => this.syncFromBackend(), 10000);
+            this.pollTimer = setInterval(() => { if (!document.hidden) this.syncFromBackend(); }, 30000);
           }
           return;
         }

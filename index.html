@@ -4,6 +4,22 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <!-- Keep the page blank until the app has decided between dashboard and login (removed by App.endBoot) -->
+  <script>
+    (function () {
+      var root = document.documentElement;
+      try { var theme = localStorage.getItem('pawtrack_theme'); if (theme) root.setAttribute('data-theme', theme); } catch (e) {}
+      root.classList.add('booting');
+      setTimeout(function () { root.classList.remove('booting'); }, 6000); // never leave a blank page if scripts fail
+    })();
+  </script>
+  <style>
+    html.booting { background: #180d07; }
+    html[data-theme="light"].booting { background: #faf6f2; }
+    html.booting body { visibility: hidden; }
+    html.booting::after { content: ""; position: fixed; top: 50%; left: 50%; width: 34px; height: 34px; margin: -17px 0 0 -17px; border-radius: 50%; border: 3px solid rgba(234, 157, 30, 0.25); border-top-color: #ea9d1e; animation: boot-spin 0.8s linear infinite; }
+    @keyframes boot-spin { to { transform: rotate(360deg); } }
+  </style>
   <title>PawTrack | Pet Recovery & Impoundment Notification System</title>
   <meta name="description"
     content="Unified NFC pet tracking, automated municipal pound alerts, and 72-hour legal holding countdown monitor." />

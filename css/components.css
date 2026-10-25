@@ -1665,14 +1665,17 @@
   justify-content: center;
   padding: max(12px, env(safe-area-inset-bottom, 12px)) 12px;
   opacity: 0;
+  visibility: hidden; /* keeps ~25 closed full-screen blur layers out of the compositor */
   pointer-events: none;
-  transition: opacity 0.2s ease;
+  transition: opacity 0.2s ease, visibility 0s linear 0.2s;
   overflow-y: auto;
 }
 
 .modal-overlay.active {
   opacity: 1;
+  visibility: visible;
   pointer-events: auto;
+  transition: opacity 0.2s ease, visibility 0s;
 }
 
 .modal-box {
@@ -8994,4 +8997,14 @@ div.owner-summary-stat:hover {
   .chart-hbar-risk {
     display: none;
   }
+}
+
+
+/* Phones: backdrop blur is the main cause of scroll jank on mobile GPUs, so drop it and rely on the opaque backgrounds */
+@media (max-width: 900px), (pointer: coarse) {
+  *, *::before, *::after {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+  }
+  .glass-card { transition: none; }
 }

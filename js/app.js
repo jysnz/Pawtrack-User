@@ -29,16 +29,25 @@ class App {
     this.handleRoute();
     this.checkHardwareScanUrl();
     this.restoreSession();
+    this.endBoot();
 
     // Subscribe to store updates
     window.pawStore.subscribe(() => {
       this.updateGoogleAuthUI();
-      this.renderCurrentView();
+      this.scheduleRender();
       this.updateNotifBadge();
     });
 
     this.updateGoogleAuthUI();
     this.updateNotifBadge();
+  }
+
+  // Reveals the page once the login screen or dashboard is in place (the head script keeps it blank until then)
+  endBoot(force = false) {
+    // Returning from Google sign-in: the code exchange is still running, so keep the page blank until it resolves
+    const exchanging = new URLSearchParams(window.location.search).has('code') && !window.pawStore.getGoogleUser();
+    if (exchanging && !force) return;
+    requestAnimationFrame(() => requestAnimationFrame(() => document.documentElement.classList.remove('booting')));
   }
 
   // The Supabase session is the source of truth (see initSupabaseAuth); its first auth event
@@ -76,6 +85,7 @@ class App {
     const landing = document.getElementById('auth-landing');
     if (landing) landing.style.display = 'none';
     document.body.classList.remove('auth-locked');
+    this.endBoot(true);
   }
 
   // Map a server account onto the guardian profile shape the views already use
@@ -746,6 +756,7 @@ class App {
       // Guests reached this from inside the app, so they may close it again
       if (authLandingClose) authLandingClose.style.display = this.isGuestMode() ? '' : 'none';
       document.body.classList.add('auth-locked');
+      this.endBoot(true);
       setBusy(false);
       if (pendingAuthError) {
         setStatus(loginStatus, pendingAuthError, true);
@@ -1515,6 +1526,20 @@ class App {
     this.renderCurrentView();
   }
 
+  // Store updates arrive in bursts (sync, polling, saves). Rebuild the view once per burst, and never
+  // while a modal is open: redrawing the page behind a modal makes the whole modal flicker.
+  scheduleRender() {
+    if (this.renderTimer) return;
+    this.renderTimer = setTimeout(() => {
+      this.renderTimer = null;
+      if (document.querySelector('.modal-overlay.active')) {
+        this.scheduleRender();
+        return;
+      }
+      this.renderCurrentView();
+    }, document.querySelector('.modal-overlay.active') ? 400 : 100);
+  }
+
   renderCurrentView() {
     const container = document.getElementById('app-viewport');
     if (!container) return;
@@ -1522,6 +1547,12 @@ class App {
     if (this.views[this.currentView]) {
       this.views[this.currentView].render(container);
     }
+
+    // Pet photos are large: decode them off the main thread and only load what is near the screen
+    container.querySelectorAll('img:not([loading])').forEach((img) => {
+      img.loading = 'lazy';
+      img.decoding = 'async';
+    });
   }
 
   // Pulls "your pet was found" alerts that finders sent from the tap page (stored in Supabase) into the notification list
