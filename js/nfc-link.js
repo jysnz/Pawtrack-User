@@ -14,13 +14,21 @@ class NfcLinkFlow {
     this.draft = null;
     this.abort = null;
     this.busy = false;
+    this.linking = false;
     this.done = false;
+    this.mode = 'scan'; // 'scan' | 'confirm' (waiting for the overwrite answer)
+    this.pending = null;
+    this.approvedSerial = null;
     this.bind();
   }
 
   bind() {
     const on = (id, fn) => document.getElementById(id)?.addEventListener('click', fn);
-    on('nfc-link-start', () => (this.done ? this.finish() : this.startScan()));
+    on('nfc-link-start', () => {
+      if (this.done) this.finish();
+      else if (this.mode === 'confirm') this.approveOverwrite();
+      else this.startScan();
+    });
     on('nfc-link-demo', () => this.simulate());
     on('nfc-link-back', () => this.back());
     on('nfc-link-close', () => this.back());
@@ -53,6 +61,11 @@ class NfcLinkFlow {
     this.draft = draft;
     this.done = false;
     this.busy = false;
+    this.linking = false;
+    this.mode = 'scan';
+    this.pending = null;
+    this.approvedSerial = null;
+    if (this.abort) this.abort.abort();
     const pet = document.getElementById('nfc-link-pet');
     if (pet) {
       const photo = draft.photoUrl ? `<img src="${this.esc(draft.photoUrl)}" alt="" />` : '';
@@ -64,6 +77,10 @@ class NfcLinkFlow {
     this.setButtons({ start: this.t('nfc.start', 'Start scanning'), demo: true, back: true });
     document.getElementById('nfc-link-modal')?.classList.add('active');
     if (window.lucide) window.lucide.createIcons();
+
+    // Start listening straight away (this runs inside the Next tap): while the page is scanning, Chrome keeps a
+    // tag's existing link from opening, which is what happens if the tag is tapped before scanning starts
+    if ('NDEFReader' in window) this.startScan(true);
   }
 
   esc(value) {
@@ -78,18 +95,33 @@ class NfcLinkFlow {
     if (d) d.textContent = detail || '';
   }
 
-  setButtons({ start, demo = true, back = true }) {
+  setButtons({ start, demo = true, back = true, backLabel = null }) {
     const startBtn = document.getElementById('nfc-link-start');
     if (startBtn) { startBtn.textContent = start; startBtn.disabled = !start; }
     const demoBtn = document.getElementById('nfc-link-demo');
     if (demoBtn) demoBtn.style.display = demo ? '' : 'none';
     const backBtn = document.getElementById('nfc-link-back');
     if (backBtn) backBtn.style.display = back ? '' : 'none';
+    const backText = backBtn && backBtn.querySelector('span');
+    if (backText) backText.textContent = backLabel || this.t('nfc.back', 'Back');
   }
 
   back() {
-    if (this.busy && this.abort) this.abort.abort();
+    // Cancel on the overwrite question: keep the screen and go back to waiting for a tag
+    if (this.mode === 'confirm' || this.approvedSerial !== null) {
+      this.mode = 'scan';
+      this.pending = null;
+      this.approvedSerial = null;
+      if (this.abort) this.abort.abort();
+      this.busy = false;
+      this.setState('idle', this.t('nfc.holdTag', 'Hold the NFC tag to the back of your phone'),
+        this.t('nfc.holdTagDetail', 'Keep this screen open and touch the tag from your pet\'s collar to your phone. While it scans, an existing link on the tag will not open.'));
+      this.setButtons({ start: this.t('nfc.start', 'Start scanning'), demo: true, back: true });
+      return;
+    }
+    if (this.abort) this.abort.abort();
     this.busy = false;
+    this.linking = false;
     document.getElementById('nfc-link-modal')?.classList.remove('active');
     if (!this.done) document.getElementById('register-pet-modal')?.classList.add('active');
   }
@@ -112,7 +144,25 @@ class NfcLinkFlow {
     return null;
   }
 
-  async startScan() {
+  // What a tag already holds, as short readable strings (empty when the tag is blank)
+  describeRecords(message) {
+    const out = [];
+    if (!message || !message.records) return out;
+    for (const record of message.records) {
+      if (record.recordType === 'empty') continue;
+      let text = '';
+      try {
+        if (record.recordType === 'url' || record.recordType === 'text' || record.recordType === 'absolute-url') {
+          text = new TextDecoder(record.encoding || 'utf-8').decode(record.data);
+        }
+      } catch (e) { /* undecodable: fall through to the type name */ }
+      text = (text || record.mediaType || record.recordType || 'data').trim();
+      out.push(text.length > 70 ? text.slice(0, 67) + '...' : text);
+    }
+    return out;
+  }
+
+  async startScan(auto = false) {
     if (this.busy) return;
     if (!('NDEFReader' in window)) {
       this.setState('error', this.t('nfc.unsupported', 'This device cannot read NFC tags'),
@@ -130,20 +180,20 @@ class NfcLinkFlow {
     try {
       const reader = new NDEFReader();
       await reader.scan({ signal: this.abort.signal });
-      reader.addEventListener('reading', (event) => {
-        if (!this.busy) return;
-        this.busy = false; // ignore further reads while this one links
-        this.link({
-          serial: event.serialNumber || '',
-          existingUid: this.existingTagId(event.message),
-          writer: reader
-        });
-      }, { once: true });
+      reader.addEventListener('reading', (event) => this.onTagRead(event, reader));
       reader.addEventListener('readingerror', () => {
+        if (this.linking) return;
         this.fail(this.t('nfc.failed', 'Could not link the tag'), this.t('nfc.unreadable', 'The tag could not be read. Hold it flat against the phone and try again.'));
-      }, { once: true });
+      });
     } catch (err) {
       this.busy = false;
+      if (auto) {
+        // Permission not granted yet or no NFC: leave the Start scanning button for the user to press
+        this.setState('idle', this.t('nfc.holdTag', 'Hold the NFC tag to the back of your phone'),
+          this.t('nfc.holdTagDetail', 'Keep this screen open and touch the tag from your pet\'s collar to your phone. While it scans, an existing link on the tag will not open.'));
+        this.setButtons({ start: this.t('nfc.start', 'Start scanning'), demo: true, back: true });
+        return;
+      }
       if (err && err.name === 'NotAllowedError') {
         this.fail(this.t('nfc.failed', 'Could not link the tag'), this.t('nfc.denied', 'NFC permission was denied. Allow NFC for this site and try again.'));
       } else if (err && err.name === 'AbortError') {
@@ -154,6 +204,53 @@ class NfcLinkFlow {
     }
   }
 
+  onTagRead(event, reader) {
+    if (this.linking || !this.busy || this.mode === 'confirm') return;
+    const serial = event.serialNumber || '';
+    const existingUid = this.existingTagId(event.message);
+
+    // The user approved the overwrite and is tapping the tag again so it can be written
+    if (this.approvedSerial !== null) {
+      if (serial !== this.approvedSerial) {
+        this.setState('scanning', this.t('nfc.differentTag', 'That is a different tag'),
+          this.t('nfc.differentTagDetail', 'Tap the same tag again, or press Cancel.'));
+        return;
+      }
+      this.approvedSerial = null;
+      this.link({ serial, existingUid, writer: reader, existing: [], confirmed: true });
+      return;
+    }
+
+    this.link({ serial, existingUid, writer: reader, existing: this.describeRecords(event.message) });
+  }
+
+  askOverwrite(info) {
+    this.pending = info;
+    this.mode = 'confirm';
+    this.linking = false;
+    this.setState('warn', this.t('nfc.hasData', 'This tag already has data'),
+      this.t('nfc.hasDataDetail', 'It currently holds: {data}. Overwrite it with the PawTrack link for {name}?',
+        { data: info.existing.join(', '), name: this.draft.name }));
+    this.setButtons({ start: this.t('nfc.overwrite', 'Overwrite'), demo: false, back: true, backLabel: this.t('nfc.cancel', 'Cancel') });
+    if (window.nfcScanner) window.nfcScanner.playErrorBuzz();
+  }
+
+  approveOverwrite() {
+    const info = this.pending;
+    if (!info) return;
+    this.mode = 'scan';
+    this.pending = null;
+    if (info.simulated || !info.writer) {
+      this.link({ ...info, existing: [], confirmed: true });
+      return;
+    }
+    // The tag has usually moved away while the question was open, so ask for one more tap before writing
+    this.approvedSerial = info.serial;
+    this.setState('scanning', this.t('nfc.tapAgain', 'Tap the tag again to overwrite it'),
+      this.t('nfc.tapAgainDetail', 'Hold it against your phone until it finishes.'));
+    this.setButtons({ start: '', demo: false, back: true, backLabel: this.t('nfc.cancel', 'Cancel') });
+  }
+
   simulate() {
     if (this.busy) return;
     this.busy = true;
@@ -162,11 +259,15 @@ class NfcLinkFlow {
     const bytes = new Uint8Array(7);
     crypto.getRandomValues(bytes);
     const serial = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join(':');
-    setTimeout(() => { this.busy = false; this.link({ serial, existingUid: null, writer: null, simulated: true }); }, 900);
+    setTimeout(() => { this.busy = false; this.link({ serial, existingUid: null, writer: null, simulated: true, existing: [] }); }, 900);
   }
 
   fail(headline, detail) {
     this.busy = false;
+    this.linking = false;
+    this.mode = 'scan';
+    this.pending = null;
+    this.approvedSerial = null;
     if (this.abort) this.abort.abort();
     this.setState('error', headline, detail);
     this.setButtons({ start: this.t('nfc.retry', 'Scan again'), demo: true, back: true });
@@ -180,9 +281,10 @@ class NfcLinkFlow {
     return data && data[0] ? data[0] : null;
   }
 
-  async link({ serial, existingUid, writer, simulated = false }) {
+  async link({ serial, existingUid, writer, simulated = false, existing = [], confirmed = false }) {
     const draft = this.draft;
     this.busy = true;
+    this.linking = true;
     this.setState('linking', this.t('nfc.linking', 'Linking tag to {name}...', { name: draft.name }),
       this.t('nfc.linkingDetail', 'Writing the pet page to the tag and saving it to the database.'));
 
@@ -199,6 +301,12 @@ class NfcLinkFlow {
       if (serial && window.pawStore.getPets().some((p) => p.nfcSerial && p.nfcSerial.toLowerCase() === serial.toLowerCase())) {
         this.fail(this.t('nfc.taken', 'This tag is already linked to another pet'),
           this.t('nfc.takenDetail', 'Use a different tag, or unlink it from the other pet first.'));
+        return;
+      }
+
+      // Anything already on the tag is only replaced after the user says so
+      if (existing.length && !confirmed) {
+        this.askOverwrite({ serial, existingUid, writer, simulated, existing });
         return;
       }
 
@@ -327,6 +435,7 @@ class NfcLinkFlow {
   onLinked(pet, saved, simulated) {
     this.done = true;
     this.busy = false;
+    this.linking = false;
     if (this.abort) this.abort.abort();
     this.setState('done', this.t('nfc.done', 'Tag linked to {name}', { name: pet.name }),
       this.t('nfc.doneDetail', 'Anyone who taps this tag will open {name}\'s page and can alert you.', { name: pet.name }));
