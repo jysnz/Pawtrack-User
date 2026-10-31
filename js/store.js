@@ -206,6 +206,7 @@ class Store {
   startSupabaseSync() {
     this.syncFromSupabase();
     this.pollTimer = setInterval(() => { if (!document.hidden) this.syncFromSupabase(); }, 20000);
+    if (this.pollTimer && this.pollTimer.unref) this.pollTimer.unref(); // tests running in Node can exit
     document.addEventListener('visibilitychange', () => { if (!document.hidden) this.syncFromSupabase(); });
   }
 

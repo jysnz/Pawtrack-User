@@ -16,9 +16,16 @@ class NotificationManager {
     return false;
   }
 
+  // The signed-in guardian's notifications (only about their own pets); a store without that filter lists all
+  myNotifications() {
+    const store = window.pawStore;
+    if (!store) return [];
+    return typeof store.getMyNotifications === 'function' ? store.getMyNotifications() : store.getNotifications();
+  }
+
   // When the panel opens on a tab with nothing unread but the other tab has unread alerts, show that tab
   pickCategoryWithUnread() {
-    const notifs = window.pawStore ? window.pawStore.getMyNotifications() : [];
+    const notifs = this.myNotifications();
     const unread = (priority) => notifs.some(n => !n.read && this.isPriority(n) === priority);
     const onPriority = this.activeCategory === 'priority';
     if (!unread(onPriority) && unread(!onPriority)) this.activeCategory = onPriority ? 'others' : 'priority';
@@ -82,7 +89,7 @@ class NotificationManager {
 
     if (!listElem) return;
 
-    const notifs = window.pawStore ? window.pawStore.getMyNotifications() : [];
+    const notifs = this.myNotifications();
     const unreadCount = notifs.filter(n => !n.read).length;
 
     // Filter Priority (Official Impound Alerts) vs Others (Good Samaritan matches, sightings, general)

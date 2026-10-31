@@ -36,7 +36,7 @@ start "" http://localhost:8080
 echo.
 echo =======================================================
 echo   Both systems are starting up and synchronized!
-echo   Shared Database: e:\Codes\pawtrack-shared-db.json
+echo   Database: Supabase (cloud)
 echo =======================================================
 echo.
 pause
