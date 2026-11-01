@@ -255,8 +255,14 @@ class NotificationManager {
     const userDropdown = document.getElementById('user-account-dropdown');
     if (userDropdown) userDropdown.style.display = 'none';
 
-    if (notif.type === 'sighting_verification' || notif.sightingId) {
-      this.openSightingVerificationModal(notif.sightingId || notif.id);
+    if (notif.caseId) {
+      this.openReunionCase(notif.caseId);
+    } else if (notif.claimId && window.sightingsView) {
+      window.sightingsView.openClaimDetail(notif.claimId);
+    } else if (notif.type === 'sighting_verification' || notif.sightingId) {
+      // The same Verify dialog as the Verify button on a post: the alert is matched to the sighting it is about
+      const sighting = this.findSightingForNotification(notif);
+      this.openSightingFromNotification(sighting, notif);
     } else if (notif.type === 'pet_found_match' || notif.finderPhone || (notif.title && notif.title.includes('FOUND YOUR PET'))) {
       this.showFinderInfo(notif);
     } else if (notif.type === 'impound_alert' && notif.impoundData) {
@@ -270,6 +276,189 @@ class NotificationManager {
         document.getElementById('incident-map-section')?.scrollIntoView({behavior:'smooth'});
       }, 250);
     }
+  }
+
+  // An alert from the database says which pet was seen, not which sighting. The sighting is the one posted closest
+  // in time to the alert, for that pet's report or at that same place (an old alert can outlive its report).
+  findSightingForNotification(notif) {
+    const store = window.pawStore;
+    if (!store) return null;
+    if (notif.sightingId) return store.getSightingById(notif.sightingId) || null;
+    const all = store.getSightings() || [];
+    const report = notif.missingReportId ? store.getMissingReportById(notif.missingReportId) : null;
+    const loc = String(notif.location || '').trim();
+    const byReport = all.filter((s) => (notif.missingReportId && String(s.missing_report_id) === String(notif.missingReportId))
+      || (report && report.petId && String(s.petId) === String(report.petId)));
+    const byPlace = loc ? all.filter((s) => String(s.location || '').trim() === loc || String(s.location || '').startsWith(loc.slice(0, 24))) : [];
+    const pool = byReport.length ? byReport : byPlace;
+    if (!pool.length) return null;
+    const at = new Date(notif.timestamp).getTime() || Date.now();
+    const time = (s) => new Date(s.createdAt || s.dateTimeSeen || 0).getTime() || 0;
+    return pool.slice().sort((a, b) => Math.abs(time(a) - at) - Math.abs(time(b) - at))[0];
+  }
+
+  // A sighting alert opens the Verify dialog; once the owner has confirmed, it opens the reunion steps instead
+  async openSightingFromNotification(sighting, notif) {
+    if (!sighting) {
+      this.showToast('This sighting is no longer available. It may have been removed.', 'info', 4500);
+      return;
+    }
+    if (sighting.status === 'confirmed_sighting') {
+      const caseId = await window.pawStore.getCaseIdForSighting(sighting.id);
+      if (caseId) { this.openReunionCase(caseId); return; }
+    }
+    this.openSightingVerificationModal(sighting.id);
+  }
+
+  // ---------- Reunion case: next steps after an owner confirms a sighting ----------
+  async openReunionCase(caseId) {
+    const d = await window.pawStore.getCaseDetails(caseId);
+    if (!d || !document.getElementById('case-body')) {
+      this.showToast('This reunion is not available any more.', 'info', 4000);
+      return;
+    }
+    this.currentCaseId = caseId;
+    this.renderReunionCase(d);
+    this.openModal('reunion-case-modal');
+  }
+
+  renderReunionCase(d) {
+    this.currentCase = d;
+    const body = document.getElementById('case-body');
+    const esc = (v) => String(v == null ? '' : v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const owner = d.role === 'owner';
+    const pet = d.pet_name || 'the pet';
+    const status = d.status;
+    const ago = (v) => { if (!v) return ''; const m = Math.max(1, Math.round((Date.now() - new Date(v).getTime()) / 60000)); return m < 60 ? `${m}m ago` : m < 1440 ? `${Math.round(m / 60)}h ago` : `${Math.round(m / 1440)}d ago`; };
+    const done = { connecting: 1, still_searching: 1, owner_marked: 2, disputed: 2, reunited: 4, not_mine: 0 }[status] ?? 1;
+    const steps = [
+      ['Confirmed', owner ? 'You confirmed it is your pet' : 'The owner confirmed it'],
+      ['Contact', owner ? 'Call the finder' : 'The owner will call you'],
+      ['Handover', `${pet} goes home`],
+      ['Reunited', 'Both of you confirm']
+    ];
+    const stepper = status === 'not_mine' ? '' : `<ol class="rc-steps">${steps.map(([t, h], i) =>
+      `<li class="${i < done ? 'is-done' : i === done ? 'is-active' : ''}"><span class="rc-dot">${i < done ? '&#10003;' : i + 1}</span><span class="rc-step-text"><b>${t}</b><small>${h}</small></span></li>`).join('')}</ol>`;
+
+    const moved = !!d.moved_on_at;
+    let banner = {
+      connecting: owner ? 'Contact the finder to arrange the handover.' : 'The owner will contact you to collect the pet. Keep your phone nearby.',
+      still_searching: 'You are still searching. This sighting stays on the map as a lead.',
+      owner_marked: owner ? 'You marked the pet as found. Waiting for the finder to confirm that it went home.' : 'The owner says the pet is home. Please confirm below.',
+      disputed: owner ? 'The finder says the pet did not go home. Please contact them.' : 'You said the pet did not go home. The owner has been told.',
+      reunited: owner ? 'Reunion complete. Welcome home!' : 'Reunion complete. Thank you for helping this pet get home!',
+      not_mine: owner ? 'Closed: you said this was not your pet.' : 'Closed: the owner checked and it was not their pet.'
+    }[status] || '';
+    if (moved && ['connecting', 'still_searching'].includes(status)) {
+      banner = owner
+        ? `${pet} moved on from this spot. We asked the finder and others who reported ${pet} to look nearby.`
+        : `The owner says ${pet} left that spot. Did you see where it went?`;
+    }
+    const bannerCls = status === 'reunited' ? 'is-ok' : (status === 'disputed' || status === 'not_mine') ? 'is-bad' : 'is-wait';
+
+    const showContact = !['reunited', 'not_mine'].includes(status);
+    const tel = String(d.counterpart_phone || '').replace(/[^+\d]/g, '');
+    const contact = showContact ? (d.counterpart_phone
+      ? `<a class="cd-call" href="tel:${esc(tel)}"><span class="cd-call-icon"><i data-lucide="phone"></i></span><span class="cd-call-text"><small>Call ${esc(d.counterpart_name)}</small><strong>${esc(d.counterpart_phone)}</strong></span><span class="cd-call-go">Tap to call</span></a>`
+      : `<p class="cd-nophone">${esc(d.counterpart_name)} did not leave a number yet. They can reach you on the number you gave.</p>`) : '';
+
+    const movedTips = owner && d.moved_on_at && ['connecting', 'still_searching'].includes(status) ? `
+      <div class="rc-tips"><h4>Search nearby</h4><ul>
+        <li>Walk or drive the streets around that spot, calling ${esc(pet)} by name.</li>
+        <li>Ask neighbours, guards and shop owners if they have seen ${esc(pet)}.</li>
+        <li>Keep your phone on in case the finder or a neighbour calls.</li>
+        <li>Check shelters and the Found a Pet list for new sightings.</li>
+      </ul></div>` : '';
+    const tips = movedTips || (owner && ['connecting', 'still_searching'].includes(status) ? `
+      <div class="rc-tips"><h4>Meeting safely</h4><ul>
+        <li>Meet in a public place, in daylight.</li>
+        <li>Bring proof it is your pet: the Digital Pass, photos, or the vaccination card.</li>
+        <li>Check the pet's condition before you leave, and never send money first.</li>
+      </ul></div>` : '');
+
+    let actions = '';
+    if (owner && ['connecting', 'still_searching'].includes(status)) {
+      actions = `<div class="rc-actions">
+        <button type="button" class="btn btn-primary rc-primary" data-case="reunited"><i data-lucide="party-popper"></i> ${moved ? `${esc(pet)} was found` : 'We are reunited'}</button>
+        <div class="rc-row">
+          <button type="button" class="btn btn-outline btn-sm" data-case="notmine"><i data-lucide="x-circle"></i> Not my pet</button>
+          ${d.moved_on_at ? '' : '<button type="button" class="btn btn-outline btn-sm" data-case="movedon"><i data-lucide="footprints"></i> It left that spot</button>'}
+        </div></div>`;
+    } else if (!owner && d.moved_on_at && ['connecting', 'still_searching'].includes(status)) {
+      actions = `<div class="rc-actions"><button type="button" class="btn btn-primary rc-primary" data-case="newsighting"><i data-lucide="map-pin"></i> I saw where it went</button></div>`;
+    } else if (!owner && status === 'owner_marked' && !d.finder_answer) {
+      actions = `<div class="rc-actions"><div class="rc-row rc-row-2">
+        <button type="button" class="btn btn-outline" data-case="no">Not yet</button>
+        <button type="button" class="btn btn-primary" data-case="yes"><i data-lucide="check"></i> Yes, ${esc(pet)} went home</button>
+      </div></div>`;
+    }
+
+    body.innerHTML = `
+      <div class="rc">
+        <section class="rc-pet">
+          <img src="${esc(d.pet_photo || window.PET_PHOTO_PLACEHOLDER)}" alt="" onerror="this.src='${window.PET_PHOTO_PLACEHOLDER}'" />
+          <div><small>${owner ? 'Your pet' : 'The pet you reported'}</small><strong>${esc(pet)}</strong>
+            <span><i data-lucide="map-pin"></i> ${esc(String(d.location || '').replace(/\s*\([^()]*\)\s*$/, ''))}</span>
+            ${d.moved_on_at ? '<em class="rc-moved">Pet moved on from this spot</em>' : ''}</div>
+        </section>
+        ${stepper}
+        <div class="cd-status ${bannerCls === 'is-ok' ? 'is-reunited' : bannerCls === 'is-bad' ? 'is-discarded' : 'is-pending'}"><i data-lucide="${status === 'reunited' ? 'party-popper' : status === 'not_mine' || status === 'disputed' ? 'alert-circle' : 'clock'}"></i><span>${esc(banner)}</span></div>
+        ${contact}
+        ${tips}
+        <ul class="cd-timeline"><li><span>Confirmed</span><b>${esc(ago(d.owner_confirmed_at))}</b></li>${d.owner_marked_at ? `<li><span>Marked found</span><b>${esc(ago(d.owner_marked_at))}</b></li>` : ''}${d.finder_answered_at ? `<li><span>Finder answered</span><b>${esc(ago(d.finder_answered_at))}</b></li>` : ''}</ul>
+        ${actions}
+      </div>`;
+    if (!body.__caseBound) {
+      body.__caseBound = true;
+      body.addEventListener('click', (e) => {
+        const b = e.target.closest && e.target.closest('[data-case]');
+        if (b) this.caseAction(b);
+      });
+    }
+    if (window.lucide) window.lucide.createIcons({ root: body });
+  }
+
+  // Buttons on the case screen. Destructive answers ask for a second tap.
+  async caseAction(btn) {
+    const act = btn.dataset.case;
+    const d = this.currentCase;
+    const store = window.pawStore;
+    if (!d) return;
+    if ((act === 'notmine' || act === 'no') && btn.dataset.armed !== '1') {
+      btn.dataset.armed = '1';
+      btn.dataset.label = btn.innerHTML;
+      btn.textContent = 'Tap again to confirm';
+      setTimeout(() => { if (btn.isConnected && btn.dataset.armed === '1') { btn.dataset.armed = ''; btn.innerHTML = btn.dataset.label; } }, 4000);
+      return;
+    }
+    if (act === 'newsighting') {
+      // The finder reports where the pet went: Found a Pet with this missing pet chosen
+      this.closeModal('reunion-case-modal');
+      if (window.publicView && window.publicView.seenThisPet) window.publicView.seenThisPet(d.registered_pet_id || '', d.missing_report_id || '');
+      return;
+    }
+    if (act === 'reunited') {
+      // The owner shows the pet's condition and a photo together before the report closes
+      this.closeModal('reunion-case-modal');
+      if (window.publicView && window.publicView.openMarkFound) window.publicView.openMarkFound(d.registered_pet_id || d.missing_report_id);
+      return;
+    }
+    btn.disabled = true;
+    let res;
+    let done = '';
+    if (act === 'notmine') { res = await store.ownerCaseResponse(d.id, 'not_mine'); done = 'Closed. The finder was thanked and told.'; }
+    else if (act === 'movedon') { res = await store.markSightingMovedOn(d.sighting_id); done = 'Noted. The finder and others who reported this pet were asked to look nearby.'; }
+    else if (act === 'yes') { res = await store.finderConfirmHandover(d.id, true); done = 'Thank you! The owner was told.'; }
+    else if (act === 'no') { res = await store.finderConfirmHandover(d.id, false); done = 'Thanks. The owner was told.'; }
+    if (!res || !res.ok) {
+      btn.disabled = false;
+      this.showToast((res && res.error) || 'Could not save that. Please try again.', 'danger', 5000);
+      return;
+    }
+    this.showToast(done, 'success', 4500);
+    store.syncFromSupabase();
+    const fresh = await store.getCaseDetails(d.id);
+    if (fresh) this.renderReunionCase(fresh);
   }
 
   showFinderInfo(itemOrId) {
@@ -564,7 +753,6 @@ class NotificationManager {
     const verifySightPhoto = document.getElementById('verify-sight-photo');
     const verifySightLocation = document.getElementById('verify-sight-location');
     const verifySightDatetime = document.getElementById('verify-sight-datetime');
-    const verifySightCoords = document.getElementById('verify-sight-coords');
     const verifySightReporter = document.getElementById('verify-sight-reporter');
     const verifySightPhone = document.getElementById('verify-sight-phone');
     const verifySightNotes = document.getElementById('verify-sight-notes');
@@ -577,19 +765,58 @@ class NotificationManager {
         ? new Date(sighting.dateTimeSeen).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })
         : 'Recently reported';
     }
-    const coordsStr = sighting.coords 
-      ? `${sighting.coords[0].toFixed(4)}, ${sighting.coords[1].toFixed(4)}`
-      : (sighting.lat && sighting.lng ? `${sighting.lat.toFixed(4)}, ${sighting.lng.toFixed(4)}` : '14.6500, 121.0350');
-    if (verifySightCoords) verifySightCoords.textContent = coordsStr;
+
+    // Everything the finder filled in: kind of pet and assumed breed, place name and description, condition
+    const verifySightBreed = document.getElementById('verify-sight-breed');
+    if (verifySightBreed) verifySightBreed.textContent = [sighting.species, window.pawStore.sightingBreed(sighting)].filter(Boolean).join(' · ') || 'Not specified';
+
+    // The finder's place description is saved in brackets after the place name: "Place name (near the park gate)"
+    const placeMatch = String(sighting.location || '').match(/^(.*?)\s*\(([^()]*)\)\s*$/);
+    if (placeMatch && verifySightLocation) verifySightLocation.textContent = placeMatch[1] || sighting.location;
+    const descRow = document.getElementById('verify-sight-placedesc-row');
+    const descEl = document.getElementById('verify-sight-placedesc');
+    if (descRow && descEl) {
+      descEl.textContent = placeMatch ? placeMatch[2] : '';
+      descRow.hidden = !(placeMatch && placeMatch[2].trim());
+    }
+    this.showVerificationMap(sighting);
 
     if (verifySightReporter) verifySightReporter.textContent = sighting.reporterName || 'Community Good Samaritan';
     if (verifySightPhone) verifySightPhone.textContent = sighting.reporterPhone || '+63 9XX XXX XXXX';
-    if (verifySightNotes) verifySightNotes.textContent = `"${sighting.comments || sighting.notes || 'Spotted moving in area.'}"`;
+    const rawNotes = String(sighting.comments || sighting.notes || '').trim();
+    const condition = rawNotes.match(/^pet condition:\s*([\s\S]*)$/i);
+    const notesLabel = document.getElementById('verify-sight-notes-label');
+    if (notesLabel) notesLabel.textContent = condition ? 'Pet condition:' : 'Finder Observations / Notes:';
+    if (verifySightNotes) verifySightNotes.textContent = `"${condition ? condition[1] : (rawNotes || 'Spotted moving in area.')}"`;
 
     this.openModal('sighting-verification-modal');
   }
 
-  handleVerificationDecision(isMatch) {
+  // Small map with a pin where the finder found the pet (hidden when the report has no coordinates)
+  async showVerificationMap(sighting) {
+    const el = document.getElementById('verify-sight-map');
+    if (!el) return;
+    const lat = sighting.coords ? Number(sighting.coords[0]) : Number(sighting.lat);
+    const lng = sighting.coords ? Number(sighting.coords[1]) : Number(sighting.lng);
+    if (this.verifyMap) { try { this.verifyMap.remove(); } catch (e) {} this.verifyMap = null; }
+    el.innerHTML = '';
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) { el.hidden = true; return; }
+    el.hidden = false;
+    try { await window.PawMapsReady; } catch (e) { /* the map is optional */ }
+    if (!window.L || !document.getElementById('verify-sight-map') || el.hidden) { el.hidden = true; return; }
+    this.verifyMap = window.L.map(el, { scrollWheelZoom: false, zoomControl: true, doubleClickZoom: false }).setView([lat, lng], 16);
+    window.L.tileLayer('https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', { maxZoom: 20 }).addTo(this.verifyMap);
+    window.L.marker([lat, lng], {
+      icon: window.L.divIcon({
+        className: 'verify-pin',
+        html: '<div style="width:20px;height:20px;border-radius:50%;background:#ba3820;border:3px solid #fff;transform:translate(-50%,-50%);box-shadow:0 2px 8px rgba(0,0,0,0.5);"></div>',
+        iconSize: [0, 0], iconAnchor: [0, 0]
+      })
+    }).addTo(this.verifyMap);
+    setTimeout(() => this.verifyMap && this.verifyMap.invalidateSize(), 250);
+  }
+
+  async handleVerificationDecision(isMatch) {
     const hiddenSightingId = document.getElementById('verification-sighting-id');
     const sightingId = hiddenSightingId ? hiddenSightingId.value : null;
 
@@ -602,7 +829,12 @@ class NotificationManager {
       if (window.pawStore) {
         window.pawStore.confirmSighting(sightingId);
       }
-      this.showToast('YES! Sighting Confirmed as Your Pet! Location verified on Community Map.', 'success', 5500);
+      const yesBtn = document.getElementById('verify-decision-yes-btn');
+      if (yesBtn) yesBtn.disabled = true;
+      // The database confirms it, opens the reunion case and tells the finder
+      const result = window.pawStore ? await window.pawStore.confirmSightingRpc(sightingId) : { ok: false };
+      if (yesBtn) yesBtn.disabled = false;
+      this.showToast('Confirmed as your pet. The finder has been told.', 'success', 5000);
 
       // Update in-modal badge
       const statusBadge = document.getElementById('verification-status-badge');
@@ -615,6 +847,10 @@ class NotificationManager {
       const statusDot = document.getElementById('verification-status-dot');
       if (statusDot) statusDot.style.background = '#22c55e';
 
+      const confirmed = window.pawStore.getSightingById(sightingId) || {};
+      const rep = confirmed.missing_report_id ? window.pawStore.getMissingReportById(confirmed.missing_report_id) : null;
+      const reunionPetId = (rep && (rep.petId || rep.id)) || confirmed.petId || null;
+
       setTimeout(() => {
         this.closeModal('sighting-verification-modal');
         if (window.publicView && window.location.hash === '#map') {
@@ -623,7 +859,13 @@ class NotificationManager {
         if (window.ownerView && window.location.hash === '#owner') {
           window.ownerView.render(document.getElementById('app-viewport'));
         }
-      }, 900);
+        if (result.ok && result.caseId) {
+          this.openReunionCase(result.caseId); // next steps: call the finder, meet safely, mark reunited
+        } else if (reunionPetId && window.publicView && window.publicView.openMarkFound) {
+          window.publicView.openMarkFound(reunionPetId);
+        }
+        if (window.sightingsView && window.location.hash === '#sightings') window.sightingsView.refresh();
+      }, 600);
     } else {
       if (window.pawStore) {
         window.pawStore.dismissSighting(sightingId);

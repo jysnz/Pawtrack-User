@@ -221,14 +221,17 @@ class Store {
       const user = this.getGoogleUser();
       const signedIn = !!(user && user.id);
       const none = Promise.resolve({ data: [] });
-      const [reports, sightings, shelters, impounded, pets, notifs, reunited] = await Promise.all([
+      const [reports, sightings, shelters, impounded, pets, notifs, reunited, contacts] = await Promise.all([
         sb.from('missing_pets').select('*').in('status', ['missing', 'sighted']).order('last_seen_at', { ascending: false }),
         sb.from('community_sightings').select('*').order('created_at', { ascending: false }).limit(500),
         sb.from('shelters').select('*').order('name'),
         sb.from('impounded_pets').select('*').order('intake_at', { ascending: false }).limit(200),
         signedIn ? sb.from('registered_pets').select('*').order('created_at') : none,
-        signedIn ? sb.from('notifications').select('*').order('created_at', { ascending: false }).limit(100) : none,
-        sb.from('reunited_pets').select('*').order('reunited_at', { ascending: false }).limit(200)
+        // Only this person's own alerts: an approved admin could otherwise read everyone's
+        signedIn ? sb.from('notifications').select('*').eq('recipient_id', user.id).order('created_at', { ascending: false }).limit(100) : none,
+        sb.from('reunited_pets').select('*').order('reunited_at', { ascending: false }).limit(200),
+        // Finder phone numbers are private: the database only returns the ones this guardian may see
+        signedIn ? sb.from('sighting_contacts').select('sighting_id, phone') : none
       ].map((p) => Promise.resolve(p).catch((error) => ({ error }))));
 
       let changed = false;
@@ -243,7 +246,14 @@ class Store {
 
       const reportList = reports.error ? this.getMissingReports() : (reports.data || []).map((r) => this.fromReportRow(r));
       if (!reports.error) put(STORAGE_KEYS.MISSING_REPORTS, reportList);
-      if (!sightings.error) put(STORAGE_KEYS.SIGHTINGS, (sightings.data || []).map((s) => this.fromSightingRow(s)));
+      if (!sightings.error) {
+        const phones = new Map((contacts && !contacts.error ? contacts.data || [] : []).map((c) => [c.sighting_id, c.phone]));
+        put(STORAGE_KEYS.SIGHTINGS, (sightings.data || []).map((row) => {
+          const item = this.fromSightingRow(row);
+          if (phones.has(row.id)) item.reporterPhone = phones.get(row.id);
+          return item;
+        }));
+      }
       const shelterList = shelters.error ? this.getShelters() : (shelters.data || []).map((s) => this.fromShelterRow(s));
       if (!shelters.error) put(STORAGE_KEYS.SHELTERS, shelterList);
       if (!impounded.error) put(STORAGE_KEYS.IMPOUNDMENTS, (impounded.data || []).map((i) => this.fromImpoundRow(i, shelterList)));
@@ -261,6 +271,11 @@ class Store {
       }
 
       this.syncStatus = 'connected';
+      // Follow-up reminders for reunions that are still open (24h, then 72h); checked at most once an hour
+      if (signedIn && (!this._remindersAt || Date.now() - this._remindersAt > 3600000)) {
+        this._remindersAt = Date.now();
+        this.runCaseReminders().then((n) => { if (n) this.syncFromSupabase(); });
+      }
       if (changed) this.notify('supabase_sync');
       return true;
     })().finally(() => { this.syncing = null; });
@@ -290,6 +305,7 @@ class Store {
       lastSeenCoords: [r.lat, r.lng],
       lastSeenDate: r.last_seen_at,
       notes: r.notes || '',
+      caption: r.caption || '',
       status: 'active', // only open reports (missing or sighted) are loaded
       dbStatus: r.status,
       reportedByOwner: r.reported_by_owner !== false,
@@ -345,6 +361,9 @@ class Store {
       photoUrl: s.photo_url || '',
       photo: s.photo_url || '',
       reporterName: s.reporter_name || '',
+      caption: s.caption || '',
+      reporterAvatar: s.reporter_avatar || '',
+      movedOn: !!s.moved_on_at,
       reporterId: s.reporter_id || null, // the signed-in finder who sent it (null for guests)
       confidenceScore: s.confidence_score,
       status: s.status || 'possible_sighting'
@@ -407,6 +426,8 @@ class Store {
       finderName: 'Community Good Samaritan',
       finderPhone: (message.match(/Finder phone: ([^.]+)/) || [])[1] || '',
       finderNotes: (message.match(/Message: "([^"]*)"/) || [])[1] || '',
+      claimId: n.sighting_claim_id || undefined, // set on pet-claim alerts: tapping one opens the claim
+      caseId: n.reunion_case_id || undefined, // set on reunion alerts: tapping one opens the case
       timestamp: n.created_at,
       read: !!n.is_read
     };
@@ -614,6 +635,8 @@ class Store {
       daysMissing: r.days_missing,
       outcome: r.outcome,
       story: r.story || '',
+      foundCondition: r.found_condition || '',
+      reunionPhotoUrl: r.reunion_photo_url || '',
       reunitedAt: r.reunited_at
     };
   }
@@ -713,7 +736,8 @@ class Store {
     });
     this.notify('notifications_read');
     const sb = this.client();
-    if (sb && this.getGoogleUser()) sb.from('notifications').update({ is_read: true }).eq('is_read', false).then(({ error }) => { if (error) console.warn('[Store] mark all read:', error.message); });
+    const me = this.getGoogleUser();
+    if (sb && me && me.id) sb.from('notifications').update({ is_read: true }).eq('recipient_id', me.id).eq('is_read', false).then(({ error }) => { if (error) console.warn('[Store] mark all read:', error.message); });
   }
 
   // Alerts whoever reported a missing pet: kind 'found' (Found a Pet) or 'sighting' ("Seen this pet?").
@@ -762,7 +786,7 @@ class Store {
     if (!sb || !Number.isFinite(+coords[0]) || !Number.isFinite(+coords[1])) return;
     const reportId = [s.missing_report_id, s.missingReportId, s.matchedReportId].find((id) => this.isDbId(id)) || null;
     const photoUrl = await this.uploadPhoto(s.photoUrl || s.photo, 'sightings');
-    const { error } = await sb.from('community_sightings').insert({
+    const { data: saved, error } = await sb.from('community_sightings').insert({
       missing_pet_id: reportId,
       species: ['Dog', 'Cat', 'Other'].includes(s.species) ? s.species : 'Other',
       breed: s.breed || null,
@@ -773,9 +797,15 @@ class Store {
       lng: +coords[1],
       seen_at: new Date(s.dateTimeSeen || s.timestamp || s.createdAt || Date.now()).toISOString(),
       notes: String(s.comments || s.notes || '').slice(0, 1000) || null,
+      caption: s.caption ? String(s.caption).slice(0, 500) : null,
       reporter_name: String(s.reporterName || 'Anonymous').slice(0, 80),
       status: 'possible_sighting'
-    });
+    }).select('id').single();
+    if (!error && saved && saved.id && String(s.reporterPhone || '').trim().length >= 6) {
+      // The finder's phone is kept in a private table, so people claiming the pet can reach them
+      const contact = await sb.from('sighting_contacts').insert({ sighting_id: saved.id, phone: String(s.reporterPhone).trim().slice(0, 30) });
+      if (contact.error) console.warn('[Store] Could not save the finder phone:', contact.error.message);
+    }
     if (error) {
       if (/rate limit/i.test(error.message)) {
         if (window.notifManager) window.notifManager.showToast('You have sent several sightings recently, so this one was not added to the public map. The owner was still alerted.', 'warning', 6000);
@@ -785,6 +815,226 @@ class Store {
       return;
     }
     this.syncFromSupabase();
+  }
+
+  // A signed-in guardian says a reported pet is theirs. Alerts the finder; returns the finder's phone when there is one.
+  async claimSighting(sightingId, phone, message, photoBlob) {
+    const sb = await this.waitForClient(5000);
+    if (!sb || !this.isDbId(sightingId)) return { ok: false, error: 'This report has not been saved online yet. Please try again in a moment.' };
+    const { data: userData } = await sb.auth.getUser();
+    const uid = userData && userData.user && userData.user.id;
+    if (!uid) return { ok: false, error: 'Please sign in again.' };
+    // The photo of the claimant with the pet goes to a private bucket, in their own folder
+    const path = `${uid}/${(crypto.randomUUID ? crypto.randomUUID() : Date.now() + '-' + Math.random().toString(36).slice(2))}.jpg`;
+    const up = await sb.storage.from('claim-evidence').upload(path, photoBlob, { contentType: 'image/jpeg' });
+    if (up.error) return { ok: false, error: `Photo upload failed: ${up.error.message}` };
+    const { data, error } = await sb.rpc('claim_sighting', {
+      p_sighting_id: sightingId, p_phone: String(phone || '').trim(), p_message: String(message || '').trim(), p_photo_path: path
+    });
+    if (error) {
+      sb.storage.from('claim-evidence').remove([path]).catch(() => {});
+      return { ok: false, error: error.message };
+    }
+    return { ok: true, finderPhone: data || '' };
+  }
+
+  // ---- Sightings feed: likes and comments (loaded together, kept in memory) ----
+  async loadSocial() {
+    const sb = await this.waitForClient(5000);
+    if (!sb) return this.social;
+    const [likes, comments] = await Promise.all([
+      sb.from('sighting_likes').select('sighting_id, missing_pet_id, user_id').limit(5000),
+      sb.from('sighting_comments').select('id, sighting_id, missing_pet_id, user_id, author_name, author_avatar, body, created_at').order('created_at', { ascending: true }).limit(5000)
+    ]);
+    const social = { likes: {}, comments: {} };
+    (likes.data || []).forEach((l) => { const k = l.sighting_id || l.missing_pet_id; (social.likes[k] = social.likes[k] || []).push(l.user_id); });
+    (comments.data || []).forEach((c) => { const k = c.sighting_id || c.missing_pet_id; (social.comments[k] = social.comments[k] || []).push(c); });
+    this.social = social;
+    return social;
+  }
+
+  getLikes(sightingId) {
+    const me = (this.getGoogleUser() || {}).id;
+    const list = ((this.social || {}).likes || {})[sightingId] || [];
+    return { count: list.length, liked: !!me && list.includes(me) };
+  }
+
+  getComments(sightingId) {
+    return (((this.social || {}).comments || {})[sightingId] || []).slice();
+  }
+
+  // Shown at once; the change is undone if the database refuses it
+  async toggleLike(sightingId, kind = 'sighting') {
+    const col = kind === 'missing' ? 'missing_pet_id' : 'sighting_id';
+    const me = (this.getGoogleUser() || {}).id;
+    const sb = await this.waitForClient(5000);
+    if (!me || !sb || !this.isDbId(sightingId)) return false;
+    this.social = this.social || { likes: {}, comments: {} };
+    const list = this.social.likes[sightingId] = this.social.likes[sightingId] || [];
+    const had = list.includes(me);
+    if (had) list.splice(list.indexOf(me), 1); else list.push(me);
+    const res = had
+      ? await sb.from('sighting_likes').delete().eq(col, sightingId).eq('user_id', me)
+      : await sb.from('sighting_likes').insert({ [col]: sightingId });
+    if (res.error) {
+      if (had) list.push(me); else list.splice(list.indexOf(me), 1);
+      this.dbError('Could not update your like', res.error);
+      return false;
+    }
+    return true;
+  }
+
+  async addComment(sightingId, body, kind = 'sighting') {
+    const col = kind === 'missing' ? 'missing_pet_id' : 'sighting_id';
+    const sb = await this.waitForClient(5000);
+    if (!sb || !this.isDbId(sightingId)) return { ok: false, error: 'This report is not saved online yet.' };
+    const { data, error } = await sb.from('sighting_comments').insert({ [col]: sightingId, body: String(body || '').trim() })
+      .select('id, sighting_id, missing_pet_id, user_id, author_name, author_avatar, body, created_at').single();
+    if (error) return { ok: false, error: error.message };
+    this.social = this.social || { likes: {}, comments: {} };
+    (this.social.comments[sightingId] = this.social.comments[sightingId] || []).push(data);
+    return { ok: true };
+  }
+
+  async deleteComment(sightingId, commentId) {
+    const sb = await this.waitForClient(5000);
+    if (!sb) return false;
+    const { error } = await sb.from('sighting_comments').delete().eq('id', commentId);
+    if (error) { this.dbError('Could not delete the comment', error); return false; }
+    const list = ((this.social || {}).comments || {})[sightingId] || [];
+    const i = list.findIndex((c) => c.id === commentId);
+    if (i !== -1) list.splice(i, 1);
+    return true;
+  }
+
+  // The breed a sighting shows. "Mixed Breed" was the old stand-in when the reporter gave no breed, so for a
+  // pet that is not registered it reads as "not specified" instead; a reporter's own guess is shown as typed.
+  sightingBreed(s) {
+    const breed = String((s && s.breed) || '').trim();
+    const registered = s && (s.petId || s.missing_report_id || s.matchedPetId);
+    if (!breed || (!registered && breed.toLowerCase() === 'mixed breed')) return 'Breed not specified';
+    return breed;
+  }
+
+  // ---- Reunion cases: after an owner confirms a sighting ----
+  async confirmSightingRpc(sightingId) {
+    const sb = await this.waitForClient(5000);
+    if (!sb || !this.isDbId(sightingId)) return { ok: false, error: 'This sighting is not saved online yet.' };
+    const { data, error } = await sb.rpc('confirm_sighting', { p_sighting_id: sightingId });
+    return error ? { ok: false, error: error.message } : { ok: true, caseId: data };
+  }
+
+  async getCaseDetails(caseId) {
+    const sb = await this.waitForClient(5000);
+    if (!sb || !this.isDbId(caseId)) return null;
+    const { data, error } = await sb.rpc('case_details', { p_case_id: caseId });
+    return error ? null : data;
+  }
+
+  async getCaseIdForSighting(sightingId) {
+    const sb = await this.waitForClient(5000);
+    if (!sb || !this.isDbId(sightingId)) return null;
+    const { data } = await sb.from('reunion_cases').select('id').eq('sighting_id', sightingId).limit(1);
+    return data && data[0] ? data[0].id : null;
+  }
+
+  async finderConfirmHandover(caseId, yes) {
+    const sb = await this.waitForClient(5000);
+    if (!sb) return { ok: false, error: 'No connection.' };
+    const { error } = await sb.rpc('finder_confirm_handover', { p_case_id: caseId, p_yes: !!yes });
+    return error ? { ok: false, error: error.message } : { ok: true };
+  }
+
+  async ownerCaseResponse(caseId, answer) {
+    const sb = await this.waitForClient(5000);
+    if (!sb) return { ok: false, error: 'No connection.' };
+    const { error } = await sb.rpc('owner_case_response', { p_case_id: caseId, p_answer: answer });
+    return error ? { ok: false, error: error.message } : { ok: true };
+  }
+
+  async markSightingMovedOn(sightingId) {
+    const sb = await this.waitForClient(5000);
+    if (!sb) return { ok: false, error: 'No connection.' };
+    const { error } = await sb.rpc('mark_sighting_moved_on', { p_sighting_id: sightingId });
+    return error ? { ok: false, error: error.message } : { ok: true };
+  }
+
+  async runCaseReminders() {
+    const sb = await this.waitForClient(5000);
+    if (!sb) return 0;
+    const { data, error } = await sb.rpc('send_case_reminders');
+    return error ? 0 : (data || 0);
+  }
+
+  // The pets this guardian has claimed (one row per report), and the full claim with a link to its photo
+  async getMyClaims() {
+    const sb = await this.waitForClient(5000);
+    const user = this.getGoogleUser();
+    if (!sb || !user || !user.id) return [];
+    const { data, error } = await sb.from('sighting_claims').select('sighting_id').eq('claimant_id', user.id);
+    return error || !data ? [] : data;
+  }
+
+  async getMyClaim(sightingId) {
+    const sb = await this.waitForClient(5000);
+    const user = this.getGoogleUser();
+    if (!sb || !user || !user.id || !this.isDbId(sightingId)) return null;
+    const { data, error } = await sb.from('sighting_claims')
+      .select('id, status, resolved_at, phone, message, photo_path, finder_phone, created_at')
+      .eq('sighting_id', sightingId).eq('claimant_id', user.id).maybeSingle();
+    if (error || !data) return null;
+    let photoUrl = '';
+    if (data.photo_path) {
+      const signed = await sb.storage.from('claim-evidence').createSignedUrl(data.photo_path, 600);
+      photoUrl = (signed.data && signed.data.signedUrl) || '';
+    }
+    return { ...data, photoUrl };
+  }
+
+  // The finder marks a claim as 'reunited' or 'discarded'. Both people are alerted by the database.
+  async resolveClaim(claimId, action) {
+    const sb = await this.waitForClient(5000);
+    if (!sb || !this.isDbId(claimId)) return { ok: false, error: 'Could not reach the server. Please try again.' };
+    const { error } = await sb.rpc('resolve_claim', { p_claim_id: claimId, p_action: action });
+    if (error) return { ok: false, error: error.message };
+    this.syncFromSupabase(); // refreshes the sightings and brings in the new alert
+    return { ok: true };
+  }
+
+  // One claim with its report and photo, for the claim details dialog. `role` is the viewer's side of it.
+  async getClaimDetail(claimId) {
+    const sb = await this.waitForClient(5000);
+    const user = this.getGoogleUser();
+    if (!sb || !user || !user.id || !this.isDbId(claimId)) return null;
+    const { data: c, error } = await sb.from('sighting_claims')
+      .select('id, sighting_id, claimant_id, claimant_name, phone, message, photo_path, finder_phone, status, resolved_at, created_at')
+      .eq('id', claimId).maybeSingle();
+    if (error || !c) return null;
+    const { data: sighting } = await sb.from('community_sightings')
+      .select('id, missing_pet_id, species, breed, photo_url, location, seen_at, notes, status, reporter_id').eq('id', c.sighting_id).maybeSingle();
+    let photoUrl = '';
+    if (c.photo_path) {
+      const signed = await sb.storage.from('claim-evidence').createSignedUrl(c.photo_path, 600);
+      photoUrl = (signed.data && signed.data.signedUrl) || '';
+    }
+    return { ...c, photoUrl, sighting: sighting || null, role: c.claimant_id === user.id ? 'claimant' : 'finder' };
+  }
+
+  // Claims made on a report this guardian sent, each with a short-lived link to its photo
+  async getClaimsFor(sightingId) {
+    const sb = await this.waitForClient(5000);
+    if (!sb || !this.isDbId(sightingId)) return [];
+    const { data, error } = await sb.from('sighting_claims')
+      .select('id, status, resolved_at, claimant_name, phone, message, photo_path, created_at')
+      .eq('sighting_id', sightingId).order('created_at', { ascending: false });
+    if (error || !data) return [];
+    const paths = data.map((c) => c.photo_path).filter(Boolean);
+    const urls = {};
+    if (paths.length) {
+      const signed = await sb.storage.from('claim-evidence').createSignedUrls(paths, 600);
+      (signed.data || []).forEach((u) => { if (u.signedUrl) urls[u.path] = u.signedUrl; });
+    }
+    return data.map((c) => ({ ...c, photoUrl: urls[c.photo_path] || '' }));
   }
 
   getMissingReports() {
@@ -850,6 +1100,16 @@ class Store {
     return String((pet.owner && pet.owner.email) || '').toLowerCase() === String(user.email || '').toLowerCase();
   }
 
+  // Whether a missing report, or a pet reported missing, belongs to the signed-in guardian ("I saw this pet" is not for them)
+  isMyMissing(reportId, petId) {
+    const user = this.getGoogleUser();
+    if (!user || !user.id) return false;
+    const report = reportId ? this.getMissingReports().find((r) => String(r.id) === String(reportId)) : null;
+    if (report && report.reporterId === user.id) return true;
+    const pet = petId ? this.getPets().find((p) => String(p.id) === String(petId)) : null;
+    return !!pet && this.isMyPet(pet) && pet.status === 'lost';
+  }
+
   // The guardian's own registered pets plus every other open missing report
   getMapPets() {
     return [...this.getPets(), ...this.getUnregisteredMissingPets()];
@@ -877,6 +1137,7 @@ class Store {
       lng: +coords[1],
       last_seen_at: new Date(reportData.lastSeenDate || Date.now()).toISOString(),
       notes: reportData.notes ? String(reportData.notes).slice(0, 1000) : null,
+      caption: reportData.caption ? String(reportData.caption).slice(0, 500) : null,
       reported_by_owner: reportData.reportedByOwner !== false,
       status: 'missing'
     }).select('*').single();

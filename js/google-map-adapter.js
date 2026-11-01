@@ -87,6 +87,7 @@
         inner.style.cssText = `position:absolute;left:${-anchor[0]}px;top:${-anchor[1]}px;width:max-content;`;
         inner.innerHTML = icon.html || '<div style="width:14px;height:14px;border-radius:50%;background:#ba3820;border:2px solid #fff;transform:translate(-50%,-50%)"></div>';
         box.appendChild(inner);
+        if (this._opts.opacity != null) inner.style.opacity = String(this._opts.opacity);
         this._anchorY = anchor[1];
 
         box.addEventListener('mouseenter', () => this._showTooltip());

@@ -627,6 +627,7 @@
       <div class="modal-header">
         <h3 style="display:flex; align-items:center; gap:0.5rem;">
           <i data-lucide="qr-code" style="color:var(--primary); width:20px; height:20px;"></i> Digital NFC Pass
+          <button type="button" class="pass-info-btn" onclick="window.notifManager.openModal('pass-info-modal')" aria-label="About the Digital NFC pass" title="What is this?"><i data-lucide="info"></i></button>
         </h3>
         <button class="btn-outline btn-sm" onclick="window.notifManager.closeModal('digital-pass-modal')"
           aria-label="Close">&times;</button>
@@ -637,8 +638,10 @@
       <div class="modal-footer">
         <button type="button" class="btn btn-outline"
           onclick="window.notifManager.closeModal('digital-pass-modal')">Close</button>
-        <button type="button" class="btn btn-primary"
-          onclick="window.print()">Download / Print Pass</button>
+        <button type="button" class="btn btn-outline"
+          onclick="window.print()">Print</button>
+        <button type="button" class="btn btn-primary" id="digital-pass-save-btn"
+          onclick="window.ownerView.savePetPass()">Save pass to device</button>
       </div>
     </div>
   </div>
@@ -729,10 +732,6 @@
           <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; background: var(--bg-surface-elevated, #fff); border-radius: 8px; border: 1px solid var(--border-subtle, #e2e8f0); font-size: 12.5px;">
             <span style="color: var(--text-muted, #64748b);">Active Protected Pets</span>
             <strong id="profile-pet-count">0 Registered Pets</strong>
-          </div>
-          <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; background: var(--bg-surface-elevated, #fff); border-radius: 8px; border: 1px solid var(--border-subtle, #e2e8f0); font-size: 12.5px;">
-            <span style="color: var(--text-muted, #64748b);">Microchip Standard</span>
-            <strong style="font-family: monospace;">134.2 kHz FDX-B</strong>
           </div>
         </div>
 
@@ -916,7 +915,7 @@
 
             <label style="display:flex; align-items:center; gap:10px; padding:10px 12px; background:var(--bg-surface-elevated, #fff); border:1px solid var(--border-subtle); border-radius:8px; cursor:pointer;">
               <input type="checkbox" id="claim-doc-nfc" checked style="accent-color:var(--primary); width:18px; height:18px;" />
-              <span style="font-size:13px; font-weight:600;">3. NFC Transponder Verification / Microchip Certificate</span>
+              <span style="font-size:13px; font-weight:600;">3. NFC Tag Verification / Digital Pass</span>
             </label>
           </div>
 
@@ -981,9 +980,9 @@
             <div class="guide-step-card">
               <div class="guide-step-num before">1</div>
               <div class="guide-step-main">
-                <div class="guide-step-title" data-i18n="guide.phase1Step1Title">Register Pet & Attach NFC Tag / Link Microchip</div>
+                <div class="guide-step-title" data-i18n="guide.phase1Step1Title">Register Pet & Attach NFC Tag</div>
                 <div class="guide-step-text" data-i18n="guide.phase1Step1Text">
-                  Add your dog or cat into the PawTrack registry with full details: breed, age, distinct color markings, medical notes, and a clear front-facing photo. Link an implanted 134.2 kHz ISO microchip or attach a PawTrack NFC collar transponder.
+                  Add your dog or cat into the PawTrack registry with full details: breed, age, distinct color markings, medical notes, and a clear front-facing photo. Attach a PawTrack NFC collar tag to your pet.
                 </div>
                 <div class="guide-step-tip">
                   <i data-lucide="info" style="width:14px; height:14px; color:#38bdf8; flex-shrink:0;"></i>
@@ -1011,7 +1010,7 @@
               <div class="guide-step-main">
                 <div class="guide-step-title" data-i18n="guide.phase1Step3Title">Save / Print Your Pet's Digital NFC Pass</div>
                 <div class="guide-step-text" data-i18n="guide.phase1Step3Text">
-                  Tap "Digital Pass" on your registered pet card. Save the digital pass badge with QR code and microchip UID to your smartphone or keep a printed physical copy with your pet's vaccination booklet.
+                  Tap "Digital Pass" on your registered pet card. Save the digital pass badge with QR code and NFC tag ID to your smartphone or keep a printed physical copy with your pet's vaccination booklet.
                 </div>
               </div>
             </div>
@@ -1301,6 +1300,11 @@
                 </div>
               </div>
 
+              <div class="form-group report-place-group">
+                <label class="form-label" for="report-missing-location" data-i18n="report.lastSeenLoc">Last Seen Location *</label>
+                <input type="text" class="form-control" id="report-missing-location" placeholder="e.g. Barangay Commonwealth" value="" data-i18n-placeholder="report.lastSeenLocPh" />
+                <small class="report-field-hint">Filled in from the pin. You can also type a landmark.</small>
+              </div>
             </div>
 
             <!-- CONTAINER 2: Upload Photo Panel (Found / Sighted Stray Pet tab) -->
@@ -1408,6 +1412,12 @@
                 <input type="tel" class="form-control" id="report-found-phone" placeholder="e.g. 0917 123 4567" value="" required style="padding: 7px 10px; font-size: 0.85rem;" data-i18n-placeholder="report.finderPhonePh" />
               </div>
 
+              <div class="form-group" style="margin-bottom: 8px;">
+                <label class="form-label" style="font-size: 0.78rem;" for="report-found-caption">Post caption <span style="font-weight:400; color:var(--text-muted);">(optional)</span></label>
+                <textarea class="form-control" id="report-found-caption" rows="2" maxlength="300" placeholder="e.g. Found this friendly dog near the park entrance. Is he yours?" style="padding: 7px 10px; font-size: 0.85rem; resize: vertical;"></textarea>
+                <small style="font-size: 0.72rem; color: var(--text-muted);">Shown with your post on the Sightings page.</small>
+              </div>
+
               <div class="form-group" style="margin-bottom: 0;">
                 <label class="form-label" style="font-size: 0.78rem;" data-i18n="report.messageOptional">Message (optional)</label>
                 <textarea class="form-control" id="report-found-notes" rows="3" placeholder="Your pet is safe with me near the park entrance." style="padding: 8px 10px; font-size: 0.85rem; resize: vertical; line-height: 1.35;" data-i18n-placeholder="report.messagePh"></textarea>
@@ -1418,6 +1428,7 @@
             <div id="report-fields-missing" style="display: none;">
               <div class="report-card glass-card" id="report-card-pet">
               <div class="report-field-section report-step-1" data-i18n="report.sectionPet">About the pet</div>
+              <p class="report-section-hint">Choose the pet that is missing and show how it looks today.</p>
               <div class="form-group" id="report-missing-pet-select-wrap" style="margin-bottom: 8px;">
                 <label class="form-label" style="font-size: 0.78rem;" data-i18n="report.selectPetMissing">Which pet is missing? *</label>
                 <select class="form-control" id="report-missing-pet-select" style="display: none;" aria-hidden="true" tabindex="-1" onchange="window.reportManager.handlePetSelect(this.value)">
@@ -1432,7 +1443,8 @@
               <div class="report-pet-card" id="report-missing-pet-card" hidden></div>
 
               <div class="form-group" id="report-missing-photo-row" style="display: none; margin-bottom: 8px;">
-                <label class="form-label" style="font-size: 0.78rem;" id="report-missing-photo-label">Photo of the pet</label>
+                <label class="form-label" style="font-size: 0.78rem;" id="report-missing-photo-label">Current photo of the pet *</label>
+                <small class="report-photo-hint">Add a clear photo of the pet so others can recognise it.</small>
                 <div class="report-photo-inline">
                   <img id="report-missing-photo-thumb" alt="" hidden />
                   <span class="report-photo-inline-text" id="report-missing-photo-status-text">No photo attached</span>
@@ -1445,22 +1457,33 @@
 
               <!-- Pets with no NFC tag cannot be identified by a tap, so the owner gives a current photo and condition -->
               <div class="form-group" id="report-missing-condition-wrap" style="display: none; margin-bottom: 8px;">
-                <label class="form-label" style="font-size: 0.78rem;" for="report-missing-condition">Current condition of the pet *</label>
-                <textarea class="form-control" id="report-missing-condition" rows="2" maxlength="400" placeholder="e.g. Looks thin and limps on the left leg, no collar, may be scared of strangers." style="padding: 7px 10px; font-size: 0.85rem; resize: vertical;"></textarea>
-                <small style="font-size: 0.72rem; color: var(--text-muted);">This pet has no NFC tag, so a recent photo and its condition help others recognise it.</small>
+                <label class="form-label" style="font-size: 0.78rem;" for="report-missing-condition">Condition of the pet before it went missing *</label>
+                <textarea class="form-control" id="report-missing-condition" rows="2" maxlength="400" placeholder="e.g. Healthy and friendly, wearing a red collar with a bell, a small scar on the left ear." style="padding: 7px 10px; font-size: 0.85rem; resize: vertical;"></textarea>
+                <small style="font-size: 0.72rem; color: var(--text-muted);">This pet has no NFC tag, so a recent photo and how it looked before it went missing help others recognise it.</small>
+              </div>
+
+              <!-- Same for every pet, registered or not: its description (a registered pet's is filled in for you) -->
+              <div class="form-group" id="report-missing-desc-wrap" style="display: none; margin-bottom: 8px;">
+                  <label class="form-label" for="report-missing-custom-desc" style="font-size: 0.78rem;" data-i18n="report.petDesc">Description *</label>
+                  <textarea class="form-control" id="report-missing-custom-desc" rows="2" maxlength="300" placeholder="e.g. Tricolor beagle mix, medium size, red collar, white patch on the chest" style="padding: 7px 10px; font-size: 0.85rem;" data-i18n-placeholder="report.petDescPh"></textarea>
+                  <small style="font-size: 0.72rem; color: var(--text-muted);" data-i18n="report.petDescHint">Breed or mix, size, colours and anything that stands out, so finders can recognise it.</small>
               </div>
 
               <div class="form-group" id="report-missing-custom-name-wrap" style="display: none; margin-bottom: 8px;">
+                <p class="report-extra-title">Because this pet is not registered, we also need</p>
+                <div class="form-group">
+                  <label class="form-label" for="report-missing-custom-species">Kind of pet *</label>
+                  <select class="form-control" id="report-missing-custom-species">
+                    <option value="">Choose one</option>
+                    <option value="Dog">Dog</option>
+                    <option value="Cat">Cat</option>
+                    <option value="Other">Other</option>
+                  </select>
+                </div>
                 <div class="form-group" style="margin-bottom: 0;">
                   <label class="form-label" for="report-missing-custom-name" style="font-size: 0.78rem;" data-i18n="report.petName">Pet name *</label>
                   <input type="text" class="form-control" id="report-missing-custom-name" placeholder="e.g. Brownie" maxlength="60" autocomplete="off" style="padding: 7px 10px; font-size: 0.85rem;" data-i18n-placeholder="report.petNamePh" />
                 </div>
-                <div class="form-group" style="margin: 10px 0 0;">
-                  <label class="form-label" for="report-missing-custom-desc" style="font-size: 0.78rem;" data-i18n="report.petDesc">Description *</label>
-                  <textarea class="form-control" id="report-missing-custom-desc" rows="2" maxlength="300" placeholder="e.g. Tricolor beagle mix, medium size, red collar, white patch on the chest" style="padding: 7px 10px; font-size: 0.85rem;" data-i18n-placeholder="report.petDescPh"></textarea>
-                  <small style="font-size: 0.72rem; color: var(--text-muted);" data-i18n="report.petDescHint">Breed or mix, size, colours and anything that stands out, so finders can recognise it.</small>
-                </div>
-
                 <!-- Whose pet: the reporter is the contact either way -->
                 <div class="form-group report-whose" id="report-missing-whose" role="radiogroup" aria-labelledby="report-whose-label">
                   <span class="form-label" id="report-whose-label" style="font-size: 0.78rem;">Is this your pet? *</span>
@@ -1482,11 +1505,7 @@
 
               <div class="report-card glass-card" id="report-card-details">
               <div class="report-field-section report-step-3" data-i18n="report.sectionLastSeen">Last seen &amp; contact</div>
-              <div class="form-group" style="margin-bottom: 8px;">
-                <label class="form-label" style="font-size: 0.78rem;" data-i18n="report.lastSeenLoc">Last Seen Location *</label>
-                <input type="text" class="form-control" id="report-missing-location" placeholder="e.g. Barangay Commonwealth" value="" style="padding: 7px 10px; font-size: 0.85rem;" data-i18n-placeholder="report.lastSeenLocPh" />
-              </div>
-
+              <p class="report-section-hint">When it went missing, and the number finders can call.</p>
               <div class="report-row-2">
               <div class="form-group" style="margin-bottom: 8px;">
                 <label class="form-label" style="font-size: 0.78rem;" data-i18n="report.lastSeenDateTime">Last Seen Date & Time *</label>
@@ -1497,6 +1516,16 @@
                 <label class="form-label" style="font-size: 0.78rem;" data-i18n="report.ownerPhone">Emergency Contact Phone *</label>
                 <input type="tel" class="form-control" id="report-missing-phone" placeholder="e.g. 0917 555 3829" value="" style="padding: 7px 10px; font-size: 0.85rem;" data-i18n-placeholder="report.ownerPhonePh" />
               </div>
+              </div>
+
+              </div><!-- /details card -->
+
+              <div class="report-card glass-card" id="report-card-post">
+              <div class="report-field-section report-step-4">Your post <em class="report-opt">Optional</em></div>
+              <p class="report-section-hint">This is what people see with your post on the Sightings page.</p>
+              <div class="form-group" style="margin-bottom: 8px;">
+                <label class="form-label" style="font-size: 0.78rem;" for="report-missing-caption">Post caption <span style="font-weight:400; color:var(--text-muted);">(optional)</span></label>
+                <textarea class="form-control" id="report-missing-caption" rows="2" maxlength="300" placeholder="e.g. Please help! Brownie went missing near the park gate this evening. Any sighting helps." style="padding: 7px 10px; font-size: 0.85rem; resize: vertical;"></textarea>
               </div>
 
               <div class="form-group" style="margin-bottom: 0;">
@@ -1704,6 +1733,8 @@
           <div class="sighting-step"><span>4</span><div class="sighting-step-text"><div class="sighting-step-title">What did you notice? <em class="sighting-tag is-optional">Optional</em></div><small>Behaviour, condition or anything that stood out</small></div></div>
           <div class="form-group">
             <textarea id="sighting-notes-input" rows="2" placeholder="e.g. Pet seemed nervous, moving toward the gate, wearing a faded brown collar..."></textarea>
+            <label class="form-label" for="sighting-caption-input" style="margin-top:10px; font-size:0.8rem;">Post caption <em class="sighting-tag is-optional">Optional</em></label>
+            <textarea id="sighting-caption-input" rows="2" maxlength="300" placeholder="Words for your post, e.g. Saw this dog by the gate. Does anyone know him?"></textarea>
             <div class="sighting-chips" role="group" aria-label="Quick notes">
               <button type="button" class="sighting-chip" onclick="window.reportManager.addSightingNote('Looked healthy and calm.')">Healthy and calm</button>
               <button type="button" class="sighting-chip" onclick="window.reportManager.addSightingNote('Seemed scared or nervous.')">Scared</button>
@@ -1782,7 +1813,7 @@
             <span>Owner Verification: Community Pet Sighting</span>
           </h3>
           <div style="font-size:0.78rem; color:var(--text-muted); margin-top:2px;">
-            Compare your registered pet profile with the community sighting report to verify identity.
+            Review the community sighting report and confirm whether this is your pet.
           </div>
         </div>
         <button type="button" class="btn-outline btn-sm" onclick="window.notifManager.closeModal('sighting-verification-modal')" aria-label="Close">&times;</button>
@@ -1804,43 +1835,6 @@
 
         <!-- Side-by-Side Comparison Split Grid -->
         <div class="verification-split-grid">
-          <!-- LEFT COLUMN: Registered Pet Profile -->
-          <div class="verification-column official-col">
-            <div class="verification-col-header">
-              <span style="font-size:0.75rem; font-weight:800; color:var(--primary); text-transform:uppercase; letter-spacing:0.04em;">Registered Pet Profile</span>
-              <span class="badge badge-outline" style="font-size:0.65rem;">Official Record</span>
-            </div>
-
-            <div class="verification-photo-box" onclick="window.pawApp ? window.pawApp.openLightbox(document.getElementById('verify-reg-photo').src, document.getElementById('verify-reg-name').textContent, 'Official Registered Pet Photo') : null" title="Click to enlarge">
-              <img id="verify-reg-photo" src="" alt="Registered Pet" onerror="this.src='https://images.unsplash.com/photo-1543466835-00a7907e9de1?auto=format&fit=crop&w=400&q=80'" />
-            </div>
-
-            <div class="verification-detail-row">
-              <span class="verification-detail-label">Pet Name</span>
-              <span class="verification-detail-val" id="verify-reg-name" style="font-size:0.95rem; color:var(--primary);">Max</span>
-            </div>
-            <div class="verification-detail-row">
-              <span class="verification-detail-label">Species & Breed</span>
-              <span class="verification-detail-val" id="verify-reg-breed">Dog · Golden Retriever</span>
-            </div>
-            <div class="verification-detail-row">
-              <span class="verification-detail-label">Sex & Color</span>
-              <span class="verification-detail-val" id="verify-reg-color">Male · Golden brown with white chest patch</span>
-            </div>
-            <div class="verification-detail-row">
-              <span class="verification-detail-label">NFC Tag</span>
-              <span class="verification-detail-val" id="verify-reg-nfc" style="font-family:monospace; color:var(--primary);">NFC-882194</span>
-            </div>
-            <div class="verification-detail-row">
-              <span class="verification-detail-label">Last Known Location</span>
-              <span class="verification-detail-val" id="verify-reg-last-seen">Scout Gandia cor. Tomas Morato, QC</span>
-            </div>
-            <div class="verification-detail-row">
-              <span class="verification-detail-label">Guardian Community</span>
-              <span class="verification-detail-val" id="verify-reg-community">Philam Homes, Quezon City</span>
-            </div>
-          </div>
-
           <!-- RIGHT COLUMN: Sighting Report -->
           <div class="verification-column sighting-col">
             <div class="verification-col-header">
@@ -1853,16 +1847,21 @@
             </div>
 
             <div class="verification-detail-row">
+              <span class="verification-detail-label">Species & Breed (as reported)</span>
+              <span class="verification-detail-val" id="verify-sight-breed">Dog</span>
+            </div>
+            <div class="verification-detail-row">
               <span class="verification-detail-label">Spotted Location</span>
               <span class="verification-detail-val" id="verify-sight-location" style="color:#16a34a;">EDSA cor. West Avenue walkway</span>
             </div>
+            <div class="verification-detail-row" id="verify-sight-placedesc-row" hidden>
+              <span class="verification-detail-label">Place Description</span>
+              <span class="verification-detail-val" id="verify-sight-placedesc"></span>
+            </div>
+            <div class="verification-sight-map" id="verify-sight-map" hidden aria-label="Map of where the pet was found"></div>
             <div class="verification-detail-row">
               <span class="verification-detail-label">Date & Time Spotted</span>
               <span class="verification-detail-val" id="verify-sight-datetime">Recently Reported</span>
-            </div>
-            <div class="verification-detail-row">
-              <span class="verification-detail-label">Reported Coordinates</span>
-              <span class="verification-detail-val" id="verify-sight-coords" style="font-family:monospace;">14.6530, 121.0310</span>
             </div>
             <div class="verification-detail-row">
               <span class="verification-detail-label">Reported By</span>
@@ -1875,7 +1874,7 @@
 
             <!-- Sighting Notes Observation -->
             <div style="margin-top:4px;">
-              <div style="font-size:0.75rem; color:var(--text-muted); font-weight:600; margin-bottom:3px;">Finder Observations / Notes:</div>
+              <div style="font-size:0.75rem; color:var(--text-muted); font-weight:600; margin-bottom:3px;" id="verify-sight-notes-label">Finder Observations / Notes:</div>
               <div class="verification-notes-callout" id="verify-sight-notes">
                 "Spotted walking calmly near the pedestrian overpass stairs heading toward Philam Homes."
               </div>
@@ -1885,10 +1884,8 @@
       </div>
 
       <!-- Modal Footer with Decision Buttons -->
-      <div class="modal-footer" style="padding:1rem 1.4rem; display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap; border-top:1px solid var(--border-subtle);">
-        <button type="button" class="btn btn-outline" onclick="window.notifManager.closeModal('sighting-verification-modal')">Close Window</button>
-
-        <div style="display:flex; gap:10px; flex-wrap:wrap;">
+      <div class="modal-footer" style="padding:1rem 1.4rem; display:flex; justify-content:flex-end; align-items:center; gap:10px; flex-wrap:wrap; border-top:1px solid var(--border-subtle);">
+        <div style="display:flex; gap:10px; flex-wrap:wrap; justify-content:flex-end;">
           <!-- [ No, This Isn't My Pet ] Decision Button -->
           <button type="button" id="verify-decision-no-btn" class="btn btn-outline" style="border-color:#ba3820; color:#ba3820; display:flex; align-items:center; gap:6px;" onclick="window.notifManager ? window.notifManager.handleVerificationDecision(false) : null">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -2282,6 +2279,96 @@
     </div>
   </div>
 
+  <!-- About the Digital NFC pass -->
+  <div class="modal-overlay" id="pass-info-modal">
+    <div class="modal-box pass-info-box" role="dialog" aria-modal="true" aria-labelledby="pass-info-title">
+      <div class="modal-header">
+        <h3 id="pass-info-title" style="display:flex; align-items:center; gap:0.5rem;">
+          <i data-lucide="info" style="color:var(--primary); width:20px; height:20px;"></i> About the Digital NFC pass
+        </h3>
+        <button type="button" class="btn-outline btn-sm" onclick="window.notifManager.closeModal('pass-info-modal')" aria-label="Close">&times;</button>
+      </div>
+      <div class="modal-body pass-info-body">
+        <p>The Digital NFC pass is an image card with your pet's photo, name and breed, NFC tag ID, your name and your emergency phone number. Save it on your phone or print it.</p>
+
+        <h4>When to use it</h4>
+        <ul>
+          <li><strong>Claiming an impounded pet.</strong> Show it to the pound officer with your government ID and your pet's vaccination book.</li>
+          <li><strong>If the collar tag is lost.</strong> It keeps the tag ID, so you can tell staff which tag belongs to your pet.</li>
+          <li><strong>At the vet, groomer or boarding.</strong> They get your pet's details and your contact number.</li>
+          <li><strong>With your pet's papers.</strong> Print it and keep it with the vaccination booklet.</li>
+        </ul>
+
+        <h4>What it can't do</h4>
+        <ul>
+          <li>It can't be tapped or scanned. The NFC tag on the collar is what a finder taps.</li>
+          <li>It isn't an official credential. People read it by eye.</li>
+          <li>It shows your phone number, so share it only with people you trust.</li>
+        </ul>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-primary" onclick="window.notifManager.closeModal('pass-info-modal')">Got it</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Unsaved changes: asked before a dialog with typed-in fields is closed -->
+  <div class="modal-overlay" id="discard-confirm-modal" style="z-index: 10050;">
+    <div class="modal-box auth-dialog-card logout-confirm-card" role="alertdialog" aria-modal="true" aria-labelledby="discard-confirm-title" aria-describedby="discard-confirm-sub">
+      <span class="logout-confirm-icon archive-confirm-icon" aria-hidden="true">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+      </span>
+      <h2 class="auth-dialog-title" id="discard-confirm-title">Discard your changes?</h2>
+      <p class="auth-dialog-sub" id="discard-confirm-sub">What you typed here has not been saved. If you close now, it will be lost.</p>
+      <div class="logout-confirm-actions">
+        <button type="button" id="discard-confirm-keep-btn" class="logout-confirm-btn logout-confirm-btn-primary">Keep editing</button>
+        <button type="button" id="discard-confirm-yes-btn" class="logout-confirm-btn logout-confirm-btn-ghost">Discard</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Claim a reported pet -->
+  <div class="modal-overlay" id="claim-sighting-modal">
+    <div class="modal-box claim-box" role="dialog" aria-modal="true" aria-labelledby="claim-title">
+      <div class="modal-header">
+        <h3 id="claim-title" style="display:flex; align-items:center; gap:0.5rem;">
+          <i data-lucide="heart-handshake" style="color:var(--primary); width:20px; height:20px;"></i><span id="claim-title-text"> Is this your pet?</span>
+        </h3>
+        <button type="button" class="btn-outline btn-sm" onclick="window.notifManager.closeModal('claim-sighting-modal')" aria-label="Close">&times;</button>
+      </div>
+      <div class="modal-body" id="claim-body"></div>
+    </div>
+  </div>
+
+  <!-- Reunion case: next steps after an owner confirms a sighting -->
+  <div class="modal-overlay" id="reunion-case-modal">
+    <div class="modal-box case-box" role="dialog" aria-modal="true" aria-labelledby="case-title">
+      <div class="modal-header">
+        <h3 id="case-title" style="display:flex; align-items:center; gap:0.5rem;">
+          <i data-lucide="heart-handshake" style="color:var(--primary); width:20px; height:20px;"></i> Reunion
+        </h3>
+        <button type="button" class="btn-outline btn-sm" onclick="window.notifManager.closeModal('reunion-case-modal')" aria-label="Close">&times;</button>
+      </div>
+      <div class="modal-body" id="case-body"></div>
+    </div>
+  </div>
+
+  <!-- Archive sighting confirmation -->
+  <div class="modal-overlay" id="archive-sighting-modal">
+    <div class="modal-box auth-dialog-card logout-confirm-card" role="alertdialog" aria-modal="true" aria-labelledby="archive-sighting-title" aria-describedby="archive-sighting-sub">
+      <span class="logout-confirm-icon archive-confirm-icon" aria-hidden="true">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="5" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/><path d="M10 12h4"/></svg>
+      </span>
+      <h2 class="auth-dialog-title" id="archive-sighting-title">Archive this sighting?</h2>
+      <p class="auth-dialog-sub" id="archive-sighting-sub">It will be hidden from the board and the Incident Map. You can bring it back anytime from the Archived tab.</p>
+      <div class="archive-confirm-what" id="archive-sighting-what" hidden></div>
+      <div class="logout-confirm-actions">
+        <button type="button" id="archive-sighting-cancel-btn" class="logout-confirm-btn logout-confirm-btn-ghost">Keep it</button>
+        <button type="button" id="archive-sighting-yes-btn" class="logout-confirm-btn logout-confirm-btn-primary">Archive</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Log out confirmation -->
   <div class="modal-overlay" id="logout-confirm-modal">
     <div class="modal-box auth-dialog-card logout-confirm-card" role="alertdialog" aria-modal="true" aria-labelledby="logout-confirm-title" aria-describedby="logout-confirm-sub">
@@ -2469,8 +2556,8 @@
         <h4 style="color:var(--text-main); font-size:14px; margin: 16px 0 6px;">1. Google OAuth &amp; Identity Authorization</h4>
         <p>PawTrack accesses basic Google profile attributes (Name, Email, Profile Picture) strictly to authenticate verified pet guardians, issue digital pass badges, and dispatch urgent municipal impound notifications. We do not sell or transfer your Google data to third parties.</p>
 
-        <h4 style="color:var(--text-main); font-size:14px; margin: 16px 0 6px;">2. NFC Transponder &amp; Microchip Records</h4>
-        <p>Encrypted NFC tag serials, microchip numbers, and pet characteristics are recorded to enable municipal pound scanning grids and shelter intake matching across participating barangays.</p>
+        <h4 style="color:var(--text-main); font-size:14px; margin: 16px 0 6px;">2. NFC Tag Records</h4>
+        <p>Encrypted NFC tag serials and pet characteristics are recorded to enable municipal pound scanning grids and shelter intake matching across participating barangays.</p>
 
         <h4 style="color:var(--text-main); font-size:14px; margin: 16px 0 6px;">3. 72-Hour Municipal Holding Countdown Alerts</h4>
         <p>Upon shelter transponder scan, automated SMS and Email alerts are immediately sent to the registered guardian email to assist timely pet claiming within the legal holding period.</p>
@@ -2479,7 +2566,6 @@
         <p>Your exact residential address is shielded. Public lost &amp; found sighting pins display general barangay vicinity coordinates to protect owner privacy.</p>
 
         <h4 style="color:var(--text-main); font-size:14px; margin: 16px 0 6px;">5. Full Standalone Policy Document</h4>
-        <p>You can also view the permanent web document at <a href="privacy.html" target="_blank" style="color:var(--primary); font-weight:600;">pawtrack.com/privacy.html</a>.</p>
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-primary" onclick="window.notifManager.closeModal('privacy-policy-modal')">I Understand</button>
@@ -2512,7 +2598,6 @@
         <p>Community sighting reports must contain authentic photos and accurate vicinity locations to prevent false alerts.</p>
 
         <h4 style="color:var(--text-main); font-size:14px; margin: 16px 0 6px;">4. Full Standalone Terms Document</h4>
-        <p>You can also view the permanent terms document at <a href="terms.html" target="_blank" style="color:var(--primary); font-weight:600;">pawtrack.com/terms.html</a>.</p>
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-primary" onclick="window.notifManager.closeModal('terms-modal')">Accept &amp; Close</button>
@@ -2549,6 +2634,7 @@
   <script src="js/nfc-link.js"></script>
   <script src="js/found-page.js"></script>
   <script src="js/notifications.js"></script>
+  <script src="js/modal-guard.js"></script>
   <script src="js/views/pets-view.js"></script>
   <script src="js/views/owner-view.js"></script>
   <script src="js/turn-by-turn.js"></script>

@@ -174,6 +174,8 @@ class ReportManager {
     this.pinChosen = false; // set once the owner places the pin (map tap, drag, search pick or current location)
     document.querySelectorAll('input[name="report-whose"]').forEach((r) => { r.checked = false; });
 
+    // Every new report starts with an empty post caption, not the last one that was sent
+    ['report-missing-caption', 'report-found-caption'].forEach((id) => { const el = document.getElementById(id); if (el) el.value = ''; });
     this.removeUploadedPhoto(false);
     this.setType(type);
     this.setViewMode('map');
@@ -564,29 +566,49 @@ class ReportManager {
     const current = select.value;
     const plus = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>';
     const check = '<svg class="pet-pick-check" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="5 12 10 17 19 7"/></svg>';
-    const card = ({ value, name, sub = '', img, selected = false, notes = [], disabled = false, other = false, action = '' }) =>
+    const card = ({ value, name, sub = '', sub2 = '', img, selected = false, notes = [], disabled = false, other = false, action = '' }) =>
       `<button type="button" class="pet-pick${selected ? ' is-selected' : ''}${other ? ' is-other' : ''}" ${action ? `data-action="${action}"` : `role="radio" aria-checked="${selected}" data-value="${esc(value)}"`} ${disabled ? 'disabled' : ''} title="${esc(name)}">
         ${img}
-        <span class="pet-pick-text"><span class="pet-pick-name">${esc(name)}</span>${sub ? `<span class="pet-pick-sub">${esc(sub)}</span>` : ''}${notes.map((n) => `<span class="pet-pick-badge">${esc(n)}</span>`).join('')}</span>
+        <span class="pet-pick-text"><span class="pet-pick-name">${esc(name)}</span>${sub ? `<span class="pet-pick-sub">${esc(sub)}</span>` : ''}${sub2 ? `<span class="pet-pick-sub">${esc(sub2)}</span>` : ''}${notes.map((n) => `<span class="pet-pick-badge">${esc(n)}</span>`).join('')}</span>
         ${selected ? check : ''}
       </button>`;
     const petCard = (p) => card({
       value: p.id,
       name: p.name,
       sub: [p.species, p.breed].filter(Boolean).join(' · '),
+      sub2: [p.color, p.age].filter(Boolean).join(' · '),
+      notes: [p.nfcTag ? 'NFC linked' : 'No NFC'],
       img: this.petAvatarHtml(p),
       selected: String(current) === String(p.id)
     });
 
-    picker.innerHTML = pets.map(petCard).join('')
+    // Many pets: show the first few (and always the chosen one); "See all" shows the rest
+    const LIMIT = 4;
+    let shown = pets;
+    let toggle = '';
+    if (pets.length > LIMIT) {
+      if (!this.petPickerAll) {
+        shown = pets.slice(0, LIMIT);
+        const chosen = pets.find((p) => String(p.id) === String(current));
+        if (chosen && !shown.includes(chosen)) shown = [...pets.slice(0, LIMIT - 1), chosen];
+        toggle = `<button type="button" class="pet-pick pet-pick-more" data-action="more"><span class="pet-pick-text"><span class="pet-pick-name">See all pets (${pets.length - shown.length} more)</span></span></button>`;
+      } else {
+        toggle = '<button type="button" class="pet-pick pet-pick-more" data-action="less"><span class="pet-pick-text"><span class="pet-pick-name">Show fewer pets</span></span></button>';
+      }
+    }
+    picker.innerHTML = shown.map(petCard).join('') + toggle
       + card({
         value: 'custom',
         name: 'Another pet',
+        sub: 'Not registered in PawTrack',
         img: `<span class="pet-pick-img pet-pick-other">${plus}</span>`,
         selected: current === 'custom' || current === 'unregistered',
         other: true
       });
-    picker.querySelectorAll('.pet-pick').forEach((btn) => {
+    picker.querySelectorAll('.pet-pick-more').forEach((btn) => {
+      btn.addEventListener('click', () => { this.petPickerAll = btn.dataset.action === 'more'; this.renderPetPicker(); });
+    });
+    picker.querySelectorAll('.pet-pick:not(.pet-pick-more)').forEach((btn) => {
       btn.addEventListener('click', () => {
         select.value = btn.dataset.value;
         this.handlePetSelect(select.value);
@@ -609,59 +631,76 @@ class ReportManager {
     this.missingNoNfc = noNfc;
     const conditionWrap = document.getElementById('report-missing-condition-wrap');
     const conditionInput = document.getElementById('report-missing-condition');
-    if (conditionWrap) conditionWrap.style.display = noNfc ? '' : 'none';
+    // Every registered pet needs its current condition, tagged or not: finders and shelters read it first
+    const registeredPick = !!chosen || isUnregistered; // registered or "Another pet"
+    const descWrap = document.getElementById('report-missing-desc-wrap');
+    if (descWrap) descWrap.style.display = registeredPick ? '' : 'none';
+    if (conditionWrap) {
+      conditionWrap.style.display = registeredPick ? '' : 'none';
+      const hint = conditionWrap.querySelector('small');
+      if (hint) hint.textContent = isUnregistered
+        ? 'Tell finders how the pet looked and behaved before it went missing, so they know what to look for.'
+        : noNfc
+          ? 'This pet has no NFC tag, so a recent photo and how it looked before it went missing help others recognise it.'
+          : 'Tell finders how your pet looked and behaved before it went missing, so they know what to look for.';
+    }
     if (conditionInput) {
-      conditionInput.required = noNfc;
-      if (!noNfc) conditionInput.value = '';
+      conditionInput.required = registeredPick;
+      if (!registeredPick) conditionInput.value = '';
     }
     const photoLabel = document.getElementById('report-missing-photo-label');
-    if (photoLabel) photoLabel.textContent = noNfc ? 'Current photo of the pet *' : 'Photo of the pet';
+    if (photoLabel) photoLabel.textContent = 'Current photo of the pet *';
 
     // Registered pets with a tag already have their photo on file; unregistered and untagged pets need one uploaded
     const photoRow = document.getElementById('report-missing-photo-row');
-    if (photoRow) photoRow.style.display = (isUnregistered || noNfc) ? '' : 'none';
-    if (isUnregistered || noNfc) this.removeUploadedPhoto(false);
+    if (photoRow) photoRow.style.display = ''; // always shown, and always a new photo: never the pet's profile photo
+    let photoChanged = false;
+    if (this._photoFor !== String(petId)) { this.removeUploadedPhoto(false); this._photoFor = String(petId); photoChanged = true; } // keep a photo already added for this pet
+    const photoHint = document.querySelector('#report-missing-photo-row .report-photo-hint');
+    if (photoHint) photoHint.textContent = chosen
+      ? "Your pet's registered photo is used. Change it if you have a newer one."
+      : 'Add a clear photo of the pet so others can recognise it.';
 
     const customDesc = document.getElementById('report-missing-custom-desc');
     if (isUnregistered) {
       if (customWrap) customWrap.style.display = 'block';
       if (customInput) customInput.required = true;
-      if (customDesc) customDesc.required = true;
+      if (customDesc) {
+        customDesc.required = true;
+        if (this._descFor !== 'custom') { customDesc.value = ''; this._descFor = 'custom'; }
+      }
       this.updateMissingPhotoStatus(null, false);
     } else {
       if (customWrap) customWrap.style.display = 'none';
       if (customDesc) {
-        customDesc.required = false;
-        customDesc.value = '';
+        // Written by the owner for this report: never prefilled (not even from the pet's saved description)
+        customDesc.required = !!chosen;
+        if (this._descFor !== String(petId)) { customDesc.value = ''; this._descFor = String(petId); }
       }
       if (customInput) {
         customInput.required = false;
         customInput.value = '';
       }
+      const customSpeciesEl = document.getElementById('report-missing-custom-species');
+      if (customSpeciesEl) customSpeciesEl.value = '';
       if (petId && petId !== 'registered' && window.pawStore) {
         const pets = window.pawStore.getPets();
         const pet = pets.find(p => String(p.id) === String(petId));
         if (pet) {
           // The last-seen location is not copied from the pet's previous incident: a new disappearance
           // needs a new spot, and the old one was often just the map's default pin
-          if (noNfc) {
-            this.updateMissingPhotoStatus(null, false);
-          } else if (pet.photoUrl || pet.photo) {
-            this.setUploadedPhoto(pet.photoUrl || pet.photo);
+          const profilePhoto = pet.photoUrl || pet.photo;
+          if (photoChanged && profilePhoto) {
+            this.applyUploadedPhoto(profilePhoto); // already checked when the pet was registered
             this.updateMissingPhotoStatus(pet.name, true);
           } else {
-            this.removeUploadedPhoto(false);
             this.updateMissingPhotoStatus(null, false);
           }
         }
       } else if (petId === 'registered' && window.pawStore) {
         const pets = window.pawStore.getPets();
         if (pets && pets.length > 0) {
-          const pet = pets[0];
-          if (pet.photoUrl || pet.photo) {
-            this.setUploadedPhoto(pet.photoUrl || pet.photo);
-            this.updateMissingPhotoStatus(pet.name, true);
-          }
+          this.updateMissingPhotoStatus(null, false);
         }
       } else {
         this.updateMissingPhotoStatus(null, false);
@@ -727,9 +766,7 @@ class ReportManager {
           if (nfcInput && pet.nfcTag) {
             nfcInput.value = pet.nfcTag;
           }
-          if (pet.photoUrl || pet.photo) {
-            this.setUploadedPhoto(pet.photoUrl || pet.photo);
-          }
+          // The photo is not set here: it belongs to the pet chosen in the missing-pet list above
         }
       } else if (petId === 'registered' && window.pawStore) {
         const pets = window.pawStore.getPets();
@@ -738,7 +775,6 @@ class ReportManager {
           if (speciesSelect && pet.species) speciesSelect.value = (pet.species === 'Cat' ? 'Cat' : pet.species === 'Dog' ? 'Dog' : 'Other');
           if (breedInput && pet.breed) breedInput.value = pet.breed;
           if (nfcInput && pet.nfcTag) nfcInput.value = pet.nfcTag;
-          if (pet.photoUrl || pet.photo) this.setUploadedPhoto(pet.photoUrl || pet.photo);
         }
       }
     }
@@ -1331,9 +1367,8 @@ class ReportManager {
     }
 
     const reader = new FileReader();
-    reader.onload = (e) => {
-      this.setUploadedPhoto(e.target.result);
-      if (window.notifManager) {
+    reader.onload = async (e) => {
+      if (await this.setUploadedPhoto(e.target.result) && window.notifManager) {
         window.notifManager.showToast('Pet photo attached successfully.', 'success', 3000);
       }
     };
@@ -1367,9 +1402,8 @@ class ReportManager {
         return;
       }
       const reader = new FileReader();
-      reader.onload = (ev) => {
-        this.setUploadedPhoto(ev.target.result);
-        if (window.notifManager) {
+      reader.onload = async (ev) => {
+        if (await this.setUploadedPhoto(ev.target.result) && window.notifManager) {
           window.notifManager.showToast('Pet photo attached successfully.', 'success', 3000);
         }
       };
@@ -1396,9 +1430,50 @@ class ReportManager {
     });
   }
 
-  setUploadedPhoto(dataUrl) {
+  // A tiny fingerprint of a picture (8x8 grey squares), to tell whether two files show the same photo
+  async photoHash(src) {
+    const img = await new Promise((resolve, reject) => { const el = new Image(); el.onload = () => resolve(el); el.onerror = reject; el.src = src; });
+    const c = document.createElement('canvas');
+    c.width = 8; c.height = 8;
+    const ctx = c.getContext('2d', { willReadFrequently: true });
+    ctx.drawImage(img, 0, 0, 8, 8);
+    const d = ctx.getImageData(0, 0, 8, 8).data;
+    const grey = [];
+    for (let i = 0; i < d.length; i += 4) grey.push(d[i] * 0.3 + d[i + 1] * 0.59 + d[i + 2] * 0.11);
+    const avg = grey.reduce((a, b) => a + b, 0) / grey.length;
+    return grey.map((g) => (g >= avg ? 1 : 0));
+  }
+
+  // Is this the pet's own profile photo (or a copy of it)? The report needs a NEW photo.
+  async isProfilePhoto(dataUrl) {
+    try {
+      const id = document.getElementById('report-missing-pet-select')?.value;
+      const pet = id && window.pawStore.getPets().find((p) => String(p.id) === String(id));
+      const url = pet && (pet.photoUrl || pet.photo);
+      if (!url || !dataUrl) return false;
+      if (url === dataUrl) return true;
+      const blob = await (await fetch(url)).blob();
+      const local = URL.createObjectURL(blob);
+      try {
+        const [a, b] = await Promise.all([this.photoHash(local), this.photoHash(dataUrl)]);
+        return a.filter((bit, i) => bit !== b[i]).length <= 5;
+      } finally { URL.revokeObjectURL(local); }
+    } catch (e) {
+      return false; // cannot compare: allow it
+    }
+  }
+
+  async setUploadedPhoto(dataUrl) {
+    // Only a real photo of a pet is accepted, not a screenshot or an unrelated picture
+    const check = window.petAI ? await window.petAI.checkPetPhoto(dataUrl, { indicator: document.getElementById('report-missing-photo-row') }) : { ok: true };
+    if (!check.ok) {
+      this.removeUploadedPhoto(false);
+      if (window.notifManager) window.notifManager.showToast(check.reason, 'warning', 7000);
+      return false;
+    }
     if (dataUrl && dataUrl.length >= 150000) this.shrinkDataUrl(dataUrl).then((small) => this.applyUploadedPhoto(small));
     else this.applyUploadedPhoto(dataUrl);
+    return true;
   }
 
   applySightingUploadedPhoto(dataUrl) {
@@ -1417,6 +1492,8 @@ class ReportManager {
     if (previewImg) previewImg.src = dataUrl;
     const thumb = document.getElementById('report-missing-photo-thumb');
     if (thumb) { thumb.src = dataUrl; thumb.hidden = false; }
+    const photoRow = document.getElementById('report-missing-photo-row');
+    if (photoRow) this.clearFieldError(photoRow); // a photo is there now: the "add a photo" message goes away
 
     this.updateMissingPhotoStatus();
   }
@@ -1475,6 +1552,7 @@ class ReportManager {
     const phone = (document.getElementById('report-found-phone')?.value || '').trim();
     const nfc = (document.getElementById('report-found-nfc')?.value || '').trim();
     const notes = (document.getElementById('report-found-notes')?.value || '').trim();
+    const caption = (document.getElementById('report-found-caption')?.value || '').trim();
 
     // Required fields validation (all except message/notes and nfc)
     if (!selectedPetId) {
@@ -1527,6 +1605,7 @@ class ReportManager {
       community: matchedPet ? (matchedPet.community || (matchedPet.owner && matchedPet.owner.community) || '') : '',
       reporterName: 'Community Good Samaritan',
       comments: notes,
+      caption,
       timestamp: new Date().toISOString(),
       confidenceScore: 92,
       photo: finalPhoto,
@@ -1632,6 +1711,7 @@ class ReportManager {
     const petId = (select?.value || '').trim();
     const customName = (document.getElementById('report-missing-custom-name')?.value || '').trim();
     const customDesc = (document.getElementById('report-missing-custom-desc')?.value || '').trim();
+    const customSpecies = document.getElementById('report-missing-custom-species')?.value || '';
     const location = (document.getElementById('report-missing-location')?.value || '').trim();
     const date = (document.getElementById('report-missing-date')?.value || '').trim();
     // The phone falls back to the account's, then to the one saved on the pet
@@ -1641,6 +1721,7 @@ class ReportManager {
     const phone = ((phoneBox?.value || '').trim() || (account && account.phone) || (savedPet && savedPet.owner && savedPet.owner.phone) || '').trim();
     if (phoneBox && phone && !phoneBox.value.trim()) phoneBox.value = phone;
     const notes = (document.getElementById('report-missing-notes')?.value || '').trim();
+    const caption = (document.getElementById('report-missing-caption')?.value || '').trim();
 
     // Required fields: every problem is marked on its own field, not just the first one
     this.clearFieldErrors();
@@ -1650,15 +1731,19 @@ class ReportManager {
     const condition = (document.getElementById('report-missing-condition')?.value || '').trim();
     const problems = [];
     if (!petId) problems.push(['report-missing-pet-picker', 'Choose which pet is missing, or pick Another pet.']);
+    if (isUnregistered && !customSpecies) problems.push(['report-missing-custom-species', 'Choose what kind of pet it is.']);
     if (isUnregistered && !customName) problems.push(['report-missing-custom-name', "Enter the pet's name."]);
-    if (isUnregistered && !customDesc) problems.push(['report-missing-custom-desc', 'Describe the pet so finders can recognise it (breed, size, colours, collar).']);
+    if ((isUnregistered || untagged) && !customDesc) problems.push(['report-missing-custom-desc', 'Describe the pet so finders can recognise it (breed, size, colours, collar).']);
     // "Another pet": is it the reporter's own pet or someone else's? The reporter is the contact either way
     const whose = (document.querySelector('input[name="report-whose"]:checked') || {}).value || '';
     if (isUnregistered && !whose) problems.push(['report-missing-whose', 'Say whether this is your pet or someone else\'s.']);
-    // A pet with no NFC tag needs a current photo and its condition, since nobody can tap a tag to identify it
-    if (untagged && !untagged.nfcTag) {
-      if (!this.uploadedPhotoData) problems.push(['report-missing-photo-row', `${untagged.name} has no NFC tag. Add a current photo so others can recognise it.`]);
-      if (!condition) problems.push(['report-missing-condition', `Describe how ${untagged.name} looks right now (injuries, collar, behaviour).`]);
+    // Every report needs a new photo of the pet as it looks now (not its profile photo)
+    if (petId && !this.uploadedPhotoData) {
+      problems.push(['report-missing-photo-row', untagged ? `Add a photo of ${untagged.name} so others can recognise it.` : 'Add a current photo of the pet so others can recognise it.']);
+    }
+    // Every registered pet needs its current condition (injuries, collar, behaviour)
+    if (untagged || isUnregistered) {
+      if (!condition) problems.push(['report-missing-condition', `Describe how ${untagged ? untagged.name : 'the pet'} looked before it went missing (injuries, collar, behaviour).`]);
     }
     if (!location) problems.push(['report-missing-location', 'Enter where the pet was last seen, or drop the pin on the map.']);
     else if (!this.pinChosen) problems.push(['report-missing-location', 'Drop the pin on the map where the pet was last seen, so it shows in the right place.']);
@@ -1706,7 +1791,7 @@ class ReportManager {
     const missingReport = await window.pawStore.createMissingReport({
       petId: pet ? pet.id : null,
       petName: petName,
-      species: pet ? pet.species : 'Other',
+      species: pet ? pet.species : (customSpecies || 'Other'),
       breed: pet ? pet.breed : '',
       gender: pet ? pet.gender : '',
       color: pet ? pet.color : '',
@@ -1719,10 +1804,12 @@ class ReportManager {
       lastSeenCoords: [this.pinnedLat, this.pinnedLng],
       lastSeenDate: date,
       notes: reportNotes,
+      caption: caption,
       condition: condition,
       // For a pet reported without registering: false when the reporter is not its owner (a neighbour's pet,
       // a stray they look after). Finders notify the reporter either way, through ownerEmail and ownerPhone.
-      ...(pet ? {} : { reportedByOwner: whose !== 'other', description: customDesc }),
+      description: customDesc,
+      ...(pet ? {} : { reportedByOwner: whose !== 'other' }),
       status: 'active'
     });
     if (submitBtn) submitBtn.disabled = false;
@@ -1778,6 +1865,11 @@ class ReportManager {
 
   // context: optional {name, breed, photoUrl, place, lat, lng, seenAt} for pets that are not in the local store
   openSightingModal(missingReportId = null, petId = null, context = null) {
+    // Your own missing pet: nobody needs to send you a sighting of it from here, and you cannot report it to yourself
+    if (window.pawStore && window.pawStore.isMyMissing(missingReportId, petId)) {
+      if (window.notifManager) window.notifManager.showToast('This is your own pet. When you find it, mark it as safe in Pets.', 'info', 5000);
+      return;
+    }
     const modal = document.getElementById('sighting-submission-modal');
     if (!modal) return;
 
@@ -1799,6 +1891,8 @@ class ReportManager {
     // A signed-in guardian's name and mobile number are filled in (and can still be edited)
     const account = (window.pawStore.getGoogleUser && window.pawStore.getGoogleUser()) || null;
     if (notesInput) notesInput.value = '';
+    const sightingCaption = document.getElementById('sighting-caption-input');
+    if (sightingCaption) sightingCaption.value = '';
     if (phoneInput) phoneInput.value = account && account.phone ? this.formatLocalMobile(account.phone) : '';
     if (nameInput)  nameInput.value  = account && account.name ? account.name : '';
     this.sightingSavedName = nameInput ? nameInput.value : '';
@@ -2356,7 +2450,14 @@ class ReportManager {
     }
 
     const reader = new FileReader();
-    reader.onload = (e) => {
+    reader.onload = async (e) => {
+      // Only a real photo of a pet is accepted, not a screenshot or an unrelated picture
+      const check = window.petAI ? await window.petAI.checkPetPhoto(e.target.result, { indicator: document.getElementById('sighting-photo-dropzone') }) : { ok: true };
+      if (!check.ok) {
+        input.value = '';
+        if (window.notifManager) window.notifManager.showToast(check.reason, 'warning', 7000);
+        return;
+      }
       this.setSightingUploadedPhoto(e.target.result);
       if (window.notifManager) {
         window.notifManager.showToast('Pet photo attached successfully.', 'success', 3000);
@@ -2502,6 +2603,7 @@ class ReportManager {
     }
 
     const notes = (document.getElementById('sighting-notes-input')?.value || '').trim();
+    const caption = (document.getElementById('sighting-caption-input')?.value || '').trim();
     const reporterName = anonymous ? 'Anonymous' : reporterNameRaw;
     const missingReportId = document.getElementById('sighting-missing-report-id')?.value || null;
     const petId = document.getElementById('sighting-pet-id')?.value || null;
@@ -2538,6 +2640,7 @@ class ReportManager {
       photoUrl: this.sightingPhotoData,
       photo: this.sightingPhotoData,
       reporterName: reporterName,
+      caption: caption,
       reporterPhone: phone,
       status: 'possible_sighting',
       createdAt: new Date().toISOString()

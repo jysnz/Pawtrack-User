@@ -375,3 +375,98 @@
   .owner-guide-modal-box > .modal-footer .btn { flex: 1; justify-content: center; }
 }
 .guide-phase-banner { margin-bottom: 16px; }
+
+/* Digital NFC pass row in the pet details modal */
+.pet-pass-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 14px 0;
+  padding: 12px 14px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  background: var(--bg-surface-elevated, transparent);
+}
+
+.pet-pass-text { display: grid; gap: 2px; min-width: 0; }
+.pet-pass-text strong { display: flex; align-items: center; gap: 6px; font-size: 0.9rem; }
+.pet-pass-text strong svg { width: 16px; height: 16px; color: var(--primary); }
+.pet-pass-text span { font-size: 0.78rem; color: var(--text-muted); }
+.pet-pass-row .btn { flex: none; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.pet-pass-row .btn svg { width: 15px; height: 15px; }
+
+@media (max-width: 420px) {
+  .pet-pass-row { flex-direction: column; align-items: stretch; }
+}
+
+/* Report a missing pet: the pet list looks like the Found a Pet list (photo, details, tick) */
+#report-pet-modal .pet-picker { grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 10px; max-height: none; padding: 3px; margin: -3px; }
+#report-pet-modal .pet-pick { gap: 12px; padding: 10px 12px; border-radius: var(--radius-lg); }
+#report-pet-modal .pet-pick:hover:not([disabled]) { transform: translateY(-1px); }
+#report-pet-modal .pet-pick.is-selected { padding-right: 40px; }
+#report-pet-modal .pet-pick-img { width: 64px; height: 64px; border-radius: 14px; }
+#report-pet-modal .pet-pick-text { gap: 2px; }
+#report-pet-modal .pet-pick-name { font-size: 0.98rem; }
+#report-pet-modal .pet-pick-sub { font-size: 0.76rem; }
+#report-pet-modal .pet-pick-badge { margin-top: 3px; font-size: 0.6rem; }
+#report-pet-modal .pet-pick-check { top: 8px; right: 8px; width: 22px; height: 22px; padding: 4px; box-shadow: var(--shadow-md); }
+
+/* Report a missing pet: the current photo is the part that matters most, so it stands out */
+#report-pet-modal #report-missing-photo-row { padding: 14px 16px; border: 1.5px solid var(--primary); border-radius: var(--radius-lg); background: color-mix(in srgb, var(--primary) 9%, var(--bg-surface-elevated)); box-shadow: 0 0 0 4px color-mix(in srgb, var(--primary) 12%, transparent); }
+#report-pet-modal #report-missing-photo-label { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; font-size: 0.95rem !important; font-weight: 800; color: var(--text-main); }
+#report-pet-modal #report-missing-photo-label::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: var(--primary); box-shadow: 0 0 0 4px color-mix(in srgb, var(--primary) 25%, transparent); }
+#report-pet-modal .report-photo-hint { display: block; margin-bottom: 10px; font-size: 0.78rem; line-height: 1.45; color: var(--text-muted); }
+#report-pet-modal #report-missing-photo-row .report-photo-inline { padding: 10px 12px; border: 1.5px dashed var(--primary); border-radius: 12px; background: var(--bg-surface-elevated); }
+#report-pet-modal #report-missing-photo-row #report-missing-photo-status-btn { background: var(--primary); border-color: var(--primary); color: var(--text-inverse, #1a1206); font-weight: 700; }
+#report-pet-modal #report-missing-photo-row .report-photo-inline img { width: 56px; height: 56px; border-radius: 12px; object-fit: cover; }
+
+/* ---- Report a missing pet: clearer hierarchy ---- */
+/* 4 steps: pet, where, when and contact, your post. Each is its own card with a title, a one-line hint, then fields. */
+#report-pet-modal.report-page .report-step-4::before { content: "4"; }
+#report-pet-modal.report-page .report-step-4::before { flex: none; display: inline-grid; place-items: center; width: 24px; height: 24px; margin-right: 8px; border-radius: 50%; background: var(--primary); color: var(--text-inverse, #fff); font-family: var(--font-body, inherit); font-size: 0.78rem; font-weight: 800; line-height: 1; }
+#report-pet-modal.report-page #report-card-post { order: 4; }
+#report-pet-modal.report-page #report-fields-found { order: 5; }
+#report-pet-modal.report-page .report-modal-layout { gap: 20px; }
+
+/* Card titles: bigger, with a quiet hint under them */
+#report-pet-modal.report-page .report-field-section,
+#report-pet-modal.report-page #report-header-title { font-size: 1.15rem !important; }
+#report-pet-modal.report-page .report-card .report-field-section { margin-bottom: 4px; }
+#report-pet-modal.report-page .report-section-hint { margin: 0 0 16px 32px; font-size: 0.84rem; line-height: 1.45; color: var(--text-muted); }
+#report-pet-modal.report-page .report-opt { margin-left: 4px; padding: 2px 9px; border-radius: 999px; background: var(--bg-surface-elevated); border: 1px solid var(--border-glass); font-family: var(--font-body, inherit); font-size: 0.68rem; font-weight: 700; font-style: normal; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-muted); }
+
+/* Fields: labels read as labels, inputs are easy to hit, hints are quiet */
+#report-pet-modal.report-page .report-card .form-label,
+#report-pet-modal.report-page .report-place-group .form-label { display: block; margin-bottom: 6px; font-size: 0.88rem !important; font-weight: 700; color: var(--text-main); }
+#report-pet-modal.report-page .report-card .form-control,
+#report-pet-modal.report-page .report-place-group .form-control { padding: 11px 13px !important; font-size: 0.95rem !important; border-radius: 12px; }
+#report-pet-modal.report-page .report-card .form-group { margin-bottom: 16px !important; }
+#report-pet-modal.report-page .report-card .form-group:last-child { margin-bottom: 0 !important; }
+#report-pet-modal.report-page .report-card small,
+#report-pet-modal.report-page .report-field-hint { display: block; margin-top: 6px; font-size: 0.78rem !important; color: var(--text-muted); }
+#report-pet-modal.report-page .report-place-group { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border-subtle); }
+#report-pet-modal.report-page .report-card { padding: 20px 22px; }
+@media (max-width: 560px) {
+  #report-pet-modal.report-page .report-card { padding: 16px; }
+  #report-pet-modal.report-page .report-section-hint { margin-left: 0; }
+}
+
+/* Location first: step 1 is the map, step 2 is the pet */
+#report-pet-modal.report-page .report-map-column { order: 1; }
+#report-pet-modal.report-page #report-card-pet { order: 2; }
+#report-pet-modal.report-page .report-step-1::before { content: "2"; }
+#report-pet-modal.report-page #report-header-title.report-step-2::before { content: "1"; }
+
+/* Report a pet: the pet is step 1 again, then the map */
+#report-pet-modal.report-page #report-card-pet { order: 1; }
+#report-pet-modal.report-page .report-map-column { order: 2; }
+#report-pet-modal.report-page .report-step-1::before { content: "1"; }
+#report-pet-modal.report-page #report-header-title.report-step-2::before { content: "2"; }
+#report-pet-modal .pet-pick-more { justify-content: center; border-style: dashed; color: var(--primary); text-align: center; min-height: 86px; }
+#report-pet-modal .pet-pick-more .pet-pick-name { color: var(--primary); }
+
+.report-extra-title { margin: 0 0 12px; padding-top: 14px; border-top: 1px dashed var(--border-glass); font-size: 0.8rem; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-muted); }
+
+/* Pet picker: a subtitle wraps to two lines instead of being cut off */
+.pet-pick-sub { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.3; overflow-wrap: anywhere; }

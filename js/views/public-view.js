@@ -167,7 +167,7 @@ class PublicView {
     const pets = window.pawStore.getMapPets();
     const sightings = window.pawStore.getSightings();
     const lostCount = pets.filter(p => p.status === 'lost').length;
-    const sightedCount = sightings.length;
+    const sightedCount = sightings.filter(x => x.status !== 'dismissed' && x.status !== 'archived').length;
     const lastSeenCount = (this.lastSeenItems || []).length;
     const impoundedCount = pets.filter(p => p.status === 'impounded' || p.status === 'active_impounded').length;
 
@@ -182,7 +182,7 @@ class PublicView {
 
     return `
       <button type="button" class="btn btn-sm ${isAll ? 'btn-primary active' : 'btn-outline'}" onclick="window.publicView.setFilter('all')">
-        ${t('map.filterAll', 'All Records')} (${pets.length + sightings.length + lastSeenCount})
+        ${t('map.filterAll', 'All Records')} (${pets.length + sightedCount + lastSeenCount})
       </button>
       ${mineCount ? `<button type="button" class="btn btn-sm ${isMine ? 'btn-primary active' : 'btn-outline'}" onclick="window.publicView.setFilter('mine')" title="Only your own pets">
         ${t('map.filterMine', 'My Pets')} (${mineCount})
@@ -603,7 +603,7 @@ class PublicView {
             { icon: 'pin', label: p.status === 'lost' ? 'Last seen at' : 'Location', value: p.lastSeenLocation, hint: p.lastSeenDate ? this.getTimeAgo(p.lastSeenDate) : '' }
           ],
           note: p.unregistered ? p.description : '',
-          actions: `${p.status === 'lost' ? `${window.pawStore.isMyPet(p) ? `<button type="button" class="pt-btn pt-btn-primary" onclick="window.publicView.openMarkFound('${p.id}')">Mark as found</button>` : `<button type="button" class="pt-btn pt-btn-primary" onclick="window.reportManager.openSightingModal('${p.missingReportId || ''}', '${p.id}')">Seen this pet?</button>`}<button type="button" class="pt-btn pt-btn-ghost" onclick="window.publicView.showDirections(${coords[0]}, ${coords[1]}, '${this.jsArg(p.name)}', '${this.jsArg(p.lastSeenLocation || 'Metro Manila')}', '${this.jsArg(p.photoUrl)}', 'pet')">Directions</button>` : `<button type="button" class="pt-btn pt-btn-primary" onclick="window.publicView.showDirections(${coords[0]}, ${coords[1]}, '${this.jsArg(p.name)}', '${this.jsArg(p.lastSeenLocation || 'Metro Manila')}', '${this.jsArg(p.photoUrl)}', 'pet')">Directions</button>`}${this.popupMapsLink(coords[0], coords[1])}`
+          actions: `${p.status === 'lost' ? `${window.pawStore.isMyPet(p) ? `<button type="button" class="pt-btn pt-btn-primary" onclick="window.publicView.openMarkFound('${p.id}')">Mark as found</button>` : `<button type="button" class="pt-btn pt-btn-primary" onclick="window.publicView.seenThisPet('${p.id}', '${p.missingReportId || ''}')">Seen this pet?</button>`}<button type="button" class="pt-btn pt-btn-ghost" onclick="window.publicView.showDirections(${coords[0]}, ${coords[1]}, '${this.jsArg(p.name)}', '${this.jsArg(p.lastSeenLocation || 'Metro Manila')}', '${this.jsArg(p.photoUrl)}', 'pet')">Directions</button>` : `<button type="button" class="pt-btn pt-btn-primary" onclick="window.publicView.showDirections(${coords[0]}, ${coords[1]}, '${this.jsArg(p.name)}', '${this.jsArg(p.lastSeenLocation || 'Metro Manila')}', '${this.jsArg(p.photoUrl)}', 'pet')">Directions</button>`}${this.popupMapsLink(coords[0], coords[1])}`
         })}
       `);
 
@@ -625,7 +625,7 @@ class PublicView {
         sub: this.getTimeAgo(s.dateTimeSeen || s.createdAt)
       });
 
-      const sMarker = window.L.marker(sCoords, { icon: sightingPin })
+      const sMarker = window.L.marker(sCoords, { icon: sightingPin, opacity: s.movedOn ? 0.45 : 1 })
         .addTo(this.map)
         .bindPopup(`
         ${this.popupCard({
@@ -637,7 +637,7 @@ class PublicView {
           rows: [
             { icon: 'pin', label: 'Location', value: s.location },
             { icon: 'clock', label: 'Date and time seen', value: this.formatSightingDate(s.dateTimeSeen || s.createdAt) },
-            { icon: 'info', label: 'Status', value: s.status === 'confirmed_sighting' ? 'Confirmed by the registered guardian' : 'Awaiting owner verification' }
+            { icon: 'info', label: 'Status', value: s.movedOn ? 'Pet moved on from this spot' : s.status === 'confirmed_sighting' ? 'Confirmed by the registered guardian' : 'Awaiting owner verification' }
           ],
           note: s.comments || s.notes || '',
           actions: `<button type="button" class="pt-btn pt-btn-primary" onclick="window.publicView.showDirections(${sCoords[0]}, ${sCoords[1]}, '${this.jsArg(s.breed || 'Pet')}', '${this.jsArg(s.location)}', '${this.jsArg(s.photoUrl || '')}', 'sighting')">Directions</button>${this.popupMapsLink(sCoords[0], sCoords[1])}`
@@ -831,12 +831,28 @@ class PublicView {
     });
   }
 
-  // "Have you seen this pet?" on a last-seen record: open the sighting form pre-filled with that pet
+  // "Seen this pet?" on the map: go to Found a Pet with this missing pet already chosen
+  seenThisPet(petId, reportId = '') {
+    this.map?.closePopup();
+    if (window.pawStore.isMyMissing(reportId, petId)) {
+      window.notifManager?.showToast('This is your own pet. When you find it, mark it as safe in Pets.', 'info', 5000);
+      return;
+    }
+    if (window.foundView && (window.foundView.preselect(petId) || (reportId && window.foundView.preselect(reportId)))) return;
+    if (window.reportManager) window.reportManager.openSightingModal(reportId || null, petId || null);
+  }
+
+  // "Have you seen this pet?" on a last-seen record: Found a Pet with that pet chosen
   haveYouSeen(id) {
     const item = (this.lastSeenItems || []).find(i => i.row.id === id);
     if (!item || !window.reportManager) return;
     const r = item.row;
     this.map?.closePopup();
+    if (window.pawStore.isMyMissing(id, null)) {
+      window.notifManager?.showToast('This is your own pet. When you find it, mark it as safe in Pets.', 'info', 5000);
+      return;
+    }
+    if (window.foundView && window.foundView.preselect(id)) return;
     window.reportManager.openSightingModal(null, null, {
       name: r.pet_name, breed: r.breed, photoUrl: r.photo_url,
       place: r.last_seen_location, lat: r.lat, lng: r.lng, seenAt: r.last_seen_at
@@ -1400,31 +1416,95 @@ class PublicView {
     const seen = pet.lastSeenDate ? this.getTimeAgo(pet.lastSeenDate) : '';
     modal.innerHTML = `
       <div class="modal-box mark-found-box" role="dialog" aria-modal="true" aria-labelledby="mark-found-title">
-        <div class="modal-header">
-          <h3 id="mark-found-title">Mark as found</h3>
+        <div class="modal-header mf-head">
+          <span class="mf-head-icon"><i data-lucide="party-popper"></i></span>
+          <div class="mf-head-text">
+            <h3 id="mark-found-title">Mark ${esc(pet.name)} as found</h3>
+            <p>Two quick things, then the missing alert closes.</p>
+          </div>
           <button type="button" class="btn-outline btn-sm" onclick="window.notifManager.closeModal('mark-found-modal')" aria-label="Close">&times;</button>
         </div>
+
         <div class="modal-body mark-found-body">
           <div class="mark-found-pet">
             <img src="${esc(pet.photoUrl || window.PET_PHOTO_PLACEHOLDER)}" alt="" />
             <div>
+              <span class="mf-kicker">${pet.unregistered && !pet.reportedByOwner ? 'Reported missing' : 'Your pet'}</span>
               <strong>${esc(pet.name)}</strong>
               <span>${esc([pet.unregistered && pet.description ? pet.description : pet.breed, pet.unregistered ? 'Not registered' : pet.gender].filter(Boolean).join(' · '))}</span>
               <span class="mark-found-seen"><i data-lucide="map-pin"></i>${esc(pet.lastSeenLocation || 'Last seen location not set')}${seen ? ` · ${esc(seen)}` : ''}</span>
             </div>
           </div>
-          <p class="mark-found-question">${pet.unregistered && !pet.reportedByOwner ? `Is ${esc(pet.name)} found and safe?` : `Is ${esc(pet.name)} back home and safe?`}</p>
-          <ul class="mark-found-effects">
-            <li><i data-lucide="map-pin-off"></i><span>The missing alert comes off the map and the missing list.</span></li>
-            <li><i data-lucide="check-circle-2"></i><span>The report is closed, so finders stop sending sightings.</span></li>
-          </ul>
+
+          <section class="mf-step">
+            <header>
+              <span class="mf-num">1</span>
+              <div><label for="mark-found-condition">How is ${esc(pet.name)} now? *</label><small>The condition it was found in, for finders and shelters.</small></div>
+            </header>
+            <textarea id="mark-found-condition" rows="3" maxlength="400" placeholder="e.g. Safe and healthy, a little hungry, small scratch on the front paw."></textarea>
+          </section>
+
+          <section class="mf-step" id="mark-found-photo-field">
+            <header>
+              <span class="mf-num">2</span>
+              <div><label>Photo of you with ${esc(pet.name)} *</label><small>Proof that you are reunited. It is shown with the reunion.</small></div>
+            </header>
+            <input type="file" id="mark-found-photo" accept="image/*" hidden />
+            <button type="button" class="mark-found-photo-btn" id="mark-found-photo-btn">
+              <img id="mark-found-photo-preview" alt="" hidden />
+              <span id="mark-found-photo-label"><i data-lucide="camera"></i> Add a photo of you with ${esc(pet.name)}</span>
+              <small class="mf-drop-sub">Tap to take a photo or choose one</small>
+            </button>
+          </section>
+
+          <div class="mark-found-error" id="mark-found-error" role="alert" hidden></div>
+
+          <div class="mf-next">
+            <h4>What happens next</h4>
+            <ul class="mark-found-effects">
+              <li><i data-lucide="map-pin-off"></i><span>The missing alert comes off the map and the missing list.</span></li>
+              <li><i data-lucide="check-circle-2"></i><span>The report is closed, so finders stop sending sightings.</span></li>
+              <li><i data-lucide="party-popper"></i><span>${esc(pet.name)} appears under Reunited with your photo.</span></li>
+            </ul>
+          </div>
         </div>
+
         <div class="modal-footer mark-found-footer">
           <button type="button" class="btn btn-outline" onclick="window.notifManager.closeModal('mark-found-modal')">Not yet</button>
           <button type="button" class="btn btn-primary" id="mark-found-confirm" onclick="window.publicView.markFound('${esc(pet.id)}')"><i data-lucide="check"></i> Yes, mark as found</button>
         </div>
       </div>`;
     window.notifManager.openModal('mark-found-modal');
+    this.markFoundPhoto = null;
+    const fileInput = modal.querySelector('#mark-found-photo');
+    modal.querySelector('#mark-found-photo-btn').addEventListener('click', () => fileInput.click());
+    fileInput.addEventListener('change', () => {
+      const file = fileInput.files[0];
+      if (!file) return;
+      if (!file.type.startsWith('image/')) { this.markFoundError('Please choose an image (JPG, PNG or WebP).'); fileInput.value = ''; return; }
+      const reader = new FileReader();
+      reader.onload = async () => {
+        // Only a real photo of a pet is accepted as proof
+        const check = window.petAI ? await window.petAI.checkPetPhoto(reader.result, { indicator: modal.querySelector('#mark-found-photo-field') }) : { ok: true };
+        if (!check.ok) { fileInput.value = ''; this.markFoundError(check.reason); return; }
+        this.markFoundPhoto = reader.result;
+        const img = modal.querySelector('#mark-found-photo-preview');
+        img.src = reader.result; img.hidden = false;
+        modal.querySelector('#mark-found-photo-label').innerHTML = '<i data-lucide="repeat"></i> Change photo';
+        modal.querySelector('#mark-found-photo-btn').classList.add('has-photo');
+        this.markFoundError('');
+        if (window.lucide) window.lucide.createIcons({ root: modal });
+      };
+      reader.readAsDataURL(file);
+    });
+    if (window.lucide) window.lucide.createIcons({ root: modal });
+  }
+
+  markFoundError(msg) {
+    const box = document.getElementById('mark-found-error');
+    if (!box) return;
+    box.textContent = msg || '';
+    box.hidden = !msg;
   }
 
   async markFound(petId) {
@@ -1432,7 +1512,23 @@ class PublicView {
     const pet = store.getMapPets().find(p => String(p.id) === String(petId));
     if (!pet || !store.isMyPet(pet)) return;
     const btn = document.getElementById('mark-found-confirm');
+
+    // The owner says how the pet is now, and shows a photo with it, before the report closes
+    const condition = (document.getElementById('mark-found-condition')?.value || '').trim();
+    if (!condition) { this.markFoundError(`Describe how ${pet.name} is now that it is found.`); document.getElementById('mark-found-condition')?.focus(); return; }
+    if (!this.markFoundPhoto) { this.markFoundError(`Add a photo of you with ${pet.name}, so everyone can see they are reunited.`); return; }
+    this.markFoundError('');
     if (btn) btn.disabled = true;
+
+    const reportId = pet.unregistered ? pet.missingReportId : ((store.getActiveMissingReportForPet(pet.id) || {}).id || pet.missingReportId);
+    const proofUrl = await store.uploadPhoto(this.markFoundPhoto, 'reunions');
+    if (!proofUrl) { if (btn) btn.disabled = false; this.markFoundError('The photo could not be uploaded. Please try again.'); return; }
+    const sb = window.pawApp && window.pawApp.supabase;
+    if (sb && reportId && store.isDbId(reportId)) {
+      // Saved first: closing the report copies these to its reunited record
+      const { error: proofError } = await sb.from('missing_pets').update({ found_condition: condition.slice(0, 500), reunion_photo_url: proofUrl }).eq('id', reportId);
+      if (proofError) { if (btn) btn.disabled = false; this.markFoundError(`Could not save the details: ${proofError.message}`); return; }
+    }
 
     if (pet.unregistered) {
       // Exists only as its report: closing the report takes it off the map
@@ -1458,6 +1554,7 @@ class PublicView {
     if (this.currentFilter === 'mine' && !store.getMapPets().some(p => store.isMyPet(p) && ['missing', 'impounded'].includes(this.layerFor(p)))) {
       this.setFilter('all'); // nothing of yours is left to show
     }
+    if (window.petsView && window.petsView.afterMarkedFound) window.petsView.afterMarkedFound(pet.id);
     const viewport = document.getElementById('app-viewport');
     const view = window.pawApp && window.pawApp.views[window.pawApp.currentView];
     if (view && viewport) view.render(viewport);

@@ -444,6 +444,7 @@ class OwnerView {
                 <span>${t('owner.btnReportLost', 'Report Missing')}</span>
               </button>
             `}
+            ${pet.nfcTag ? `
             <button class="btn btn-outline btn-sm" style="flex-shrink:0; display:flex; align-items:center; gap:4px;" onclick="window.ownerView.showDigitalTagPass('${pet.id}')" title="View Digital NFC & QR Tag Pass">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <rect width="5" height="5" x="3" y="3" rx="1"/>
@@ -461,6 +462,7 @@ class OwnerView {
               </svg>
               <span>${t('owner.btnDigitalPass', 'Tag Pass')}</span>
             </button>
+            ` : ''}
           </div>
         </div>
       </div>
@@ -629,52 +631,130 @@ class OwnerView {
   showDigitalTagPass(petId) {
     const pet = window.pawStore.getPetById(petId);
     if (!pet) return;
+    if (!pet.nfcTag) { window.notifManager?.showToast('Link an NFC tag to this pet to get a digital pass.', 'info', 4000); return; }
 
     const modal = document.getElementById('digital-pass-modal');
     const passBody = document.getElementById('digital-pass-content');
 
+    const e = (v) => String(v == null ? '' : v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const photo = pet.photoUrl || window.PET_PHOTO_PLACEHOLDER;
+    const meta = [pet.breed, pet.gender, pet.species].filter(Boolean).join(' · ');
     passBody.innerHTML = `
-      <div style="text-align:center; padding:0.5rem 0;">
-        <div style="width:84px; height:84px; border-radius:50%; overflow:hidden; margin:0 auto 1rem; border:3px solid var(--primary); box-shadow:var(--shadow-md); cursor:pointer;" onclick="window.pawApp.openLightbox('${pet.photoUrl}', '${(pet.name || 'Pet').replace(/'/g, "\\'")}', '${pet.breed} · ${pet.species}')" title="Click to view full photo">
-          <img src="${pet.photoUrl || window.PET_PHOTO_PLACEHOLDER}" style="width:100%; height:100%; object-fit:cover;" onerror="this.src='https://images.unsplash.com/photo-1543466835-00a7907e9de1?auto=format&fit=crop&w=150&q=80'" />
+      <div class="dpass">
+        <div class="dpass-head">
+          <span class="dpass-brand">
+            <svg width="18" height="18" viewBox="0 0 24 24.75" fill="currentColor" aria-hidden="true"><path d="M12 10.5c1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3 1.34 3 3 3zm-6 2c1.38 0 2.5-1.12 2.5-2.5S7.38 7.5 6 7.5 3.5 8.62 3.5 10s1.12 2.5 2.5 2.5zm12 0c1.38 0 2.5-1.12 2.5-2.5S19.38 7.5 18 7.5s-2.5 1.12-2.5 2.5 1.12 2.5 2.5 2.5zM12 12c-2.76 0-5 2.24-5 5 0 2.21 1.79 4 4 4 1.1 0 2-.9 2-2 0 1.1.9 2 2 2 2.21 0 4-1.79 4-4 0-2.76-2.24-5-5-5z"/></svg>
+            PawTrack
+          </span>
+          <span class="dpass-kind">Digital NFC Pass</span>
         </div>
-        <h3 style="font-size:1.4rem; margin-bottom:0.25rem;">${pet.name}</h3>
-        <div style="color:var(--text-muted); font-size:0.85rem; margin-bottom:1.25rem;">${pet.breed} · ${pet.gender} · ${pet.species}</div>
+        <div class="dpass-body">
+          <button type="button" class="dpass-photo" onclick="window.pawApp.openLightbox('${e(photo)}', '${e((pet.name || 'Pet').replace(/'/g, "\'"))}', '${e(meta)}')" title="View full photo">
+            <img src="${e(photo)}" alt="${e(pet.name)}" onerror="this.src='https://images.unsplash.com/photo-1543466835-00a7907e9de1?auto=format&fit=crop&w=150&q=80'" />
+          </button>
+          <h3 class="dpass-name">${e(pet.name)}</h3>
+          <div class="dpass-meta">${e(meta)}</div>
 
-        <div style="background:var(--bg-surface-elevated); padding:1rem; border-radius:var(--radius-md); border:1px solid var(--border-glass); margin-bottom:1.25rem; text-align:left;">
-          <div style="display:flex; justify-content:space-between; margin-bottom:0.5rem;">
-            <span style="color:var(--text-muted); font-size:0.8rem;">NFC Transponder ID</span>
-            <strong style="color:var(--primary); font-family:monospace;">${pet.nfcTag}</strong>
-          </div>
-          <div style="display:flex; justify-content:space-between; margin-bottom:0.5rem;">
-            <span style="color:var(--text-muted); font-size:0.8rem;">ISO 11784 Microchip</span>
-            <strong style="font-family:monospace; font-size:0.8rem;">${pet.microchipNo}</strong>
-          </div>
-          <div style="display:flex; justify-content:space-between; margin-bottom:0.5rem;">
-            <span style="color:var(--text-muted); font-size:0.8rem;">Registered Guardian</span>
-            <strong>${pet.owner.name}</strong>
-          </div>
-          <div style="display:flex; justify-content:space-between;">
-            <span style="color:var(--text-muted); font-size:0.8rem;">Emergency Contact</span>
-            <strong style="color:var(--primary); font-weight:700;">${pet.owner.phone}</strong>
-          </div>
+          <dl class="dpass-grid">
+            <div class="dpass-wide"><dt>NFC tag ID</dt><dd class="dpass-mono">${e(pet.nfcTag || 'Not linked')}</dd></div>
+            <div><dt>Guardian</dt><dd>${e(pet.owner && pet.owner.name)}</dd></div>
+            <div><dt>Emergency contact</dt><dd>${e(pet.owner && pet.owner.phone)}</dd></div>
+          </dl>
         </div>
-
-        <div style="background:#ffffff; padding:1rem; border-radius:var(--radius-md); display:inline-block; margin-bottom:1rem; box-shadow:var(--shadow-sm);">
-          <div style="font-family:monospace; font-weight:900; font-size:1.15rem; color:#180d07; letter-spacing:2px; border:2px dashed #180d07; padding:0.6rem 1.2rem; border-radius:var(--radius-sm);">
-            * ${pet.nfcTag} *
-          </div>
-          <div style="font-size:0.65rem; color:#666; margin-top:0.4rem; text-transform:uppercase;">13.56 MHz NFC Encoded</div>
-        </div>
-
-        <div style="font-size:0.75rem; color:var(--text-muted); line-height:1.4;">
-          Scannable by all Quezon City & Metro Manila Municipal Animal Control Handheld Transponders.
-        </div>
+        <div class="dpass-strip"><span>* ${e(pet.nfcTag || 'NO TAG')} *</span><small>13.56 MHz NFC encoded</small></div>
       </div>
+      <p class="dpass-foot">Show this pass, with your ID, when you claim your pet. The NFC tag on the collar is what finders tap.</p>
     `;
 
+    modal.dataset.petId = pet.id;
     modal.classList.add('active');
     if (window.lucide) window.lucide.createIcons({ root: modal });
+  }
+
+  // Saves the pet's digital NFC pass as a PNG image on the guardian's device
+  async savePetPass(petId) {
+    const id = petId || document.getElementById('digital-pass-modal')?.dataset.petId;
+    const pet = id && window.pawStore.getPetById(id);
+    if (!pet) return;
+
+    const W = 900, H = 520;
+    const canvas = document.createElement('canvas');
+    canvas.width = W; canvas.height = H;
+    const c = canvas.getContext('2d');
+    const font = (w, s) => `${w} ${s}px Poppins, "Segoe UI", Arial, sans-serif`;
+
+    // Card background and header band
+    c.fillStyle = '#ffffff'; c.fillRect(0, 0, W, H);
+    const grad = c.createLinearGradient(0, 0, W, 0);
+    grad.addColorStop(0, '#c2410c'); grad.addColorStop(1, '#7c2d12');
+    c.fillStyle = grad; c.fillRect(0, 0, W, 96);
+    c.fillStyle = '#ffffff'; c.textBaseline = 'middle';
+    c.font = font(700, 32); c.fillText('PawTrack', 40, 48);
+    c.font = font(500, 20); c.textAlign = 'right'; c.fillText('Digital NFC Pass', W - 40, 48);
+    c.textAlign = 'left';
+
+    // Pet photo (falls back to an initial if the image can't be read)
+    const cx = 130, cy = 250, r = 80;
+    let drawn = false;
+    if (pet.photoUrl) {
+      try {
+        const img = await new Promise((res, rej) => {
+          const i = new Image();
+          i.crossOrigin = 'anonymous';
+          i.onload = () => res(i); i.onerror = rej;
+          i.src = pet.photoUrl;
+        });
+        c.save();
+        c.beginPath(); c.arc(cx, cy, r, 0, Math.PI * 2); c.clip();
+        const s = Math.max((r * 2) / img.width, (r * 2) / img.height);
+        c.drawImage(img, cx - (img.width * s) / 2, cy - (img.height * s) / 2, img.width * s, img.height * s);
+        c.restore();
+        drawn = true;
+      } catch (e) { /* use the placeholder below */ }
+    }
+    if (!drawn) {
+      c.fillStyle = '#fde8d8'; c.beginPath(); c.arc(cx, cy, r, 0, Math.PI * 2); c.fill();
+      c.fillStyle = '#c2410c'; c.font = font(700, 64); c.textAlign = 'center';
+      c.fillText((pet.name || '?').charAt(0).toUpperCase(), cx, cy + 3); c.textAlign = 'left';
+    }
+    c.strokeStyle = '#c2410c'; c.lineWidth = 5;
+    c.beginPath(); c.arc(cx, cy, r, 0, Math.PI * 2); c.stroke();
+
+    // Pet and guardian details
+    const x = 260;
+    c.fillStyle = '#180d07'; c.font = font(700, 40); c.fillText(pet.name || 'Pet', x, 170);
+    c.fillStyle = '#6b7280'; c.font = font(400, 20);
+    c.fillText([pet.breed, pet.gender, pet.species].filter(Boolean).join(' · '), x, 210);
+    const rows = [
+      ['NFC Tag ID', pet.nfcTag || 'Not linked'],
+      ['Guardian', pet.owner?.name || ''],
+      ['Emergency contact', pet.owner?.phone || '']
+    ];
+    rows.forEach(([label, value], i) => {
+      const y = 270 + i * 52;
+      c.fillStyle = '#6b7280'; c.font = font(400, 17); c.fillText(label, x, y);
+      c.fillStyle = '#180d07'; c.font = i === 0 ? '700 24px monospace' : font(600, 24); c.fillText(String(value), x, y + 26);
+    });
+
+    // NFC tag strip
+    c.fillStyle = '#fdf6f0'; c.fillRect(0, H - 90, W, 90);
+    c.strokeStyle = '#180d07'; c.setLineDash([8, 6]); c.lineWidth = 2;
+    c.strokeRect(40, H - 74, W - 80, 58); c.setLineDash([]);
+    c.fillStyle = '#180d07'; c.font = '700 26px monospace'; c.textAlign = 'center';
+    c.fillText(`* ${pet.nfcTag || 'NO TAG'} *`, W / 2, H - 52);
+    c.fillStyle = '#6b7280'; c.font = font(400, 13);
+    c.fillText('13.56 MHz NFC encoded · Show this pass to the intake officer', W / 2, H - 28);
+
+    const safe = String(pet.name || 'pet').replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '').toLowerCase() || 'pet';
+    canvas.toBlob((blob) => {
+      if (!blob) return;
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = `pawtrack-pass-${safe}.png`;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      window.notifManager?.showToast(`${pet.name}'s digital pass was saved to your device.`, 'success');
+    }, 'image/png');
   }
 
   openOwnerGuideModal() {

@@ -167,10 +167,10 @@ class SettingsView {
               <p>${t('settings.legalSub', 'How PawTrack works and how your data is handled.')}</p>
             </div>
           </div>
-          <button type="button" class="settings-link-row" data-modal="terms-modal">
+          <button type="button" class="settings-link-row" data-legal="terms">
             <i data-lucide="file-text"></i><span>${t('settings.terms', 'Terms and Conditions')}</span><i data-lucide="chevron-right"></i>
           </button>
-          <button type="button" class="settings-link-row" data-modal="privacy-policy-modal">
+          <button type="button" class="settings-link-row" data-legal="privacy">
             <i data-lucide="shield-check"></i><span>${t('settings.privacy', 'Privacy Policy')}</span><i data-lucide="chevron-right"></i>
           </button>
         </section>
@@ -229,8 +229,11 @@ class SettingsView {
     });
 
     // Legal and log out
-    container.querySelectorAll('[data-modal]').forEach((btn) => {
-      btn.addEventListener('click', () => window.notifManager.openModal(btn.dataset.modal));
+    container.querySelectorAll('[data-legal]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        if (window.pawApp && window.pawApp.openLegalDocs) window.pawApp.openLegalDocs(btn.dataset.legal);
+        else window.notifManager.openModal(btn.dataset.legal === 'privacy' ? 'privacy-policy-modal' : 'terms-modal');
+      });
     });
     container.querySelector('#settings-logout-btn')?.addEventListener('click', () => window.pawApp.logOut());
   }

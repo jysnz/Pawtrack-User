@@ -887,30 +887,55 @@ class App {
 
     // ---------- Terms + Privacy in one dialog; "I agree" unlocks once it has been scrolled to the end ----------
     let signupTermsAccepted = false;
+    let legalReadOnly = false; // opened from Settings to read, not to agree
     const termsAgreeBody = document.getElementById('terms-agree-body');
     const termsAgreeAccept = document.getElementById('terms-agree-accept-btn');
     const termsAgreeHint = document.getElementById('terms-agree-hint');
 
     const checkTermsScrolled = () => {
-      if (!termsAgreeBody || !termsAgreeAccept) return;
+      if (!termsAgreeBody || !termsAgreeAccept || legalReadOnly) return;
       const atEnd = termsAgreeBody.scrollTop + termsAgreeBody.clientHeight >= termsAgreeBody.scrollHeight - 8;
       termsAgreeAccept.disabled = !atEnd;
       if (termsAgreeHint) termsAgreeHint.textContent = atEnd ? 'Thanks for reading. You can agree now.' : 'Scroll to the bottom to continue';
     };
     termsAgreeBody?.addEventListener('scroll', checkTermsScrolled);
 
+    const fillTermsAgree = () => {
+      const section = (title, key, modalId) => {
+        const src = document.querySelector(`#${modalId} .modal-body`);
+        return `<h3 class="terms-agree-section" data-legal="${key}">${title}</h3>${src ? src.innerHTML : ''}`;
+      };
+      termsAgreeBody.innerHTML = section('Terms of Service', 'terms', 'terms-modal') + section('Privacy Policy', 'privacy', 'privacy-policy-modal');
+      termsAgreeBody.scrollTop = 0;
+    };
+    const cancelBtn = document.getElementById('terms-agree-cancel-btn');
+
     const openTermsAgree = () => {
       if (!termsAgreeBody) { signupTermsAccepted = true; loginForm?.requestSubmit(); return; }
-      const section = (title, modalId) => {
-        const src = document.querySelector(`#${modalId} .modal-body`);
-        return `<h3 class="terms-agree-section">${title}</h3>${src ? src.innerHTML : ''}`;
-      };
-      termsAgreeBody.innerHTML = section('Terms of Service', 'terms-modal') + section('Privacy Policy', 'privacy-policy-modal');
-      termsAgreeBody.scrollTop = 0;
+      legalReadOnly = false;
+      fillTermsAgree();
+      termsAgreeAccept.textContent = 'I agree';
       termsAgreeAccept.disabled = true;
+      if (cancelBtn) cancelBtn.hidden = false;
       window.notifManager.openModal('terms-agree-modal');
       // Short content that needs no scrolling unlocks straight away
       requestAnimationFrame(checkTermsScrolled);
+    };
+
+    // Settings: the same Terms + Privacy dialog, just to read. `which` is 'terms' or 'privacy' and picks where it starts.
+    this.openLegalDocs = (which) => {
+      if (!termsAgreeBody) { window.notifManager.openModal(which === 'privacy' ? 'privacy-policy-modal' : 'terms-modal'); return; }
+      legalReadOnly = true;
+      fillTermsAgree();
+      termsAgreeAccept.textContent = 'Close';
+      termsAgreeAccept.disabled = false;
+      if (cancelBtn) cancelBtn.hidden = true;
+      if (termsAgreeHint) termsAgreeHint.textContent = 'Terms of Service and Privacy Policy';
+      window.notifManager.openModal('terms-agree-modal');
+      requestAnimationFrame(() => {
+        const target = termsAgreeBody.querySelector(`[data-legal="${which === 'privacy' ? 'privacy' : 'terms'}"]`);
+        if (target) termsAgreeBody.scrollTop = target.getBoundingClientRect().top - termsAgreeBody.getBoundingClientRect().top + termsAgreeBody.scrollTop - 4;
+      });
     };
 
     document.getElementById('terms-agree-cancel-btn')?.addEventListener('click', () => {
@@ -919,6 +944,7 @@ class App {
     termsAgreeAccept?.addEventListener('click', () => {
       if (termsAgreeAccept.disabled) return;
       window.notifManager.closeModal('terms-agree-modal');
+      if (legalReadOnly) return;
       signupTermsAccepted = true;
       loginForm?.requestSubmit();
     });
@@ -2256,8 +2282,15 @@ class App {
       }
 
       const reader = new FileReader();
-      reader.onload = (e) => {
+      reader.onload = async (e) => {
         const dataUrl = e.target.result;
+        // Only a real photo of a pet is accepted, not a screenshot or an unrelated picture
+        const check = window.petAI ? await window.petAI.checkPetPhoto(dataUrl, { indicator: dropZone }) : { ok: true };
+        if (!check.ok) {
+          fileInput.value = '';
+          if (window.notifManager) window.notifManager.showToast(check.reason, 'warning', 7000);
+          return;
+        }
         hiddenInput.value = dataUrl;
         if (previewImg) previewImg.src = dataUrl;
         if (promptBox) promptBox.style.display = 'none';

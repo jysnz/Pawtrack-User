@@ -66,6 +66,78 @@ class PetAI {
     return data.traits || {};
   }
 
+  // Screenshots, ID cards, documents and code have few colours and big flat areas; a photo of an animal does not.
+  // A quick local check on a tiny copy of the picture, so it costs nothing.
+  async looksLikeScreenshot(photo) {
+    try {
+      const img = await new Promise((resolve, reject) => {
+        const el = new Image();
+        el.onload = () => resolve(el);
+        el.onerror = reject;
+        el.src = photo;
+      });
+      const size = 96;
+      const canvas = document.createElement('canvas');
+      canvas.width = size; canvas.height = size;
+      const ctx = canvas.getContext('2d', { willReadFrequently: true });
+      ctx.drawImage(img, 0, 0, size, size);
+      const px = ctx.getImageData(0, 0, size, size).data;
+      const colors = new Set();
+      let flat = 0, pairs = 0;
+      for (let y = 0; y < size; y++) {
+        for (let x = 0; x < size; x++) {
+          const i = (y * size + x) * 4;
+          colors.add(((px[i] >> 4) << 8) | ((px[i + 1] >> 4) << 4) | (px[i + 2] >> 4));
+          if (x < size - 1) {
+            const j = i + 4;
+            pairs++;
+            if (Math.abs(px[i] - px[j]) + Math.abs(px[i + 1] - px[j + 1]) + Math.abs(px[i + 2] - px[j + 2]) < 6) flat++;
+          }
+        }
+      }
+      return colors.size < 140 && flat / pairs > 0.5;
+    } catch (e) {
+      return false; // cannot tell: let the AI check decide
+    }
+  }
+
+  // Is this a real picture of a pet? Stops screenshots and unrelated pictures being sent as evidence.
+  // 1) the local screenshot check, 2) when `ai` is true, Gemini says whether an animal is in the photo.
+  // If the AI cannot be reached the photo is allowed (the local check still applied).
+  // `indicator` is the element to cover with a "Verifying photo" overlay while the check runs
+  async checkPetPhoto(photo, { ai = true, indicator = null } = {}) {
+    const stop = indicator ? this.showVerifying(indicator) : () => {};
+    try {
+      if (await this.looksLikeScreenshot(photo)) {
+        return { ok: false, reason: 'This looks like a screenshot or a document, not a photo of a pet. Please take or choose a real photo of the animal.' };
+      }
+      if (!ai) return { ok: true };
+      try {
+        const traits = await this.readPhoto(photo);
+        if (traits.isPet === false) {
+          return { ok: false, reason: 'No pet was detected in this photo. Please choose a clear photo of the animal.' };
+        }
+      } catch (e) {
+        console.warn('[PetAI] Could not verify the photo:', e.message || e);
+      }
+      return { ok: true };
+    } finally {
+      stop();
+    }
+  }
+
+  // A spinner and "Verifying photo" over the photo area while it is being checked. Returns a function that removes it.
+  showVerifying(el) {
+    el.classList.add('photo-verifying');
+    const overlay = document.createElement('div');
+    overlay.className = 'photo-verify-overlay';
+    overlay.setAttribute('role', 'status');
+    overlay.setAttribute('aria-live', 'polite');
+    overlay.innerHTML = '<span class="photo-verify-spinner" aria-hidden="true"></span><span class="photo-verify-text"><strong>Verifying photo</strong><small>Checking that it is a real photo of a pet</small></span>';
+    el.appendChild(overlay);
+    return () => { overlay.remove(); el.classList.remove('photo-verifying'); };
+  }
+
   // A short written description from the traits Gemini saw in the photo
   describeTraits(traits) {
     const known = (v) => v && v !== 'Unknown';
@@ -81,7 +153,7 @@ class PetAI {
   // Ranks the pets already reported missing against what the photo shows. Their descriptions are part of the comparison.
   matchMissing(traits, limit = 3) {
     const store = window.pawStore;
-    const missing = store.getMapPets().filter((p) => p.status === 'lost');
+    const missing = store.getMapPets().filter((p) => p.status === 'lost' && !store.isMyPet(p));
     const colors = (traits.colors || []).join(' ');
     const sighting = {
       species: traits.species && traits.species !== 'Unknown' ? traits.species : '',

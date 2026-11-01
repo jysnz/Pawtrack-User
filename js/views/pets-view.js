@@ -268,6 +268,15 @@ class PetsView {
       </div>
       ${pet.description ? `<p class="pet-detail-desc">${this.esc(pet.description)}</p>` : ''}
       ${this.statusActionHtml(pet)}
+      ${pet.nfc_tag ? `
+      <div class="pet-pass-row">
+        <div class="pet-pass-text">
+          <strong><i data-lucide="credit-card"></i> Digital NFC pass <button type="button" class="pass-info-btn" onclick="window.notifManager.openModal('pass-info-modal')" aria-label="About the Digital NFC pass" title="What is this?"><i data-lucide="info"></i></button></strong>
+          <span>Save ${this.esc(pet.name)}'s pass as an image to keep on your phone.</span>
+        </div>
+        <button type="button" class="btn btn-outline btn-sm" onclick="window.petsView.savePass('${this.esc(pet.id)}')"><i data-lucide="download"></i> Save pass</button>
+      </div>
+      ` : ''}
       <dl class="pet-detail-facts">${facts.map(([k, v]) => `<div><dt>${k}</dt><dd>${this.esc(v)}</dd></div>`).join('')}</dl>
 
       <section class="vax-section">
@@ -360,7 +369,22 @@ class PetsView {
     window.reportManager.openReportModal('missing', pet.id);
   }
 
-  async markFound(petId) {
+  markFound(petId) {
+    // One "Mark as found" dialog for the whole app: it asks for the pet's condition and a proof photo
+    if (window.publicView && window.publicView.openMarkFound) return window.publicView.openMarkFound(petId);
+    return this.markFoundQuick(petId);
+  }
+
+  // The pet's status shown in this list after the dialog marked it found
+  afterMarkedFound(petId) {
+    const pet = this.pets.find((p) => p.id === petId);
+    if (!pet) return;
+    pet.status = 'safe';
+    this.draw();
+    if (this.openPetId === petId) this.renderDetail();
+  }
+
+  async markFoundQuick(petId) {
     const btn = document.getElementById('pet-found-btn');
     if (btn) btn.disabled = true;
     const ok = await this.setStatus(petId, 'safe');
@@ -487,12 +511,18 @@ class PetsView {
       return;
     }
 
-    const file = document.getElementById('vax-doc')?.files?.[0] || null;
-    const DOC_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
+    let file = document.getElementById('vax-doc')?.files?.[0] || null;
     const docField = document.getElementById('vax-doc-field');
-    if (file && (!DOC_TYPES.includes(file.type) || file.size > 8 * 1024 * 1024)) {
-      docField.classList.add('has-error');
-      return;
+    const docError = document.getElementById('vax-doc-error');
+    if (file) {
+      // Verify the file really is a photo or a PDF, and strip anything that could carry a script
+      const check = await this.inspectDocument(file);
+      if (!check.ok) {
+        if (docError) docError.textContent = check.reason;
+        docField.classList.add('has-error');
+        return;
+      }
+      file = check.file;
     }
     docField.classList.remove('has-error');
 
@@ -544,6 +574,64 @@ class PetsView {
       if (uploadedPath) client.storage.from('vaccination-documents').remove([uploadedPath]).catch(() => {});
       btn.disabled = false;
       this.setMsg(`Could not save the vaccination: ${err.message}`);
+    }
+  }
+
+  // Saves the open pet's digital NFC pass as an image (the same card as the Digital Pass screen)
+  savePass(petId) {
+    const pet = this.pets.find((p) => p.id === petId);
+    if (!pet || !pet.nfc_tag || !window.ownerView) return;
+    this.mirrorToDevice([pet]); // makes sure the saved copy on this device has the pet and guardian details
+    window.ownerView.savePetPass(petId);
+  }
+
+  // Checks an upload before it leaves the browser. Returns { ok, file } or { ok:false, reason }.
+  // - The real type comes from the file's first bytes, never from its name or the browser-reported type
+  // - Photos are decoded and redrawn, which drops anything hidden in them (scripts, trailing data, EXIF/GPS)
+  // - PDFs are refused if they carry scripts, auto-run actions, launch commands or embedded files
+  async inspectDocument(file) {
+    const MAX = 8 * 1024 * 1024;
+    if (!file.size) return { ok: false, reason: 'That file is empty.' };
+    if (file.size > MAX) return { ok: false, reason: 'That file is over 8 MB.' };
+
+    const head = new Uint8Array(await file.slice(0, 16).arrayBuffer());
+    const startsWith = (...b) => b.every((v, i) => head[i] === v);
+    const ascii = (from, to) => String.fromCharCode(...head.slice(from, to));
+    let type = null;
+    if (startsWith(0xFF, 0xD8, 0xFF)) type = 'image/jpeg';
+    else if (startsWith(0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A)) type = 'image/png';
+    else if (ascii(0, 4) === 'RIFF' && ascii(8, 12) === 'WEBP') type = 'image/webp';
+    else if (ascii(0, 5) === '%PDF-') type = 'application/pdf';
+    if (!type) return { ok: false, reason: 'Only real JPG, PNG, WebP or PDF files are accepted.' };
+
+    const ext = (file.name.split('.').pop() || '').toLowerCase();
+    const okExt = { 'image/jpeg': ['jpg', 'jpeg'], 'image/png': ['png'], 'image/webp': ['webp'], 'application/pdf': ['pdf'] }[type];
+    if (!okExt.includes(ext)) return { ok: false, reason: 'The file name does not match its contents. Rename it or choose another file.' };
+
+    if (type === 'application/pdf') {
+      // Latin-1 keeps every byte as one character; #xx escapes in PDF names (e.g. /J#61vaScript) are decoded first
+      const text = new TextDecoder('latin1').decode(new Uint8Array(await file.arrayBuffer()))
+        .replace(/#([0-9a-fA-F]{2})/g, (_, h) => String.fromCharCode(parseInt(h, 16)));
+      const risky = /\/(JavaScript|JS|Launch|OpenAction|AA|EmbeddedFiles?|RichMedia|XFA|SubmitForm|ImportData|GoToR|GoToE)\b/;
+      if (risky.test(text)) {
+        return { ok: false, reason: 'This PDF contains scripts or embedded content and was blocked. Save it as a plain PDF or upload a photo instead.' };
+      }
+      return { ok: true, file: new File([file], file.name, { type }) };
+    }
+
+    // Photos: decode, then redraw onto a clean canvas and save that copy
+    try {
+      const bmp = await createImageBitmap(file);
+      const canvas = document.createElement('canvas');
+      canvas.width = bmp.width; canvas.height = bmp.height;
+      canvas.getContext('2d').drawImage(bmp, 0, 0);
+      if (bmp.close) bmp.close();
+      const blob = await new Promise((res) => canvas.toBlob(res, type, 0.92));
+      if (!blob || blob.type !== type) throw new Error('re-encode failed');
+      if (blob.size > MAX) return { ok: false, reason: 'That file is over 8 MB.' };
+      return { ok: true, file: new File([blob], file.name, { type }) };
+    } catch (e) {
+      return { ok: false, reason: 'That image could not be read. It may be damaged or not a real photo.' };
     }
   }
 
