@@ -480,6 +480,15 @@ class App {
       window.notifManager.openModal('privacy-policy-modal');
     });
 
+    document.querySelectorAll('[data-open-terms]').forEach(a => a.addEventListener('click', (e) => {
+      e.preventDefault();
+      window.notifManager.openModal('terms-modal');
+    }));
+    document.querySelectorAll('[data-open-privacy]').forEach(a => a.addEventListener('click', (e) => {
+      e.preventDefault();
+      window.notifManager.openModal('privacy-policy-modal');
+    }));
+
     // Sign in with Google (header prompt)
     onetapContinue?.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -526,6 +535,7 @@ class App {
     const loginTitle = document.getElementById('auth-landing-title');
     const loginSub = document.getElementById('auth-landing-sub');
     const loginNameInput = document.getElementById('login-name');
+    const loginLastNameInput = document.getElementById('login-lastname');
     const loginEmailInput = document.getElementById('login-email');
     const loginPhoneInput = document.getElementById('login-phone');
     const loginPasswordInput = document.getElementById('login-password');
@@ -555,6 +565,7 @@ class App {
 
     const FRESH_SIGNIN_KEY = 'pawtrack_fresh_signin';
     const RECOVERY_KEY = 'pawtrack_password_recovery';
+    const NEW_ACCOUNT_KEY = 'pawtrack_new_account';
     const OTP_LOG_KEY = 'pawtrack_otp_requests';
     const OTP_MIN_GAP_MS = 60 * 1000;
     const OTP_MAX_PER_WINDOW = 3;
@@ -610,7 +621,7 @@ class App {
       if (code === 'email_not_confirmed' || /email not confirmed/i.test(message)) return 'Please confirm your email first. Check your inbox for the link we sent.';
       if (code === 'captcha_failed' || /captcha/i.test(message)) return 'Security check failed. Please complete it again.';
       if (code === 'user_already_exists' || /already registered/i.test(message)) return 'An account with this email already exists. Try logging in instead.';
-      if (code === 'weak_password' || /password should/i.test(message)) return 'Please choose a stronger password (at least 8 characters).';
+      if (code === 'weak_password' || /password should/i.test(message)) return 'Please choose a stronger password (10+ characters with upper and lower case letters, a number and a symbol).';
       if (code === 'over_request_rate_limit' || code === 'over_email_send_rate_limit' || /rate limit/i.test(message)) return 'Too many attempts. Please wait a minute and try again.';
       return message || 'Something went wrong. Please try again.';
     };
@@ -675,24 +686,59 @@ class App {
     };
 
     const setBusy = (busy) => {
-      [loginSubmit, loginGoogleBtn, loginForgotBtn, loginModeToggle].forEach(btn => { if (btn) btn.disabled = busy; });
+      [loginSubmit, loginGoogleBtn, loginForgotBtn, loginModeToggle,
+        document.getElementById('auth-tab-signin'), document.getElementById('auth-tab-signup')].forEach(btn => { if (btn) btn.disabled = busy; });
     };
 
     const setAuthMode = (mode) => {
       authMode = mode;
       const isSignup = mode === 'signup';
       authLanding?.classList.toggle('is-signup', isSignup);
+      document.getElementById('auth-tab-signin')?.setAttribute('aria-selected', String(!isSignup));
+      document.getElementById('auth-tab-signup')?.setAttribute('aria-selected', String(isSignup));
       authLanding?.querySelectorAll('[data-signup-only]').forEach(el => { el.hidden = !isSignup; });
       authLanding?.querySelectorAll('[data-signin-only]').forEach(el => { el.hidden = isSignup; });
       if (loginTitle) loginTitle.textContent = isSignup ? 'Create your account' : 'Welcome back';
       if (loginSub) loginSub.textContent = isSignup
-        ? 'Shelters use your name and mobile number to contact you if your pet is found.'
+        ? 'Set up your guardian account. It takes about a minute.'
         : 'Sign in to manage your pets and recovery alerts.';
       if (loginSubmit) loginSubmit.textContent = isSignup ? 'Create account' : 'Log in';
       if (loginModeText) loginModeText.textContent = isSignup ? 'Already have an account?' : 'New to PawTrack?';
       if (loginModeToggle) loginModeToggle.textContent = isSignup ? 'Log in' : 'Create an account';
       setStatus(loginStatus, '');
     };
+
+    // Back to a blank Log in form: nothing typed for the last account (name, email, phone, password) is left behind
+    const resetLoginForm = () => {
+      loginForm?.reset();
+      [loginNameInput, loginLastNameInput, loginEmailInput, loginPhoneInput, loginPasswordInput].forEach(input => { if (input) input.value = ''; });
+      if (loginPasswordInput) loginPasswordInput.type = 'password';
+      setAuthMode('signin');
+    };
+    this.resetLoginForm = resetLoginForm;
+
+    // "Account created" dialog for a brand-new guardian; the button takes them to the dashboard
+    const openAccountCreated = (fullName) => {
+      const nameEl = document.getElementById('account-created-name');
+      if (nameEl) nameEl.textContent = (fullName || '').split(' ')[0] || 'there';
+      window.notifManager.openModal('account-created-modal');
+      setTimeout(() => document.getElementById('account-created-continue-btn')?.focus(), 150);
+    };
+    // While the dialog is open the guardian is signed in but stays where they are: the app opens only on Continue
+    let welcomePending = false;
+    const enterApp = () => {
+      this.landedOnPets = true;
+      const hash = window.location.hash;
+      if (!hash || hash === '#owner') window.location.hash = '#pets';
+      this.renderCurrentView();
+      this.hideStartScreen();
+    };
+    document.getElementById('account-created-continue-btn')?.addEventListener('click', () => {
+      welcomePending = false;
+      window.notifManager.closeModal('account-created-modal');
+      window.location.hash = '#pets';
+      enterApp();
+    });
 
     const completeSignIn = (guardian, user) => {
       window.pawStore.setGoogleUser(this.toGuardianProfile({
@@ -704,14 +750,6 @@ class App {
       }));
       this.setGuestMode(false);
       this.updateGoogleAuthUI();
-      // Pets is the main page: land there once after signing in (not on every token refresh)
-      if (!this.landedOnPets) {
-        this.landedOnPets = true;
-        const hash = window.location.hash;
-        if (!hash || hash === '#owner') window.location.hash = '#pets';
-      }
-      this.renderCurrentView();
-      this.hideStartScreen();
       window.notifManager.closeModal('register-dialog-modal');
 
       let isFresh = false;
@@ -719,7 +757,27 @@ class App {
         isFresh = sessionStorage.getItem(FRESH_SIGNIN_KEY) === '1';
         sessionStorage.removeItem(FRESH_SIGNIN_KEY);
       } catch (e) {}
-      if (isFresh) window.notifManager.showToast(`Signed in as ${guardian.full_name}.`, 'success');
+      let isNewAccount = false;
+      try {
+        isNewAccount = sessionStorage.getItem(NEW_ACCOUNT_KEY) === '1';
+        sessionStorage.removeItem(NEW_ACCOUNT_KEY);
+      } catch (e) {}
+
+      if (isNewAccount) {
+        // A brand-new account sees the welcome dialog first; the dashboard opens when they tap Continue
+        welcomePending = true;
+        openAccountCreated(guardian.full_name);
+      } else if (!welcomePending) {
+        // Pets is the main page: land there once after signing in (not on every token refresh)
+        if (!this.landedOnPets) {
+          this.landedOnPets = true;
+          const hash = window.location.hash;
+          if (!hash || hash === '#owner') window.location.hash = '#pets';
+        }
+        this.renderCurrentView();
+        this.hideStartScreen();
+        if (isFresh) window.notifManager.showToast(`Signed in as ${guardian.full_name}.`, 'success');
+      }
 
       // The guardian's pets, reports and notifications load from Supabase (the store keeps them fresh)
       window.pawStore.syncFromSupabase();
@@ -811,6 +869,15 @@ class App {
       (authMode === 'signup' ? loginNameInput : loginEmailInput)?.focus();
     });
 
+    // Log in / Create account tabs
+    [['auth-tab-signin', 'signin'], ['auth-tab-signup', 'signup']].forEach(([id, mode]) => {
+      document.getElementById(id)?.addEventListener('click', () => {
+        if (authMode === mode) return;
+        setAuthMode(mode);
+        (mode === 'signup' ? loginNameInput : loginEmailInput)?.focus();
+      });
+    });
+
     loginPasswordToggle?.addEventListener('click', () => {
       const show = loginPasswordInput.type === 'password';
       loginPasswordInput.type = show ? 'text' : 'password';
@@ -818,15 +885,60 @@ class App {
       loginPasswordToggle.setAttribute('aria-pressed', String(show));
     });
 
+    // ---------- Terms + Privacy in one dialog; "I agree" unlocks once it has been scrolled to the end ----------
+    let signupTermsAccepted = false;
+    const termsAgreeBody = document.getElementById('terms-agree-body');
+    const termsAgreeAccept = document.getElementById('terms-agree-accept-btn');
+    const termsAgreeHint = document.getElementById('terms-agree-hint');
+
+    const checkTermsScrolled = () => {
+      if (!termsAgreeBody || !termsAgreeAccept) return;
+      const atEnd = termsAgreeBody.scrollTop + termsAgreeBody.clientHeight >= termsAgreeBody.scrollHeight - 8;
+      termsAgreeAccept.disabled = !atEnd;
+      if (termsAgreeHint) termsAgreeHint.textContent = atEnd ? 'Thanks for reading. You can agree now.' : 'Scroll to the bottom to continue';
+    };
+    termsAgreeBody?.addEventListener('scroll', checkTermsScrolled);
+
+    const openTermsAgree = () => {
+      if (!termsAgreeBody) { signupTermsAccepted = true; loginForm?.requestSubmit(); return; }
+      const section = (title, modalId) => {
+        const src = document.querySelector(`#${modalId} .modal-body`);
+        return `<h3 class="terms-agree-section">${title}</h3>${src ? src.innerHTML : ''}`;
+      };
+      termsAgreeBody.innerHTML = section('Terms of Service', 'terms-modal') + section('Privacy Policy', 'privacy-policy-modal');
+      termsAgreeBody.scrollTop = 0;
+      termsAgreeAccept.disabled = true;
+      window.notifManager.openModal('terms-agree-modal');
+      // Short content that needs no scrolling unlocks straight away
+      requestAnimationFrame(checkTermsScrolled);
+    };
+
+    document.getElementById('terms-agree-cancel-btn')?.addEventListener('click', () => {
+      window.notifManager.closeModal('terms-agree-modal');
+    });
+    termsAgreeAccept?.addEventListener('click', () => {
+      if (termsAgreeAccept.disabled) return;
+      window.notifManager.closeModal('terms-agree-modal');
+      signupTermsAccepted = true;
+      loginForm?.requestSubmit();
+    });
+
     loginForm?.addEventListener('submit', async (e) => {
       e.preventDefault();
       const email = (loginEmailInput?.value || '').trim().toLowerCase();
       const password = loginPasswordInput?.value || '';
       const isSignup = authMode === 'signup';
+      const termsAccepted = signupTermsAccepted;
+      signupTermsAccepted = false;
 
-      if (isSignup && (loginNameInput?.value || '').trim().length < 2) {
-        setStatus(loginStatus, 'Please enter your full name.', true);
+      if (isSignup && (loginNameInput?.value || '').trim().length < 1) {
+        setStatus(loginStatus, 'Please enter your first name.', true);
         loginNameInput?.focus();
+        return;
+      }
+      if (isSignup && (loginLastNameInput?.value || '').trim().length < 1) {
+        setStatus(loginStatus, 'Please enter your last name.', true);
+        loginLastNameInput?.focus();
         return;
       }
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
@@ -840,9 +952,14 @@ class App {
         loginPhoneInput?.focus();
         return;
       }
-      if (!password || (isSignup && password.length < 8)) {
-        setStatus(loginStatus, isSignup ? 'Please choose a password with at least 8 characters.' : 'Please enter your password.', true);
+      if (!password || (isSignup && !updateSignupRules())) {
+        setStatus(loginStatus, isSignup ? 'Your password does not meet all the requirements listed below the field.' : 'Please enter your password.', true);
         loginPasswordInput?.focus();
+        return;
+      }
+      // New accounts must read and accept the Terms and Privacy Policy first (dialog below), then this form resubmits
+      if (isSignup && !termsAccepted) {
+        openTermsAgree();
         return;
       }
       const captchaToken = requireTurnstileToken();
@@ -851,25 +968,20 @@ class App {
       setBusy(true);
       try {
         if (isSignup) {
-          setStatus(loginStatus, 'Creating your account…');
-          const { data, error } = await this.supabase.auth.signUp({
-            email,
-            password,
-            options: {
-              captchaToken,
-              emailRedirectTo: window.location.origin + window.location.pathname,
-              data: { signup_source: 'pawtrack_owner', full_name: loginNameInput.value.trim(), phone }
-            }
-          });
-          if (error) throw error;
-          if (data.session) {
-            sessionStorage.setItem(FRESH_SIGNIN_KEY, '1');
+          // The account is created only after the emailed code is entered (see the sign-up code dialog below)
+          setStatus(loginStatus, 'Sending a verification code to your email…');
+          const sent = await callSignupOtp({ action: 'send', email, turnstileToken: captchaToken });
+          if (sent.status === 409) {
             setStatus(loginStatus, '');
-          } else {
-            setAuthMode('signin');
-            if (loginPasswordInput) loginPasswordInput.value = '';
-            setStatus(loginStatus, `We sent a confirmation link to ${email}. Open it to activate your account, then log in.`);
+            const inUseEmail = document.getElementById('email-in-use-email');
+            if (inUseEmail) inUseEmail.textContent = email;
+            window.notifManager.openModal('email-in-use-modal');
+            return;
           }
+          if (!sent.ok) throw new Error(sent.data.error || 'Could not send the code. Please try again.');
+          pendingSignup = { email, password, name: `${loginNameInput.value.trim()} ${loginLastNameInput.value.trim()}`.replace(/\s+/g, ' '), phone };
+          setStatus(loginStatus, '');
+          openSignupOtp(sent.data.resendInSeconds || 60);
         } else {
           setStatus(loginStatus, 'Signing you in…');
           sessionStorage.setItem(FRESH_SIGNIN_KEY, '1');
@@ -886,6 +998,185 @@ class App {
       } finally {
         setBusy(false);
         resetLoginTurnstile();
+      }
+    });
+
+    document.getElementById('session-expired-continue-btn')?.addEventListener('click', () => {
+      window.notifManager.closeModal('session-expired-modal');
+      resetLoginForm();
+      openLoginDialog();
+    });
+    document.getElementById('email-in-use-close-btn')?.addEventListener('click', () => {
+      window.notifManager.closeModal('email-in-use-modal');
+      loginEmailInput?.focus();
+    });
+    document.getElementById('email-in-use-login-btn')?.addEventListener('click', () => {
+      window.notifManager.closeModal('email-in-use-modal');
+      setAuthMode('signin');
+      if (loginPasswordInput) loginPasswordInput.value = '';
+      loginPasswordInput?.focus();
+    });
+
+    // ---------- Sign-up: email -> 6-digit code (sent through Brevo) -> account created and signed in ----------
+    const signupOtpForm = document.getElementById('signup-otp-form');
+    const signupOtpInput = document.getElementById('signup-otp');
+    const signupOtpEmail = document.getElementById('signup-otp-email');
+    const signupOtpVerifyBtn = document.getElementById('signup-otp-verify-btn');
+    const signupOtpResendBtn = document.getElementById('signup-otp-resend-btn');
+    const signupOtpStatus = document.getElementById('signup-otp-status');
+    const signupOtpTurnstileEl = document.getElementById('signup-otp-turnstile');
+    let signupOtpTurnstileId = null;
+    let signupOtpTurnstileToken = null;
+    let signupResendTimer = null;
+    let pendingSignup = null;
+
+    const callSignupOtp = async (payload) => {
+      try {
+        const res = await fetch(`${config.url}/functions/v1/signup-otp`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', apikey: config.publishableKey },
+          body: JSON.stringify(payload)
+        });
+        let data = {};
+        try { data = await res.json(); } catch (err) {}
+        return { ok: res.ok, status: res.status, data };
+      } catch (err) {
+        return { ok: false, status: 0, data: { error: 'No connection. Check your internet and try again.' } };
+      }
+    };
+
+    const resetSignupOtpTurnstile = () => {
+      signupOtpTurnstileToken = null;
+      if (window.turnstile && signupOtpTurnstileId !== null) window.turnstile.reset(signupOtpTurnstileId);
+    };
+
+    const renderSignupOtpTurnstile = async () => {
+      try {
+        await waitForTurnstile();
+        if (signupOtpTurnstileId !== null) { resetSignupOtpTurnstile(); return; }
+        signupOtpTurnstileId = window.turnstile.render(signupOtpTurnstileEl, {
+          sitekey: config.turnstileSiteKey,
+          theme: turnstileTheme(),
+          size: 'flexible',
+          callback: (token) => { signupOtpTurnstileToken = token; },
+          'expired-callback': () => { signupOtpTurnstileToken = null; },
+          'error-callback': () => setStatus(signupOtpStatus, 'Security check failed to load. Please refresh and try again.', true)
+        });
+      } catch (err) {
+        setStatus(signupOtpStatus, err.message, true);
+      }
+    };
+
+    // A new code can be requested once a minute
+    const startResendCooldown = (seconds) => {
+      clearInterval(signupResendTimer);
+      let left = seconds;
+      const apply = () => {
+        if (!signupOtpResendBtn) return;
+        signupOtpResendBtn.disabled = left > 0;
+        signupOtpResendBtn.textContent = left > 0 ? `Send again in ${left}s` : 'Send again';
+        if (left <= 0) clearInterval(signupResendTimer);
+        left -= 1;
+      };
+      apply();
+      signupResendTimer = setInterval(apply, 1000);
+    };
+
+    const openSignupOtp = (resendSeconds) => {
+      if (signupOtpEmail) signupOtpEmail.textContent = pendingSignup.email;
+      if (signupOtpInput) signupOtpInput.value = '';
+      setStatus(signupOtpStatus, '');
+      window.notifManager.openModal('signup-otp-modal');
+      startResendCooldown(resendSeconds);
+      renderSignupOtpTurnstile();
+      setTimeout(() => signupOtpInput?.focus(), 150);
+    };
+
+    // Closing the dialog abandons the sign-up: nothing was created, and the password is forgotten
+    const closeSignupOtp = () => {
+      clearInterval(signupResendTimer);
+      pendingSignup = null;
+      window.notifManager.closeModal('signup-otp-modal');
+    };
+    document.getElementById('signup-otp-close-btn')?.addEventListener('click', closeSignupOtp);
+    document.getElementById('signup-otp-back-btn')?.addEventListener('click', closeSignupOtp);
+
+    signupOtpInput?.addEventListener('input', () => {
+      signupOtpInput.value = signupOtpInput.value.replace(/\D/g, '').slice(0, 6);
+      if (signupOtpInput.value.length === 6) signupOtpForm?.requestSubmit();
+    });
+
+    signupOtpResendBtn?.addEventListener('click', async () => {
+      if (!pendingSignup) return;
+      if (!signupOtpTurnstileToken) {
+        setStatus(signupOtpStatus, 'Complete the security check, then tap "Send again".', true);
+        return;
+      }
+      signupOtpResendBtn.disabled = true;
+      setStatus(signupOtpStatus, 'Sending a new code…');
+      const sent = await callSignupOtp({ action: 'send', email: pendingSignup.email, turnstileToken: signupOtpTurnstileToken });
+      resetSignupOtpTurnstile();
+      if (!sent.ok) {
+        setStatus(signupOtpStatus, sent.data.error || 'Could not send the code. Please try again.', true);
+        startResendCooldown(sent.data.retryAfter || 5);
+        return;
+      }
+      if (signupOtpInput) signupOtpInput.value = '';
+      setStatus(signupOtpStatus, 'A new code is on its way.');
+      startResendCooldown(sent.data.resendInSeconds || 60);
+      signupOtpInput?.focus();
+    });
+
+    signupOtpForm?.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      if (!pendingSignup) return;
+      const code = (signupOtpInput?.value || '').trim();
+      if (!/^\d{6}$/.test(code)) {
+        setStatus(signupOtpStatus, 'Enter the 6-digit code from your email.', true);
+        signupOtpInput?.focus();
+        return;
+      }
+      setBtnLoading(signupOtpVerifyBtn, true);
+      setStatus(signupOtpStatus, 'Verifying…');
+      const { email, password, name, phone } = pendingSignup;
+      const res = await callSignupOtp({ action: 'verify', email, code, password, full_name: name, phone });
+      if (!res.ok) {
+        setBtnLoading(signupOtpVerifyBtn, false);
+        setStatus(signupOtpStatus, res.data.error || 'Something went wrong. Please try again.', true);
+        if (res.status === 409) {
+          closeSignupOtp();
+          const inUseEmail = document.getElementById('email-in-use-email');
+          if (inUseEmail) inUseEmail.textContent = email;
+          window.notifManager.openModal('email-in-use-modal');
+          return;
+        }
+        signupOtpInput?.select();
+        return;
+      }
+
+      // The account exists now: exchange the one-time token for a session so the guardian lands signed in
+      pendingSignup = null;
+      clearInterval(signupResendTimer);
+      resetLoginForm();
+      try {
+        sessionStorage.setItem(NEW_ACCOUNT_KEY, '1');
+        sessionStorage.setItem(FRESH_SIGNIN_KEY, '1');
+      } catch (err) {}
+      let signedIn = false;
+      if (res.data.token_hash) {
+        const { error } = await this.supabase.auth.verifyOtp({ token_hash: res.data.token_hash, type: 'magiclink' });
+        signedIn = !error;
+        if (error) console.warn('[Auth] Sign-up session exchange failed:', error.message);
+      } else {
+        console.warn('[Auth] Sign-up returned no session token; the account exists but needs a normal log in.');
+      }
+      setBtnLoading(signupOtpVerifyBtn, false);
+      window.notifManager.closeModal('signup-otp-modal');
+      if (!signedIn) {
+        try { sessionStorage.removeItem(NEW_ACCOUNT_KEY); sessionStorage.removeItem(FRESH_SIGNIN_KEY); } catch (err) {}
+        setAuthMode('signin');
+        if (loginEmailInput) loginEmailInput.value = email;
+        setStatus(loginStatus, 'Your account is ready. Log in to continue.');
       }
     });
 
@@ -1162,13 +1453,13 @@ class App {
         return;
       }
       setStatus(registerStatus, '');
+      try { sessionStorage.setItem(NEW_ACCOUNT_KEY, '1'); } catch (err) {}
       completeSignIn(guardian, user);
-      window.notifManager.showToast(`Welcome to PawTrack, ${guardian.full_name}!`, 'success');
     });
 
     // Live password requirements for the reset form
     const passwordRules = {
-      length: (pw) => pw.length >= 8,
+      length: (pw) => pw.length >= 10 && pw.length <= 72,
       upper: (pw) => /[A-Z]/.test(pw),
       lower: (pw) => /[a-z]/.test(pw),
       number: (pw) => /\d/.test(pw),
@@ -1188,6 +1479,18 @@ class App {
       if (resetSubmit) resetSubmit.disabled = !allMet;
       return allMet;
     };
+    // Same requirements, shown live under the sign-up password field
+    const updateSignupRules = () => {
+      const pw = loginPasswordInput?.value || '';
+      let allMet = true;
+      document.querySelectorAll('#signup-password-rules li[data-rule]').forEach(li => {
+        const met = passwordRules[li.dataset.rule](pw, '');
+        li.classList.toggle('is-met', met);
+        if (!met) allMet = false;
+      });
+      return allMet;
+    };
+    loginPasswordInput?.addEventListener('input', updateSignupRules);
     resetInput?.addEventListener('input', updatePasswordRules);
     resetConfirm?.addEventListener('input', updatePasswordRules);
 
@@ -1276,6 +1579,17 @@ class App {
       session = newSession;
       if (event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') return;
 
+      // Signed out without the guardian asking (logOut clears the cached profile first): the session expired
+      const hadProfile = !!(window.pawStore.getGoogleUser() || {}).name;
+      if (!newSession && hadProfile && (event === 'SIGNED_OUT' || event === 'INITIAL_SESSION') && !recoveryActive) {
+        window.pawStore.setGoogleUser(null);
+        this.updateGoogleAuthUI();
+        this.endBoot(true);
+        window.notifManager.openModal('session-expired-modal');
+        setTimeout(() => document.getElementById('session-expired-continue-btn')?.focus(), 150);
+        return;
+      }
+
       // A reset-code session must not log the guardian in: keep the set-new-password step in front
       let pendingRecovery = false;
       try { pendingRecovery = sessionStorage.getItem(RECOVERY_KEY) === '1'; } catch (err) {}
@@ -1305,11 +1619,39 @@ class App {
     });
   }
 
+  // Asks first; the sign-out itself runs from the modal's confirm button
   logOut() {
+    const modal = document.getElementById('logout-confirm-modal');
+    if (!modal) return this.performLogOut();
+    if (!this._logoutWired) {
+      this._logoutWired = true;
+      document.getElementById('logout-confirm-yes-btn')?.addEventListener('click', () => {
+        window.notifManager.closeModal('logout-confirm-modal');
+        this.performLogOut();
+      });
+      document.getElementById('logout-confirm-cancel-btn')?.addEventListener('click', () => {
+        window.notifManager.closeModal('logout-confirm-modal');
+      });
+      // Clicking the dim backdrop or pressing Esc also cancels
+      modal.addEventListener('click', (e) => {
+        if (e.target === modal) window.notifManager.closeModal('logout-confirm-modal');
+      });
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && modal.classList.contains('active')) {
+          window.notifManager.closeModal('logout-confirm-modal');
+        }
+      });
+    }
+    window.notifManager.openModal('logout-confirm-modal');
+    setTimeout(() => document.getElementById('logout-confirm-cancel-btn')?.focus(), 150);
+  }
+
+  performLogOut() {
     window.pawStore.setGoogleUser(null);
     if (this.supabase) this.supabase.auth.signOut({ scope: 'local' });
     this.setGuestMode(false);
     this.updateGoogleAuthUI();
+    if (this.resetLoginForm) this.resetLoginForm();
     this.openLoginDialog();
     if (window.location.hash && window.location.hash !== '#owner') {
       window.location.hash = '#owner';
@@ -1680,7 +2022,8 @@ class App {
   initModals() {
     document.querySelectorAll('.modal-overlay').forEach(modal => {
       modal.addEventListener('click', (e) => {
-        if (e.target === modal) {
+        // The account-created dialog closes only with its Continue button, which opens the dashboard
+        if (e.target === modal && modal.id !== 'account-created-modal') {
           modal.classList.remove('active');
         }
       });

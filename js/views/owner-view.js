@@ -101,7 +101,9 @@ class OwnerView {
 
     const alertCount = mapPets.filter(p => p.status === 'lost' || p.status === 'impounded').length;
     const safeCount = pets.filter(p => p.status === 'safe' || p.status === 'reunited').length;
-    const showAlerts = "if (window.publicView) window.publicView.setFilter('lost'); document.getElementById('incident-map-section')?.scrollIntoView({behavior:'smooth'});";
+    const missingCount = mapPets.filter(p => p.status === 'lost').length;
+    const impoundedCount = mapPets.filter(p => p.status === 'impounded').length;
+    const showAlerts = (filter) => `if (window.publicView) window.publicView.setFilter('${filter}'); document.getElementById('incident-map-section')?.scrollIntoView({behavior:'smooth'});`;
 
     // Compact summary strip (shown when no impoundment notice needs the hero space)
     const summaryHtml = `
@@ -120,9 +122,13 @@ class OwnerView {
             <span class="owner-summary-value">${pets.length}</span>
             <span class="owner-summary-label">${t('owner.summaryPets', 'Pets')}</span>
           </button>
-          <button type="button" class="owner-summary-stat ${alertCount > 0 ? 'is-alert' : ''}" onclick="${showAlerts}" title="${t('owner.statActiveAlerts', 'Active Alerts / In Recovery')}">
-            <span class="owner-summary-value">${alertCount}</span>
-            <span class="owner-summary-label">${t('owner.summaryAlerts', 'Missing / Impounded')}</span>
+          <button type="button" class="owner-summary-stat ${missingCount > 0 ? 'is-alert' : ''}" onclick="${showAlerts('lost')}" title="${t('owner.statMissing', 'Missing pets')}">
+            <span class="owner-summary-value">${missingCount}</span>
+            <span class="owner-summary-label">${t('owner.summaryMissing', 'Missing')}</span>
+          </button>
+          <button type="button" class="owner-summary-stat ${impoundedCount > 0 ? 'is-alert' : ''}" onclick="${showAlerts('impounded')}" title="${t('owner.statImpounded', 'Impounded pets')}">
+            <span class="owner-summary-value">${impoundedCount}</span>
+            <span class="owner-summary-label">${t('owner.summaryImpounded', 'Impounded')}</span>
           </button>
           <button type="button" class="owner-summary-stat" onclick="window.location.hash='#sightings';" title="${t('owner.statSafePets', 'Safe / Reunited')}">
             <span class="owner-summary-value">${safeCount}</span>
@@ -143,7 +149,7 @@ class OwnerView {
           ${heroLeftHtml}
         </div>
         <div class="${statsGridClass}">
-          ${this.renderHeroStatCards(pets, t, showAlerts)}
+          ${this.renderHeroStatCards(pets, t, showAlerts('lost'))}
         </div>
       </div>
     ` : summaryHtml;
@@ -215,8 +221,11 @@ class OwnerView {
               <button type="button" class="gmap-layer-btn ${window.publicView && window.publicView.currentMapType === 'hybrid' ? 'active' : ''}" onclick="window.publicView ? window.publicView.setMapLayer('hybrid') : null" title="Hybrid View (Satellite + Street Labels)">
                 <span>Hybrid</span>
               </button>
-              <button type="button" class="gmap-layer-btn ${window.publicView && window.publicView.currentMapType === 'dark' ? 'active' : ''}" onclick="window.publicView ? window.publicView.setMapLayer('dark') : null" title="Dark Theme Style">
+              <button type="button" class="gmap-layer-btn gmap-layer-btn-dark ${window.publicView && window.publicView.currentMapType === 'dark' ? 'active' : ''}" onclick="window.publicView ? window.publicView.setMapLayer('dark') : null" title="Dark Theme Style">
                 <span>Dark</span>
+              </button>
+              <button type="button" class="gmap-layer-btn gmap-layer-btn-light ${window.publicView && window.publicView.currentMapType === 'light' ? 'active' : ''}" onclick="window.publicView ? window.publicView.setMapLayer('light') : null" title="Light Theme Style">
+                <span>Light</span>
               </button>
             </div>
 
@@ -233,6 +242,9 @@ class OwnerView {
                 </svg>
               </button>
             </div>
+
+            <!-- Legend: what each pin colour means -->
+            ${window.publicView ? window.publicView.renderMapLegend() : ''}
 
             <!-- Container for Directions & Actual Place Drawer -->
             <div id="gmap-directions-hud-container"></div>
@@ -504,7 +516,11 @@ class OwnerView {
         delete form.dataset.prefillNfc;
       }
     }
-    if (modal) modal.classList.add('active');
+    if (modal) {
+      // Cancel hides the modal with an inline display:none, so clear it when reopening
+      modal.style.display = '';
+      modal.classList.add('active');
+    }
   }
 
   openReportLostModal(petId) {
@@ -606,8 +622,8 @@ class OwnerView {
   }
 
   openDirections(address) {
-    const url = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`;
-    window.open(url, '_blank');
+    const url = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(address)}`;
+    window.open(url, '_blank', 'noopener');
   }
 
   showDigitalTagPass(petId) {

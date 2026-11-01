@@ -4,24 +4,34 @@
  * Interactive Turn-by-Turn Navigation, and Real-World Actual Place / Street View Visualizer.
  */
 
+// The one palette for everything on the map: pins, the legend, list section headers, popups and cards.
+// Each situation has its own hue, so no two pins can be mistaken for each other.
+const MAP_COLORS = {
+  missing:   '#dc2626', // red
+  lastSeen:  '#7c3aed', // violet
+  sighting:  '#ea9d1e', // amber
+  confirmed: '#16a34a', // green
+  impounded: '#0891b2', // cyan
+  shelter:   '#475569'  // slate
+};
+window.MAP_COLORS = MAP_COLORS;
+
 // What each quick filter shows on the map; the Layers panel then fine-tunes it
 const MAP_LAYER_PRESETS = {
-  all:       { missing: true,  lastSeen: true,  sightings: true,  impounded: true,  reunited: true,  shelters: true },
-  lost:      { missing: true,  lastSeen: true,  sightings: false, impounded: false, reunited: false, shelters: false },
-  lastseen:  { missing: false, lastSeen: true,  sightings: false, impounded: false, reunited: false, shelters: false },
-  sighted:   { missing: false, lastSeen: false, sightings: true,  impounded: false, reunited: false, shelters: false },
-  impounded: { missing: false, lastSeen: false, sightings: false, impounded: true,  reunited: false, shelters: true },
-  reunited:  { missing: false, lastSeen: false, sightings: false, impounded: false, reunited: true,  shelters: false },
-  mine:      { missing: true,  lastSeen: false, sightings: false, impounded: true,  reunited: false, shelters: false }
+  all:       { missing: true,  lastSeen: true,  sightings: true,  impounded: true,  shelters: true },
+  lost:      { missing: true,  lastSeen: true,  sightings: false, impounded: false, shelters: false },
+  lastseen:  { missing: false, lastSeen: true,  sightings: false, impounded: false, shelters: false },
+  sighted:   { missing: false, lastSeen: false, sightings: true,  impounded: false, shelters: false },
+  impounded: { missing: false, lastSeen: false, sightings: false, impounded: true,  shelters: true },
+  mine:      { missing: true,  lastSeen: false, sightings: false, impounded: true,  shelters: false }
 };
 
 const MAP_LAYER_DEFS = [
-  { key: 'missing',   label: 'Missing pets',        color: '#ba3820' },
-  { key: 'lastSeen',  label: 'Last seen locations', color: '#e11d48' },
-  { key: 'sightings', label: 'Community sightings', color: '#ea9d1e' },
-  { key: 'impounded', label: 'Impounded pets',      color: '#b85410' },
-  { key: 'reunited',  label: 'Reunited',            color: '#16a34a' },
-  { key: 'shelters',  label: 'Shelters',            color: '#54280e' }
+  { key: 'missing',   label: 'Missing pets',        color: MAP_COLORS.missing },
+  { key: 'lastSeen',  label: 'Last seen locations', color: MAP_COLORS.lastSeen },
+  { key: 'sightings', label: 'Community sightings', color: MAP_COLORS.sighting },
+  { key: 'impounded', label: 'Impounded pets',      color: MAP_COLORS.impounded },
+  { key: 'shelters',  label: 'Shelters',            color: MAP_COLORS.shelter }
 ];
 
 class PublicView {
@@ -119,6 +129,9 @@ class PublicView {
           <!-- Layer selector: choose exactly what the map shows -->
           <div class="map-layers" id="map-layers">${this.renderLayersPanel()}</div>
 
+          <!-- Legend: what each pin colour means -->
+          ${this.renderMapLegend()}
+
           <!-- Container for Directions & Actual Place Drawer -->
           <div id="gmap-directions-hud-container"></div>
         </div>
@@ -131,6 +144,24 @@ class PublicView {
     setTimeout(() => this.initMap(pets, shelters), 100);
   }
 
+  renderMapLegend() {
+    const items = [
+      [MAP_COLORS.missing, 'Missing pet'],
+      [MAP_COLORS.lastSeen, 'Last seen here'],
+      [MAP_COLORS.sighting, 'Possible sighting'],
+      [MAP_COLORS.confirmed, 'Confirmed sighting'],
+      [MAP_COLORS.impounded, 'Impounded'],
+      [MAP_COLORS.shelter, 'Shelter']
+    ];
+    return `
+      <details class="map-legend" ${window.innerWidth >= 768 ? 'open' : ''}>
+        <summary>Legend</summary>
+        <ul>
+          ${items.map(([color, label]) => `<li><span class="map-legend-dot" style="background:${color};"></span>${label}</li>`).join('')}
+        </ul>
+      </details>`;
+  }
+
   renderFilterButtons() {
     const t = (k, d) => (window.pawI18n ? window.pawI18n.t(k, d) : d);
     const pets = window.pawStore.getMapPets();
@@ -139,7 +170,6 @@ class PublicView {
     const sightedCount = sightings.length;
     const lastSeenCount = (this.lastSeenItems || []).length;
     const impoundedCount = pets.filter(p => p.status === 'impounded' || p.status === 'active_impounded').length;
-    const reunitedCount = pets.filter(p => p.status === 'reunited').length;
 
     // Owners get a "My pets" filter for their own pets that are missing or impounded
     const mineCount = pets.filter(p => window.pawStore.isMyPet(p) && ['missing', 'impounded'].includes(this.layerFor(p))).length;
@@ -149,7 +179,6 @@ class PublicView {
     const isLastSeen = this.currentFilter === 'lastseen';
     const isSighted = this.currentFilter === 'sighted';
     const isImpounded = this.currentFilter === 'impounded';
-    const isReunited = this.currentFilter === 'reunited';
 
     return `
       <button type="button" class="btn btn-sm ${isAll ? 'btn-primary active' : 'btn-outline'}" onclick="window.publicView.setFilter('all')">
@@ -169,9 +198,6 @@ class PublicView {
       </button>
       <button type="button" class="btn btn-sm ${isImpounded ? 'btn-secondary active' : 'btn-outline'}" onclick="window.publicView.setFilter('impounded')">
         ${t('map.filterImpounded', 'Impounded')} (${impoundedCount})
-      </button>
-      <button type="button" class="btn btn-sm ${isReunited ? 'btn-primary active' : 'btn-outline'}" onclick="window.publicView.setFilter('reunited')">
-        ${t('map.filterReunited', 'Reunited')} (${reunitedCount})
       </button>
     `;
   }
@@ -368,7 +394,7 @@ class PublicView {
             <div style="flex:1; min-width:0;">
               <div style="display:flex; justify-content:space-between; align-items:center; gap:0.5rem; margin-bottom:2px;">
                 <h4 style="font-size:0.95rem; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin:0;">${this.escapeHtml(r.pet_name)}</h4>
-                <span style="font-size:0.68rem; font-weight:700; color:#e11d48; text-transform:uppercase; white-space:nowrap;">Last seen</span>
+                <span style="font-size:0.68rem; font-weight:700; color:${MAP_COLORS.lastSeen}; text-transform:uppercase; white-space:nowrap;">Last seen</span>
               </div>
               <div style="font-size:0.78rem; color:var(--text-muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${this.escapeHtml(r.last_seen_location)}</div>
               <div style="font-size:0.72rem; color:var(--primary); font-weight:700;">${this.getTimeAgo(r.last_seen_at)} &middot; ${this.escapeHtml(r.species)}${r.breed ? ' &middot; ' + this.escapeHtml(r.breed) : ''}</div>
@@ -382,13 +408,13 @@ class PublicView {
         const sLat = (s.lat || 14.6360);
         const sLng = (s.lng || 121.0370);
         return `
-          <div class="glass-card" style="padding:0.9rem; display:flex; flex-direction:column; gap:0.6rem; border-left:3px solid #ea9d1e; cursor:pointer;" onclick="window.publicView.focusCoordsOnMap(${sLat}, ${sLng}, 'Sighting: ${s.breed || 'Pet'}')">
+          <div class="glass-card" style="padding:0.9rem; display:flex; flex-direction:column; gap:0.6rem; border-left:3px solid ${MAP_COLORS.sighting}; cursor:pointer;" onclick="window.publicView.focusCoordsOnMap(${sLat}, ${sLng}, 'Sighting: ${s.breed || 'Pet'}')">
             <div style="display:flex; gap:0.85rem; align-items:center;">
               <img src="${s.photoUrl || 'https://images.unsplash.com/photo-1543466835-00a7907e9de1?auto=format&fit=crop&w=300&q=80'}" style="width:58px; height:58px; border-radius:var(--radius-md); object-fit:cover; border:2px solid #ea9d1e; flex-shrink:0; cursor:zoom-in;" onclick="event.stopPropagation(); window.pawApp.openLightbox('${s.photoUrl}', 'Community Pet Sighting', '${s.breed || 'Stray Pet'} · ${s.location}')" />
               <div style="flex:1; min-width:0;">
                 <div style="display:flex; justify-content:space-between; align-items:center; gap:0.5rem; margin-bottom:2px;">
                   <h4 style="font-size:0.95rem; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin:0;">${s.breed || 'Spotted Pet'}</h4>
-                  <span class="badge" style="background:#ea9d1e22; color:#ea9d1e; border:1px solid #ea9d1e66; font-size:0.68rem; flex-shrink:0;">SIGHTED</span>
+                  <span class="badge" style="background:${MAP_COLORS.sighting}22; color:${MAP_COLORS.sighting}; border:1px solid ${MAP_COLORS.sighting}66; font-size:0.68rem; flex-shrink:0;">SIGHTED</span>
                 </div>
                 <div style="font-size:0.78rem; color:var(--text-muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-bottom:2px;">Location: ${s.location}</div>
                 <div style="font-size:0.72rem; color:var(--primary); font-weight:700;">Seen: ${this.formatSightingDate(s.dateTimeSeen || s.createdAt)}</div>
@@ -409,8 +435,8 @@ class PublicView {
       const pet = item.data;
       let statusColor = '#16a34a';
       let statusLabel = 'Safe';
-      if (pet.status === 'lost') { statusColor = '#ba3820'; statusLabel = 'Missing'; }
-      if (pet.status === 'impounded' || pet.status === 'active_impounded') { statusColor = '#b85410'; statusLabel = 'Impounded'; }
+      if (pet.status === 'lost') { statusColor = MAP_COLORS.missing; statusLabel = 'Missing'; }
+      if (pet.status === 'impounded' || pet.status === 'active_impounded') { statusColor = MAP_COLORS.impounded; statusLabel = 'Impounded'; }
       if (pet.status === 'reunited') { statusColor = '#16a34a'; statusLabel = 'Reunited'; }
 
       const petCoordinates = {
@@ -523,7 +549,7 @@ class PublicView {
         .bindPopup(`
         ${this.popupCard({
           badge: 'Animal facility',
-          tone: '#54280e',
+          tone: MAP_COLORS.shelter,
           photo: s.photoUrl,
           placeholderIcon: 'building',
           title: s.name,
@@ -569,7 +595,7 @@ class PublicView {
         .bindPopup(`
         ${this.popupCard({
           badge: statusDisplay,
-          tone: p.status === 'lost' ? '#ba3820' : (p.status === 'impounded' || p.status === 'active_impounded') ? '#b85410' : '#16a34a',
+          tone: p.status === 'lost' ? MAP_COLORS.missing : (p.status === 'impounded' || p.status === 'active_impounded') ? MAP_COLORS.impounded : MAP_COLORS.confirmed,
           photo: p.photoUrl || window.PET_PHOTO_PLACEHOLDER,
           title: p.name,
           subtitle: [p.breed, p.gender].filter(Boolean).join(' · '),
@@ -604,7 +630,7 @@ class PublicView {
         .bindPopup(`
         ${this.popupCard({
           badge: s.status === 'confirmed_sighting' ? 'Confirmed sighting' : 'Possible sighting',
-          tone: s.status === 'confirmed_sighting' ? '#16a34a' : '#ea9d1e',
+          tone: s.status === 'confirmed_sighting' ? MAP_COLORS.confirmed : MAP_COLORS.sighting,
           photo: s.photoUrl,
           title: s.breed || 'Spotted pet',
           subtitle: this.getTimeAgo(s.dateTimeSeen || s.createdAt),
@@ -683,7 +709,7 @@ class PublicView {
       const marker = window.L.marker(coords, { icon, zIndexOffset: 500 }).bindPopup(`
         ${this.popupCard({
           badge: 'Last seen here',
-          tone: '#e11d48',
+          tone: MAP_COLORS.lastSeen,
           photo: row.photo_url,
           title: row.pet_name,
           subtitle: `${row.species}${row.breed ? ' · ' + row.breed : ''}`,
@@ -698,7 +724,7 @@ class PublicView {
 
       // Soft circle: the pet was somewhere around here, not exactly on the pin
       const area = window.L.circle(coords, {
-        radius: 300, color: '#ba3820', weight: 1.5, opacity: 0.7, dashArray: '6 6', fillColor: '#ba3820', fillOpacity: 0.08
+        radius: 300, color: MAP_COLORS.lastSeen, weight: 1.5, opacity: 0.7, dashArray: '6 6', fillColor: MAP_COLORS.lastSeen, fillOpacity: 0.08
       });
 
       marker.on('click', () => this.focusPlace(coords, row.last_seen_location || row.pet_name));
@@ -845,18 +871,19 @@ class PublicView {
     return shown;
   }
 
-  // One pin family for every situation: a round head with a pointer, coloured and glyphed by situation.
-  // Pets with a photo show it in the head and carry the glyph as a small badge. The anchor is the pointer tip.
-  pinIcon({ kind, photo = '', label = '', sub = '', title = '' }) {
+  // One pin family for every situation: a round head with a pointer, coloured by situation (the map legend names
+  // each colour). Pins carry no text. Pets with a photo show it in the head; others show a small icon.
+  // The anchor is the pointer tip.
+  pinIcon({ kind, photo = '', title = '' }) {
     const kinds = {
-      missing:   { color: '#ba3820', pulse: true,  glyph: '<path d="M12 9v4"/><path d="M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/>' },
-      lastseen:  { color: '#e11d48', pulse: true,  glyph: '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>' },
-      sighting:  { color: '#ea9d1e', pulse: false, glyph: '<path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>' },
-      confirmed: { color: '#0d9488', pulse: false, glyph: '<path d="M20 6 9 17l-5-5"/>' },
-      impounded: { color: '#b85410', pulse: false, glyph: '<rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>' },
+      missing:   { color: MAP_COLORS.missing, pulse: true,  glyph: '<path d="M12 9v4"/><path d="M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/>' },
+      lastseen:  { color: MAP_COLORS.lastSeen, pulse: true,  glyph: '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>' },
+      sighting:  { color: MAP_COLORS.sighting, pulse: false, glyph: '<path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>' },
+      confirmed: { color: MAP_COLORS.confirmed, pulse: false, glyph: '<path d="M20 6 9 17l-5-5"/>' },
+      impounded: { color: MAP_COLORS.impounded, pulse: false, glyph: '<rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>' },
       safe:      { color: '#16a34a', pulse: false, glyph: '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/>' },
       reunited:  { color: '#16a34a', pulse: false, glyph: '<path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8l1 1.1L12 21l7.8-7.5 1-1.1a5.5 5.5 0 0 0 0-7.8z"/>' },
-      shelter:   { color: '#54280e', pulse: false, glyph: '<path d="M3 21h18"/><path d="M5 21V9l7-5 7 5v12"/><path d="M10 21v-6h4v6"/>' }
+      shelter:   { color: MAP_COLORS.shelter, pulse: false, glyph: '<path d="M3 21h18"/><path d="M5 21V9l7-5 7 5v12"/><path d="M10 21v-6h4v6"/>' }
     };
     const k = kinds[kind] || kinds.safe;
     const e = (v) => this.escapeHtml(String(v ?? ''));
@@ -866,8 +893,6 @@ class PublicView {
       <div class="pt-pin pt-pin--${kind}" style="--pin:${k.color};"${title ? ` title="${e(title)}" aria-label="${e(title)}"` : ''}>
         ${k.pulse ? '<span class="pt-pin-pulse"></span>' : ''}
         <span class="pt-pin-head">${photo ? `<img src="${e(photo)}" alt="" onerror="this.remove()" />` : svg(20)}</span>
-        ${photo ? `<span class="pt-pin-badge">${svg(11)}</span>` : ''}
-        ${label ? `<span class="pt-pin-label"><strong>${e(label)}</strong>${sub ? `<small>${e(sub)}</small>` : ''}</span>` : ''}
       </div>
     `;
     return window.L.divIcon({
@@ -879,7 +904,7 @@ class PublicView {
   }
 
   // Shared look for every map popup: photo header with a status badge, key facts with icons, action buttons
-  popupCard({ badge, tone = '#ba3820', photo = '', placeholderIcon = 'paw', title, subtitle = '', rows = [], note = '', actions = '' }) {
+  popupCard({ badge, tone = MAP_COLORS.missing, photo = '', placeholderIcon = 'paw', title, subtitle = '', rows = [], note = '', actions = '' }) {
     const e = (v) => this.escapeHtml(String(v ?? ''));
     const icons = {
       pin: '<path d="M21 10c0 7-9 13-9 13S3 17 3 10a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>',
@@ -935,6 +960,17 @@ class PublicView {
     if (!this.map || !window.L) return;
     this.currentMapType = type;
 
+    // The dock offers only the opposite of the app theme; if the theme flips onto the chosen style, go back to the plain map
+    if (!this._themeWatch) {
+      this._themeWatch = new MutationObserver(() => {
+        const light = document.documentElement.getAttribute('data-theme') === 'light';
+        if ((light && this.currentMapType === 'light') || (!light && this.currentMapType === 'dark')) {
+          this.setMapLayer('roadmap', false);
+        }
+      });
+      this._themeWatch.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+    }
+
     // Remove previous active tile layer
     if (this.currentTileLayer) {
       this.map.removeLayer(this.currentTileLayer);
@@ -957,6 +993,10 @@ class PublicView {
     } else if (type === 'dark') {
       // Night / Dark Roast Mode
       tileUrl = 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
+      tileOptions.attribution = '&copy; CARTO & OpenStreetMap';
+    } else if (type === 'light') {
+      // Light street map, offered while the app itself is in dark mode
+      tileUrl = 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
       tileOptions.attribution = '&copy; CARTO & OpenStreetMap';
     } else {
       // Default: Google Roadmap with business/landmark labels hidden (apistyle s.t:2 = POI) for a calmer map
@@ -987,7 +1027,7 @@ class PublicView {
     }
 
     if (notify && window.notifManager) {
-      const label = type === 'satellite' ? 'Actual Aerial Satellite View' : type === 'hybrid' ? 'Hybrid Street Imagery' : type === 'dark' ? 'Dark Theme' : 'Google Roadmap';
+      const label = type === 'satellite' ? 'Actual Aerial Satellite View' : type === 'hybrid' ? 'Hybrid Street Imagery' : type === 'dark' ? 'Dark Theme' : type === 'light' ? 'Light Theme' : 'Google Roadmap';
       window.notifManager.showToast(`Switched map layer to ${label}`, 'info', 2000);
     }
   }
@@ -1092,7 +1132,20 @@ class PublicView {
     return min >= 60 ? `${Math.floor(min / 60)} hr ${min % 60} min` : `${min} min`;
   }
 
-  async showDirections(destLat, destLng, destName, destAddress, destPhotoUrl, destType = 'shelter', travelMode = 'drive') {
+  // Directions open in Google Maps, which routes from the person's current location
+  showDirections(destLat, destLng, destName, destAddress, destPhotoUrl, destType = 'shelter', travelMode = 'drive') {
+    const lat = Number(destLat);
+    const lng = Number(destLng);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+      if (window.notifManager) window.notifManager.showToast('This place has no map position yet.', 'warning', 3500);
+      return;
+    }
+    const mode = { drive: 'driving', walk: 'walking', transit: 'transit', bike: 'bicycling' }[travelMode] || 'driving';
+    window.open(`https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&travelmode=${mode}`, '_blank', 'noopener');
+  }
+
+  // The in-app route preview (no longer reached from the Directions buttons)
+  async showRouteInApp(destLat, destLng, destName, destAddress, destPhotoUrl, destType = 'shelter', travelMode = 'drive') {
     if (!this.map || !window.L) return;
 
     const requestId = (this.routeRequestId = (this.routeRequestId || 0) + 1);
@@ -1153,7 +1206,7 @@ class PublicView {
     const canNavigate = !route.approximate && travelMode !== 'transit' && route.steps && route.steps.length > 0;
 
     const modeTab = (mode, label) => `
-      <button type="button" class="gmap-mode-tab ${travelMode === mode ? 'active' : ''}" onclick="window.publicView.showDirections(${destLat}, ${destLng}, '${this.jsArg(destName)}', '${this.jsArg(destAddress)}', '${this.jsArg(this.activeRoute.destPhotoUrl)}', '${destType}', '${mode}')">
+      <button type="button" class="gmap-mode-tab ${travelMode === mode ? 'active' : ''}" onclick="window.publicView.showRouteInApp(${destLat}, ${destLng}, '${this.jsArg(destName)}', '${this.jsArg(destAddress)}', '${this.jsArg(this.activeRoute.destPhotoUrl)}', '${destType}', '${mode}')">
         <span style="font-size:11px; font-weight:700;">${label}</span>
         ${travelMode === mode ? `<span style="font-size:10px; opacity:0.8;">${route.durationMin}m</span>` : ''}
       </button>`;
@@ -1433,8 +1486,7 @@ class PublicView {
   layerFor(pet) {
     if (pet.status === 'lost') return 'missing';
     if (pet.status === 'impounded' || pet.status === 'active_impounded') return 'impounded';
-    if (pet.status === 'reunited') return 'reunited';
-    return null; // safe pets are not shown on the map or in its list
+    return null; // safe and reunited pets are not on the map or in its list (reunions are on the Sightings page)
   }
 
   layerCounts() {
@@ -1445,7 +1497,6 @@ class PublicView {
       lastSeen: (this.lastSeenItems || []).length,
       sightings: window.pawStore.getSightings().filter(x => x.status !== 'dismissed' && x.status !== 'archived').length,
       impounded: countBy('impounded'),
-      reunited: countBy('reunited'),
       shelters: window.pawStore.getShelters().length
     };
   }

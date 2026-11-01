@@ -19,7 +19,8 @@ const STORAGE_KEYS = {
   SIGHTINGS: 'pawtrack_sightings',
   CASES: 'pawtrack_cases',
   MISSING_REPORTS: 'pawtrack_missing_reports',
-  LOCAL_NOTIFICATIONS: 'pawtrack_local_notifications'
+  LOCAL_NOTIFICATIONS: 'pawtrack_local_notifications',
+  REUNITED: 'pawtrack_reunited_pets'
 };
 
 // Bumped when the cached lists change meaning; older caches are cleared on load (v1: Supabase replaces the
@@ -220,13 +221,14 @@ class Store {
       const user = this.getGoogleUser();
       const signedIn = !!(user && user.id);
       const none = Promise.resolve({ data: [] });
-      const [reports, sightings, shelters, impounded, pets, notifs] = await Promise.all([
+      const [reports, sightings, shelters, impounded, pets, notifs, reunited] = await Promise.all([
         sb.from('missing_pets').select('*').in('status', ['missing', 'sighted']).order('last_seen_at', { ascending: false }),
         sb.from('community_sightings').select('*').order('created_at', { ascending: false }).limit(500),
         sb.from('shelters').select('*').order('name'),
         sb.from('impounded_pets').select('*').order('intake_at', { ascending: false }).limit(200),
         signedIn ? sb.from('registered_pets').select('*').order('created_at') : none,
-        signedIn ? sb.from('notifications').select('*').order('created_at', { ascending: false }).limit(100) : none
+        signedIn ? sb.from('notifications').select('*').order('created_at', { ascending: false }).limit(100) : none,
+        sb.from('reunited_pets').select('*').order('reunited_at', { ascending: false }).limit(200)
       ].map((p) => Promise.resolve(p).catch((error) => ({ error }))));
 
       let changed = false;
@@ -237,7 +239,7 @@ class Store {
         changed = true;
       };
       const warn = (what, res) => { if (res && res.error) console.warn(`[Store] Could not load ${what}:`, res.error.message || res.error); };
-      [['missing reports', reports], ['sightings', sightings], ['shelters', shelters], ['impounds', impounded], ['pets', pets], ['notifications', notifs]].forEach(([w, r]) => warn(w, r));
+      [['missing reports', reports], ['sightings', sightings], ['shelters', shelters], ['impounds', impounded], ['pets', pets], ['notifications', notifs], ['reunited pets', reunited]].forEach(([w, r]) => warn(w, r));
 
       const reportList = reports.error ? this.getMissingReports() : (reports.data || []).map((r) => this.fromReportRow(r));
       if (!reports.error) put(STORAGE_KEYS.MISSING_REPORTS, reportList);
@@ -245,6 +247,7 @@ class Store {
       const shelterList = shelters.error ? this.getShelters() : (shelters.data || []).map((s) => this.fromShelterRow(s));
       if (!shelters.error) put(STORAGE_KEYS.SHELTERS, shelterList);
       if (!impounded.error) put(STORAGE_KEYS.IMPOUNDMENTS, (impounded.data || []).map((i) => this.fromImpoundRow(i, shelterList)));
+      if (!reunited.error) put(STORAGE_KEYS.REUNITED, (reunited.data || []).map((r) => this.fromReunitedRow(r)));
       if (!pets.error) put(STORAGE_KEYS.PETS, (pets.data || []).map((p) => this.fromPetRow(p, reportList)));
       if (!notifs.error) {
         const before = new Set(this.getNotifications().map((n) => n.id));
@@ -342,6 +345,7 @@ class Store {
       photoUrl: s.photo_url || '',
       photo: s.photo_url || '',
       reporterName: s.reporter_name || '',
+      reporterId: s.reporter_id || null, // the signed-in finder who sent it (null for guests)
       confidenceScore: s.confidence_score,
       status: s.status || 'possible_sighting'
     };
@@ -587,6 +591,31 @@ class Store {
           ]
         });
       });
+  }
+
+  // Pets that were reunited with their guardians (a row is added when a missing report is marked found)
+  getReunitedPets() {
+    try {
+      return JSON.parse(localStorage.getItem(STORAGE_KEYS.REUNITED)) || [];
+    } catch {
+      return [];
+    }
+  }
+
+  fromReunitedRow(r) {
+    return {
+      id: r.id,
+      petId: r.pet_id,
+      name: r.pet_name,
+      species: r.species,
+      breed: r.breed || '',
+      photoUrl: r.photo_url || '',
+      location: r.found_location || '',
+      daysMissing: r.days_missing,
+      outcome: r.outcome,
+      story: r.story || '',
+      reunitedAt: r.reunited_at
+    };
   }
 
   getImpoundments() {

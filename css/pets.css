@@ -70,6 +70,8 @@
 .vax-field { display: grid; gap: 5px; min-width: 0; }
 .vax-field label { font-size: 0.76rem; font-weight: 700; }
 .vax-opt { font-weight: 500; color: var(--text-dim); }
+.vax-hint { font-size: 0.74rem; color: var(--text-dim); }
+.vax-field input[type="file"] { font-size: 0.82rem; }
 .vax-field input, .vax-field textarea { width: 100%; padding: 10px 12px; font: inherit; font-size: 0.95rem; border-radius: var(--radius-md); border: 1px solid var(--border-glass); background: var(--bg-main); color: var(--text-main); }
 .vax-field input:focus, .vax-field textarea:focus { outline: none; border-color: var(--border-focus); box-shadow: 0 0 0 3px var(--primary-light); }
 .vax-field textarea { resize: vertical; }

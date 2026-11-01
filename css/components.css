@@ -1110,6 +1110,62 @@
   color: var(--pin);
 }
 
+/* Map legend: what each pin colour means, embedded at the bottom of the map */
+.map-legend {
+  position: absolute;
+  right: 16px;
+  bottom: 34px; /* above the Google attribution line */
+  z-index: 1000;
+  min-width: 150px;
+  max-width: calc(100% - 28px);
+  padding: 8px 12px;
+  border-radius: 12px;
+  background: var(--bg-surface-elevated, rgba(35, 19, 10, 0.92));
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--border-glass, rgba(234, 157, 30, 0.3));
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
+  color: var(--text-main, #fff);
+  font-size: 0.74rem;
+}
+
+.map-legend summary {
+  cursor: pointer;
+  font-weight: 800;
+  font-size: 0.7rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted, #bfae9f);
+  list-style: none;
+}
+
+.map-legend summary::-webkit-details-marker { display: none; }
+
+.map-legend ul {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.map-legend li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+.map-legend-dot {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.3);
+}
+
 /* Shelters are landmarks, not incidents: a square head instead of a round one */
 .pt-pin--shelter .pt-pin-head {
   border-radius: 12px;
@@ -4669,16 +4725,16 @@
   border-radius: 50%;
   display: grid;
   place-items: center;
-  background: rgba(225, 29, 72, 0.12);
+  background: rgba(124, 58, 237, 0.14);
 }
 
 .last-seen-card-icon span {
   width: 16px;
   height: 16px;
   border-radius: 50%;
-  background: #e11d48;
+  background: #7c3aed;
   border: 3px solid #fff;
-  box-shadow: 0 0 0 4px rgba(225, 29, 72, 0.25);
+  box-shadow: 0 0 0 4px rgba(124, 58, 237, 0.28);
 }
 
 .gmap-quick-tools {
@@ -6015,6 +6071,62 @@
   .auth-dialog-submit-btn.is-loading::after { animation-duration: 1.6s; }
 }
 
+/* Terms + Privacy agreement dialog (sign-up) */
+.terms-agree-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.terms-agree-hint {
+  margin-right: auto;
+  font-size: 12px;
+  color: var(--text-dim, #78716c);
+}
+
+#terms-agree-accept-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+#terms-agree-body h3.terms-agree-section {
+  color: var(--text-main);
+  font-size: 16px;
+  margin: 0 0 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border-subtle, rgba(128, 128, 128, 0.25));
+}
+
+#terms-agree-body h3.terms-agree-section:not(:first-child) {
+  margin-top: 28px;
+}
+
+/* Terms line right above "Create account" (sign-up only), so it is visible without scrolling */
+.auth-terms-inline {
+  margin: 0 !important;
+  padding: 0 !important;
+  border-top: 0 !important;
+  text-align: center;
+}
+
+.auth-terms-inline[hidden] {
+  display: none;
+}
+
+/* First / last name side by side (sign-up only) */
+.auth-name-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.auth-name-row[hidden],
+.auth-rules[hidden] {
+  display: none;
+}
+
 /* Live password requirements */
 .auth-rules {
   list-style: none;
@@ -6075,6 +6187,24 @@
   font-size: 22px;
   letter-spacing: 0.4em;
   font-weight: 600;
+}
+
+/* "Account created" dialog */
+.auth-success-card {
+  text-align: center;
+}
+
+.auth-success-icon {
+  width: 68px;
+  height: 68px;
+  margin: 4px auto 14px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+  background: #16a34a;
+  box-shadow: 0 0 0 8px rgba(22, 163, 74, 0.14);
 }
 
 .auth-password-row {
@@ -6298,226 +6428,478 @@
   color: var(--auth-accent);
 }
 
-/* --- Start screen shown until the guardian signs in (modals such as registration stack above it) --- */
+/* =====================================================================
+   Start screen: Log in / Create account (split layout)
+   Shared .auth-field-* / .auth-rules / .auth-password-* styles above still style the fields.
+   ===================================================================== */
 .auth-landing {
+  --auth-accent: #b85410;
+  --auth-accent-hover: #9c450c;
+  --auth-accent-ring: rgba(184, 84, 16, 0.18);
+  --auth-on-accent: #ffffff;
+  --auth-ink: #111827;
+  --auth-ink-muted: #6b7280;
+  --auth-field-bg: #f3f4f6;
+  --auth-field-border: #e5e7eb;
+  --auth-surface: #ffffff;
+  --auth-border: #e7e5e4;
+
+  /* Spacing scales with the window height, so the screen breathes on tall displays and tightens on short ones */
+  --al-gap-xs: clamp(4px, 0.9vh, 8px);
+  --al-gap-sm: clamp(6px, 1.4vh, 12px);
+  --al-gap-md: clamp(8px, 2vh, 18px);
+  --al-gap-lg: clamp(12px, 3.4vh, 34px);
+  --al-field-pad: clamp(4px, 0.9vh, 9px);
+  --al-btn-h: clamp(40px, 5.8vh, 52px);
+  --al-tab-h: clamp(32px, 4.6vh, 42px);
+  --al-title-size: clamp(21px, 3.4vh, 28px);
+
   position: fixed;
   inset: 0;
   z-index: 9000;
   overflow-y: auto;
   display: flex;
   justify-content: center;
-  padding: 16px;
+  padding: clamp(6px, 2.4vh, 28px) 24px;
+  font-family: var(--font-body);
+  scrollbar-width: thin !important;
+  scrollbar-color: rgba(120, 113, 108, 0.45) transparent;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
   background:
-    radial-gradient(circle at 20% 10%, rgba(194, 65, 12, 0.10), transparent 45%),
-    radial-gradient(circle at 85% 90%, rgba(37, 99, 235, 0.07), transparent 45%),
+    radial-gradient(circle at 15% 10%, rgba(194, 65, 12, 0.12), transparent 45%),
+    radial-gradient(circle at 90% 90%, rgba(37, 99, 235, 0.08), transparent 45%),
     #f6f4f1;
 }
 
 [data-theme="dark"] .auth-landing {
+  --auth-accent: #ea9d1e;
+  --auth-accent-hover: #f5aa2d;
+  --auth-accent-ring: rgba(234, 157, 30, 0.22);
+  --auth-on-accent: #1a1206;
+  --auth-ink: #f3f4f6;
+  --auth-ink-muted: #9ca3af;
+  --auth-field-bg: #1f2128;
+  --auth-field-border: #2e323b;
+  --auth-surface: #17181c;
+  --auth-border: #2a2d35;
   background:
-    radial-gradient(circle at 20% 10%, rgba(194, 65, 12, 0.18), transparent 45%),
-    radial-gradient(circle at 85% 90%, rgba(37, 99, 235, 0.10), transparent 45%),
+    radial-gradient(circle at 15% 10%, rgba(194, 65, 12, 0.2), transparent 45%),
+    radial-gradient(circle at 90% 90%, rgba(37, 99, 235, 0.1), transparent 45%),
     #0f1013;
+}
+
+.auth-landing::-webkit-scrollbar {
+  display: block !important;
+  width: 8px !important;
+}
+
+.auth-landing::-webkit-scrollbar-thumb {
+  background: rgba(120, 113, 108, 0.45);
+  border-radius: 8px;
 }
 
 body.auth-locked {
   overflow: hidden;
 }
 
-.auth-landing-inner {
+/* --- Shell: brand panel + form panel --- */
+.al-shell {
   width: 100%;
-  max-width: 420px;
+  max-width: 1000px;
+  margin: auto;
+  /* Same box for Log in and Create account: fixed height, the form panel scrolls inside it */
+  height: min(700px, 100%);
+  min-height: 460px;
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
+  grid-template-rows: minmax(0, 1fr);
+  background: var(--auth-surface);
+  color: var(--auth-ink);
+  border: 1px solid var(--auth-border);
+  border-radius: 24px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.16);
+  overflow: hidden;
+}
+
+[data-theme="dark"] .al-shell {
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.65);
+}
+
+/* --- Brand panel --- */
+.al-aside {
+  position: relative;
   display: flex;
   flex-direction: column;
-  align-items: stretch;
-  gap: 12px;
-  margin: auto 0; /* centres vertically when there is room, scrolls from the top when there is not */
+  justify-content: flex-start;
+  gap: calc(var(--al-gap-lg) * 1.4);
+  padding: calc(var(--al-gap-lg) * 1.2) 40px;
+  color: #fff;
+  overflow: hidden;
+  background: linear-gradient(155deg, #c2410c 0%, #9a3412 55%, #7c2d12 100%);
 }
 
-/* Logo mark and wordmark in one row, centred on the card's axis */
-.auth-landing-brand {
+.al-aside::before,
+.al-aside::after {
+  content: '';
+  position: absolute;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.07);
+  pointer-events: none;
+}
+
+.al-aside::before { width: 320px; height: 320px; right: -120px; top: -110px; }
+.al-aside::after { width: 240px; height: 240px; left: -90px; bottom: -90px; }
+
+.al-aside > * { position: relative; z-index: 1; }
+
+.al-brand {
   display: flex;
   align-items: center;
-  justify-content: center;
   gap: 10px;
-  margin-bottom: 14px;
 }
 
-.auth-landing-logo {
-  width: 36px;
-  height: 36px;
-  flex: none;
-  border-radius: 50%;
+.al-logo {
   display: grid;
   place-items: center;
-  color: #fbbf24;
-  background: linear-gradient(140deg, #c2410c 0%, #7c2d12 100%);
-  box-shadow: 0 4px 12px rgba(194, 65, 12, 0.35), inset 0 0 0 1.5px rgba(254, 215, 170, 0.28);
+  width: 38px;
+  height: 38px;
+  border-radius: 11px;
+  background: rgba(255, 255, 255, 0.18);
+  color: #fff;
 }
 
-.auth-landing-logo svg {
-  display: block;
-}
-
-.auth-landing-brand-name {
+.al-brand-name {
   font-family: var(--font-heading);
-  font-size: 22px;
-  font-weight: 800;
-  line-height: 1;
+  font-size: 20px;
+  font-weight: 700;
   letter-spacing: -0.02em;
+}
+
+.al-pitch h2 {
+  font-family: var(--font-heading);
+  font-size: 30px;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  margin: 0 0 12px;
+  color: #fff;
+}
+
+.al-pitch > p {
+  font-size: 14.5px;
+  line-height: 1.6;
+  color: rgba(255, 255, 255, 0.85);
+  margin: 0 0 24px;
+}
+
+.al-points {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 16px;
+}
+
+.al-points li {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  font-size: 13.5px;
+  line-height: 1.45;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.al-points strong {
+  color: #fff;
+  font-size: 14px;
+}
+
+.al-point-icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+}
+
+/* --- Form panel --- */
+.al-main {
+  position: relative;
+  display: flex;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--al-gap-lg) 44px var(--al-gap-md);
+  scrollbar-width: thin !important;
+  scrollbar-color: rgba(120, 113, 108, 0.45) transparent;
+}
+
+.al-main::-webkit-scrollbar { display: block !important; width: 8px !important; }
+.al-main::-webkit-scrollbar-thumb { background: rgba(120, 113, 108, 0.45); border-radius: 8px; }
+
+.al-main-inner {
+  width: 100%;
+  max-width: 390px;
+  margin: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Create account: "Continue with Google" comes first, then "or", then the form */
+.auth-landing.is-signup .al-main-inner > * { order: 4; }
+.auth-landing.is-signup .al-main-inner > .al-brand-mobile,
+.auth-landing.is-signup .al-main-inner > .al-tabs,
+.auth-landing.is-signup .al-main-inner > .al-title,
+.auth-landing.is-signup .al-main-inner > .al-sub { order: 0; }
+.auth-landing.is-signup .al-main-inner > .auth-google-continue-btn { order: 1; }
+.auth-landing.is-signup .al-main-inner > .auth-dialog-divider { order: 2; margin-top: var(--al-gap-sm); }
+.auth-landing.is-signup .al-main-inner > .al-form { order: 3; }
+
+.al-close {
+  position: absolute;
+  top: 14px;
+  right: 16px;
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--auth-ink-muted);
+  font-size: 24px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.al-close:hover { background: var(--auth-field-bg); color: var(--auth-ink); }
+.al-close:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--auth-accent-ring); }
+
+/* The logo row only shows on small screens, where the brand panel is hidden */
+.al-brand-mobile {
+  display: none;
+  justify-content: center;
+  margin-bottom: 18px;
   color: var(--auth-ink);
 }
 
-.auth-landing-card {
-  max-width: none !important;
+.al-brand-mobile .al-logo {
+  background: var(--auth-accent);
+  color: var(--auth-on-accent);
 }
 
-.auth-landing-guest {
+/* Log in / Create account switch */
+.al-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  padding: 4px;
+  margin-bottom: var(--al-gap-md);
+  background: var(--auth-field-bg);
+  border: 1px solid var(--auth-field-border);
+  border-radius: 12px;
+}
+
+.al-tab {
+  height: var(--al-tab-h);
+  border: none;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--auth-ink-muted);
+  font-family: var(--font-body);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, box-shadow 0.15s;
+}
+
+.al-tab:hover { color: var(--auth-ink); }
+
+.al-tab[aria-selected="true"] {
+  background: var(--auth-surface);
+  color: var(--auth-ink);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.14);
+}
+
+.al-tab:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--auth-accent-ring); }
+.al-tab:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.al-title {
+  font-family: var(--font-heading);
+  font-size: var(--al-title-size);
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+  color: var(--auth-ink);
+  margin: 0 0 var(--al-gap-md);
+}
+
+.al-sub {
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--auth-ink-muted);
+  margin: calc(var(--al-gap-sm) * -0.7) 0 var(--al-gap-md);
+}
+
+/* Log in stays short enough for one screen: the title says enough, the sub-line is for sign-up only */
+.auth-landing:not(.is-signup) .al-sub { display: none; }
+
+.al-form { gap: var(--al-gap-sm); }
+
+.al-section {
+  margin: var(--al-gap-xs) 0 -2px;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--auth-ink-muted);
+}
+
+.auth-mode-row[hidden],
+.al-section[hidden],
+.al-hint[hidden],
+.al-terms[hidden] {
+  display: none;
+}
+
+.al-hint {
+  margin: -4px 2px 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--auth-ink-muted);
+}
+
+/* Fields inside the start screen: sentence-case labels, roomier boxes */
+.auth-landing .auth-field-box {
+  padding: var(--al-field-pad) 14px calc(var(--al-field-pad) + 1px);
+  border-radius: 12px;
+}
+
+.auth-landing .auth-field-label {
+  font-size: 12px;
+  letter-spacing: 0;
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+
+.auth-landing .auth-field-input {
+  font-size: 15.5px;
+}
+
+.auth-landing .auth-dialog-submit-btn,
+.auth-landing .auth-google-continue-btn {
+  height: var(--al-btn-h);
+  border-radius: 12px;
+}
+
+.auth-landing .auth-dialog-submit-btn {
+  margin-top: 2px;
+  box-shadow: 0 6px 16px -6px var(--auth-accent);
+}
+
+.auth-landing .auth-forgot-row { margin: -2px 0 0; }
+
+/* Password rules as compact chips */
+.auth-landing .auth-rules {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: -2px 0 0;
+}
+
+.auth-landing .auth-rules[hidden] { display: none; }
+
+.auth-landing .auth-rules li {
+  padding: 4px 10px 4px 8px;
+  border: 1px solid var(--auth-field-border);
+  border-radius: 999px;
+  font-size: 12px;
+}
+
+.auth-landing .auth-rules li.is-met {
+  border-color: transparent;
+  background: rgba(22, 163, 74, 0.12);
+}
+
+/* Status sits right above the button, where the guardian is looking */
+.auth-landing .auth-status { margin: 0; }
+.auth-landing .auth-turnstile-below { margin: 2px 0 0; }
+.auth-landing .auth-dialog-divider { margin: var(--al-gap-sm) 0; }
+
+.al-terms {
+  margin: 2px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  text-align: center;
+  color: var(--auth-ink-muted);
+}
+
+.al-terms a {
+  color: var(--auth-ink);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  font-weight: 500;
+}
+
+.al-terms a:hover { color: var(--auth-accent); }
+.al-terms[data-signin-only] { margin-top: var(--al-gap-sm); }
+
+.al-guest {
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
   align-items: center;
   gap: 6px;
+  margin-top: var(--al-gap-sm);
+  padding-top: var(--al-gap-sm);
+  border-top: 1px solid var(--auth-border);
   font-size: 13.5px;
-  color: #4b5563;
+  color: var(--auth-ink-muted);
 }
 
-[data-theme="dark"] .auth-landing-guest {
-  color: #9ca3af;
-}
-
-.auth-landing-guest-btn {
-  background: none;
-  border: none;
+.al-guest-btn {
   padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--auth-accent);
   font: inherit;
-  font-weight: 700;
-  color: #b85410;
+  font-weight: 600;
   cursor: pointer;
-}
-
-.auth-landing-guest-btn:hover {
   text-decoration: underline;
+  text-underline-offset: 3px;
 }
 
-[data-theme="dark"] .auth-landing-guest-btn {
-  color: #ea9d1e;
-}
+.al-guest-btn:hover { color: var(--auth-accent-hover); }
+.al-guest-btn:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--auth-accent-ring); border-radius: 4px; }
 
-/* Register (sign-up) mode fits in a single frame: no page scrolling, compact spacing */
-.auth-landing.is-signup {
-  overflow: hidden;
-  padding: 10px 16px;
-}
+/* --- Tablets and phones: single column, brand panel hidden --- */
+@media (max-width: 900px) {
+  .auth-landing { padding: 16px 12px; }
 
-.auth-landing.is-signup .auth-landing-inner {
-  gap: 8px;
-}
-
-.auth-landing.is-signup .auth-landing-card {
-  padding-top: 14px !important;
-  padding-bottom: 12px !important;
-}
-
-.auth-landing.is-signup .auth-landing-brand {
-  margin-bottom: 6px;
-}
-
-.auth-landing.is-signup .auth-dialog-sub {
-  display: none;
-}
-
-.auth-landing.is-signup .auth-dialog-title {
-  margin-bottom: 10px !important;
-}
-
-.auth-landing.is-signup .auth-dialog-form {
-  gap: 6px;
-}
-
-.auth-landing.is-signup .auth-field-box {
-  padding: 4px 14px 5px;
-}
-
-.auth-landing.is-signup .auth-dialog-submit-btn,
-.auth-landing.is-signup .auth-google-continue-btn {
-  height: 40px;
-}
-
-.auth-landing.is-signup .auth-turnstile {
-  min-height: 65px;
-}
-
-.auth-landing.is-signup .auth-turnstile-below {
-  margin-top: 8px;
-}
-
-.auth-landing.is-signup .auth-dialog-divider {
-  margin: 6px 0;
-}
-
-.auth-landing.is-signup .auth-status {
-  margin-top: 8px;
-}
-
-.auth-landing.is-signup .auth-mode-row {
-  margin-top: 8px;
-}
-
-.auth-landing.is-signup .auth-terms-note {
-  margin-top: 8px;
-  padding-top: 8px;
-}
-
-@media (max-height: 700px) {
-  .auth-landing.is-signup .auth-terms-note,
-  .auth-landing.is-signup .auth-landing-guest {
-    display: none;
-  }
-}
-
-/* Short laptop screens: keep the whole sign-in card in view without scrolling */
-@media (max-height: 680px) {
-  .auth-landing {
-    padding: 10px 16px;
+  .al-shell {
+    max-width: 460px;
+    grid-template-columns: minmax(0, 1fr);
+    border-radius: 20px;
   }
 
-  .auth-landing-inner {
-    gap: 8px;
-  }
-
-  .auth-landing-card {
-    padding-top: 16px !important;
-    padding-bottom: 14px !important;
-  }
-
-  .auth-landing-brand {
-    margin-bottom: 8px;
-  }
-
-  .auth-landing-card .auth-dialog-sub {
-    display: none;
-  }
-
-  .auth-landing-card .auth-dialog-title {
-    margin-bottom: 12px !important;
-  }
+  .al-aside { display: none; }
+  .al-brand-mobile { display: flex; }
+  .al-main { padding: 28px 22px 24px; }
+  .al-main-inner { max-width: none; }
 }
 
-/* Turnstile's flexible widget is at least 300px wide, so narrow phones get slimmer side padding
-   to keep it the same width as the buttons (360px screen -> 308px content) */
-@media (max-width: 480px) {
-  .auth-landing {
-    padding: 20px 12px;
-  }
+@media (max-width: 400px) {
+  .auth-landing { padding: 10px 8px; }
+  .al-main { padding: 24px 16px 20px; }
+  .al-title { font-size: 23px; }
+  .auth-name-row { grid-template-columns: 1fr; }
+}
 
-  .auth-landing-card {
-    padding: 22px 14px 18px !important;
-  }
-
-  .auth-dialog-title {
-    font-size: 21px !important;
-  }
+@media (prefers-reduced-motion: reduce) {
+  .al-tab, .al-close { transition: none; }
 }
 
 /* Guardian Profile Modal Styles */
@@ -7672,7 +8054,7 @@ body.auth-locked {
   .owner-summary-stats {
     width: 100%;
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(5, 1fr);
   }
 
   .owner-summary-stat {
@@ -9306,3 +9688,68 @@ div.owner-summary-stat:hover {
 }
 
 .kpi-label .kpi-sub { display: block; margin-top: 2px; font-size: 0.68rem; font-weight: 500; opacity: 0.85; }
+
+/* Log out confirmation */
+.logout-confirm-card {
+  max-width: 400px;
+  text-align: center;
+  padding: 28px 26px 22px;
+}
+
+.logout-confirm-icon {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  margin: 0 auto 14px;
+  border-radius: 50%;
+  background: rgba(220, 38, 38, 0.1);
+  color: #dc2626;
+}
+
+.logout-confirm-card .auth-dialog-title { margin-bottom: 6px; }
+.logout-confirm-card .auth-dialog-sub { margin-bottom: 22px; }
+
+.logout-confirm-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.logout-confirm-btn {
+  height: 46px;
+  border-radius: 12px;
+  font-family: var(--font-body);
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, transform 0.1s;
+}
+
+.logout-confirm-btn:active { transform: scale(0.98); }
+.logout-confirm-btn:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.25); }
+
+.logout-confirm-btn-ghost {
+  background: transparent;
+  color: inherit;
+  border: 1.5px solid rgba(120, 113, 108, 0.4);
+}
+
+.logout-confirm-btn-ghost:hover { background: rgba(120, 113, 108, 0.12); }
+
+.logout-confirm-btn-danger {
+  background: #dc2626;
+  color: #fff;
+  border: 1.5px solid #dc2626;
+}
+
+.logout-confirm-btn-danger:hover { background: #b91c1c; border-color: #b91c1c; }
+
+@media (max-width: 380px) {
+  .logout-confirm-actions { grid-template-columns: 1fr; }
+  .logout-confirm-btn-danger { order: -1; }
+}
+
+/* Map style dock: "Light" is offered while the app is dark, "Dark" while it is light */
+html:not([data-theme="light"]) .gmap-layer-btn-dark,
+html[data-theme="light"] .gmap-layer-btn-light { display: none; }

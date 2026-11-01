@@ -2048,93 +2048,152 @@
     </div>
   </div>
 
-  <!-- 15. Start Screen: Sign In (email + password, Turnstile, then Google) via Supabase Auth -->
+  <!-- 15. Start Screen: Log in / Create account (email + password, Turnstile, then Google) via Supabase Auth -->
   <section class="auth-landing" id="auth-landing" aria-labelledby="auth-landing-title" style="display: none;">
-    <div class="auth-landing-inner">
-      <div class="auth-dialog-card auth-landing-card">
-        <button type="button" class="auth-dialog-close-btn" id="auth-landing-close" aria-label="Close" style="display: none;">&times;</button>
+    <div class="al-shell">
 
-        <!-- Logo + wordmark in one centred row at the top of the card -->
-        <div class="auth-landing-brand">
-          <div class="auth-landing-logo" aria-hidden="true">
-            <!-- viewBox shifted by 0.75 so the paw (drawn at y 4.5–21) sits optically centred -->
-            <svg width="20" height="20" viewBox="0 0.75 24 24" fill="currentColor"><path d="M12 10.5c1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3 1.34 3 3 3zm-6 2c1.38 0 2.5-1.12 2.5-2.5S7.38 7.5 6 7.5 3.5 8.62 3.5 10s1.12 2.5 2.5 2.5zm12 0c1.38 0 2.5-1.12 2.5-2.5S19.38 7.5 18 7.5s-2.5 1.12-2.5 2.5 1.12 2.5 2.5 2.5zM12 12c-2.76 0-5 2.24-5 5 0 2.21 1.79 4 4 4 1.1 0 2-.9 2-2 0 1.1.9 2 2 2 2.21 0 4-1.79 4-4 0-2.76-2.24-5-5-5z"/></svg>
-          </div>
-          <span class="auth-landing-brand-name">PawTrack</span>
+      <!-- Brand panel (wide screens only) -->
+      <aside class="al-aside" aria-hidden="true">
+        <div class="al-brand">
+          <span class="al-logo">
+            <svg width="22" height="22" viewBox="0 0 24 24.75" fill="currentColor"><path d="M12 10.5c1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3 1.34 3 3 3zm-6 2c1.38 0 2.5-1.12 2.5-2.5S7.38 7.5 6 7.5 3.5 8.62 3.5 10s1.12 2.5 2.5 2.5zm12 0c1.38 0 2.5-1.12 2.5-2.5S19.38 7.5 18 7.5s-2.5 1.12-2.5 2.5 1.12 2.5 2.5 2.5zM12 12c-2.76 0-5 2.24-5 5 0 2.21 1.79 4 4 4 1.1 0 2-.9 2-2 0 1.1.9 2 2 2 2.21 0 4-1.79 4-4 0-2.76-2.24-5-5-5z"/></svg>
+          </span>
+          <span class="al-brand-name">PawTrack</span>
         </div>
 
-        <h1 class="auth-dialog-title" id="auth-landing-title">Welcome back</h1>
-        <p class="auth-dialog-sub" id="auth-landing-sub">Sign in to manage your pets and recovery alerts.</p>
+        <div class="al-pitch">
+          <h2>Every pet deserves a way home.</h2>
+          <p>Link an NFC tag to your pet's collar. Anyone who finds them can tap it and reach you right away.</p>
+          <ul class="al-points">
+            <li>
+              <span class="al-point-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8.32a7.43 7.43 0 0 1 0 7.36"/><path d="M9.46 6.21a11.76 11.76 0 0 1 0 11.58"/><path d="M12.91 4.1a15.91 15.91 0 0 1 .01 15.8"/><path d="M16.37 2a20.16 20.16 0 0 1 0 20"/></svg></span>
+              <span><strong>Tap to contact</strong><br />Finders reach you without seeing your address.</span>
+            </li>
+            <li>
+              <span class="al-point-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg></span>
+              <span><strong>Instant alerts</strong><br />Get notified the moment your pet is found or scanned.</span>
+            </li>
+            <li>
+              <span class="al-point-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg></span>
+              <span><strong>Community map</strong><br />See sightings of missing pets around you.</span>
+            </li>
+          </ul>
+        </div>
 
-        <!-- Browser autofill is off: read-only until focused (see initSupabaseAuth), new-password, non-login field names -->
-        <form id="login-form" class="auth-dialog-form" autocomplete="off" novalidate>
-          <div class="auth-field-box" data-signup-only hidden>
-            <label for="login-name" class="auth-field-label">FULL NAME</label>
-            <input type="text" id="login-name" class="auth-field-input" autocomplete="name" maxlength="80" />
+      </aside>
+
+      <!-- Form panel -->
+      <div class="al-main">
+        <button type="button" class="al-close" id="auth-landing-close" aria-label="Close" style="display: none;">&times;</button>
+
+        <div class="al-main-inner">
+          <div class="al-brand al-brand-mobile" aria-hidden="true">
+            <span class="al-logo">
+              <svg width="20" height="20" viewBox="0 0 24 24.75" fill="currentColor"><path d="M12 10.5c1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3 1.34 3 3 3zm-6 2c1.38 0 2.5-1.12 2.5-2.5S7.38 7.5 6 7.5 3.5 8.62 3.5 10s1.12 2.5 2.5 2.5zm12 0c1.38 0 2.5-1.12 2.5-2.5S19.38 7.5 18 7.5s-2.5 1.12-2.5 2.5 1.12 2.5 2.5 2.5zM12 12c-2.76 0-5 2.24-5 5 0 2.21 1.79 4 4 4 1.1 0 2-.9 2-2 0 1.1.9 2 2 2 2.21 0 4-1.79 4-4 0-2.76-2.24-5-5-5z"/></svg>
+            </span>
+            <span class="al-brand-name">PawTrack</span>
           </div>
 
-          <div class="auth-field-box">
-            <label for="login-email" class="auth-field-label">EMAIL</label>
-            <input type="email" id="login-email" name="pt-account-id" class="auth-field-input" autocomplete="off" inputmode="email" readonly data-no-autofill required />
+          <div class="al-tabs" role="tablist" aria-label="Account">
+            <button type="button" role="tab" class="al-tab" id="auth-tab-signin" aria-selected="true">Log in</button>
+            <button type="button" role="tab" class="al-tab" id="auth-tab-signup" aria-selected="false">Create account</button>
           </div>
 
-          <div class="auth-field-box" data-signup-only hidden>
-            <label for="login-phone" class="auth-field-label">MOBILE NUMBER</label>
-            <div class="auth-phone-row">
-              <span class="auth-phone-prefix" aria-hidden="true">+63</span>
-              <input type="tel" id="login-phone" class="auth-field-input" autocomplete="tel-national" inputmode="numeric" placeholder="917 123 4567" data-ph-mobile />
+          <h1 class="al-title" id="auth-landing-title">Welcome back</h1>
+          <p class="al-sub" id="auth-landing-sub">Sign in to manage your pets and recovery alerts.</p>
+
+          <!-- Browser autofill is off: read-only until focused (see initSupabaseAuth), new-password, non-login field names -->
+          <form id="login-form" class="auth-dialog-form al-form" autocomplete="off" novalidate>
+            <p class="al-section" data-signup-only hidden>About you</p>
+            <div class="auth-name-row" data-signup-only hidden>
+              <div class="auth-field-box">
+                <label for="login-name" class="auth-field-label">First name</label>
+                <input type="text" id="login-name" class="auth-field-input" autocomplete="given-name" maxlength="40" />
+              </div>
+              <div class="auth-field-box">
+                <label for="login-lastname" class="auth-field-label">Last name</label>
+                <input type="text" id="login-lastname" class="auth-field-input" autocomplete="family-name" maxlength="40" />
+              </div>
             </div>
-          </div>
 
-          <div class="auth-field-box auth-password-box">
-            <label for="login-password" class="auth-field-label">PASSWORD</label>
-            <div class="auth-password-row">
-              <input type="password" id="login-password" name="pt-account-key" class="auth-field-input" autocomplete="new-password" readonly data-no-autofill required />
-              <button type="button" class="auth-password-toggle" id="login-password-toggle" aria-label="Show password" aria-pressed="false">
-                <svg class="icon-eye" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg>
-                <svg class="icon-eye-off" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.94 17.94A10.94 10.94 0 0 1 12 19C5 19 1 12 1 12a18.5 18.5 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19M14.12 14.12a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
-              </button>
+            <div class="auth-field-box" data-signup-only hidden>
+              <label for="login-phone" class="auth-field-label">Mobile number</label>
+              <div class="auth-phone-row">
+                <span class="auth-phone-prefix" aria-hidden="true">+63</span>
+                <input type="tel" id="login-phone" class="auth-field-input" autocomplete="tel-national" inputmode="numeric" placeholder="917 123 4567" data-ph-mobile />
+              </div>
             </div>
+            <p class="al-hint" data-signup-only hidden>Shelters use your name and mobile number to reach you if your pet is found.</p>
+
+            <p class="al-section" data-signup-only hidden>Your account</p>
+            <div class="auth-field-box">
+              <label for="login-email" class="auth-field-label">Email</label>
+              <input type="email" id="login-email" name="pt-account-id" class="auth-field-input" autocomplete="off" inputmode="email" placeholder="you@example.com" readonly data-no-autofill required />
+            </div>
+
+            <div class="auth-field-box auth-password-box">
+              <label for="login-password" class="auth-field-label">Password</label>
+              <div class="auth-password-row">
+                <input type="password" id="login-password" name="pt-account-key" class="auth-field-input" autocomplete="new-password" readonly data-no-autofill required />
+                <button type="button" class="auth-password-toggle" id="login-password-toggle" aria-label="Show password" aria-pressed="false">
+                  <svg class="icon-eye" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg>
+                  <svg class="icon-eye-off" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.94 17.94A10.94 10.94 0 0 1 12 19C5 19 1 12 1 12a18.5 18.5 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19M14.12 14.12a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                </button>
+              </div>
+            </div>
+            <ul class="auth-rules" id="signup-password-rules" aria-live="polite" data-signup-only hidden>
+              <li data-rule="length">10+ characters</li>
+              <li data-rule="upper">Uppercase letter</li>
+              <li data-rule="lower">Lowercase letter</li>
+              <li data-rule="number">Number</li>
+              <li data-rule="symbol">Symbol (!@#$%&hellip;)</li>
+            </ul>
+            <div class="auth-forgot-row" data-signin-only>
+              <button type="button" class="auth-text-btn" id="login-forgot-btn">Forgot password?</button>
+            </div>
+
+            <div id="login-auth-status" class="auth-status" role="status" aria-live="polite"></div>
+
+            <div id="login-turnstile" class="auth-turnstile auth-turnstile-below"></div>
+
+            <button type="submit" id="login-submit-btn" class="auth-dialog-submit-btn">Log in</button>
+
+            <p class="al-terms" data-signup-only hidden>
+              By creating an account, you agree to our
+              <a href="#" data-open-terms>Terms</a> and
+              <a href="#" data-open-privacy>Privacy Policy</a>.
+            </p>
+          </form>
+
+          <div class="auth-dialog-divider">or</div>
+
+          <button type="button" id="login-google-btn" class="auth-google-continue-btn">
+            <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true">
+              <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+              <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+              <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+              <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+            </svg>
+            <span>Continue with Google</span>
+          </button>
+
+          <!-- The tabs above are the visible switch; this row stays for the existing sign-in code and assistive tech -->
+          <div class="auth-signup-row auth-mode-row" hidden>
+            <span id="login-mode-text">New to PawTrack?</span>
+            <button type="button" class="auth-text-btn" id="login-mode-toggle">Create an account</button>
           </div>
-          <div class="auth-forgot-row" data-signin-only>
-            <button type="button" class="auth-text-btn" id="login-forgot-btn">Forgot password?</button>
+
+          <p class="al-terms" data-signin-only>
+            By continuing, you agree to our
+            <a href="#" id="login-open-terms-btn">Terms</a> and
+            <a href="#" id="login-open-privacy-btn">Privacy Policy</a>.
+          </p>
+
+          <div class="al-guest">
+            <span>Found a pet?</span>
+            <button type="button" id="auth-landing-report-btn" class="al-guest-btn">Report it without signing in</button>
           </div>
-
-          <button type="submit" id="login-submit-btn" class="auth-dialog-submit-btn">Log in</button>
-        </form>
-
-        <div id="login-turnstile" class="auth-turnstile auth-turnstile-below"></div>
-
-        <div class="auth-dialog-divider">or</div>
-
-        <button type="button" id="login-google-btn" class="auth-google-continue-btn">
-          <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true">
-            <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
-            <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
-            <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
-            <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
-          </svg>
-          <span>Continue with Google</span>
-        </button>
-
-        <div id="login-auth-status" class="auth-status" role="status" aria-live="polite"></div>
-
-        <div class="auth-signup-row auth-mode-row">
-          <span id="login-mode-text">New to PawTrack?</span>
-          <button type="button" class="auth-text-btn" id="login-mode-toggle">Create an account</button>
         </div>
-
-        <div class="auth-terms-note">
-          By continuing, you agree to our
-          <a href="#" id="login-open-terms-btn">Terms</a>
-          and
-          <a href="#" id="login-open-privacy-btn">Privacy Policy</a>.
-        </div>
-      </div>
-
-      <div class="auth-landing-guest">
-        <span>Found a pet?</span>
-        <button type="button" id="auth-landing-report-btn" class="auth-landing-guest-btn">Report it without signing in</button>
       </div>
     </div>
   </section>
@@ -2171,6 +2230,80 @@
 
         <button type="submit" id="register-submit-btn" class="auth-dialog-submit-btn">Create account</button>
       </form>
+    </div>
+  </div>
+
+  <!-- 16-otp. Sign-up verification: a 6-digit code emailed through Brevo must be entered before the account is created -->
+  <div class="modal-overlay" id="signup-otp-modal">
+    <div class="modal-box auth-dialog-card" role="dialog" aria-modal="true" aria-labelledby="signup-otp-title">
+      <button type="button" class="auth-dialog-back-btn" id="signup-otp-back-btn" aria-label="Back">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
+      </button>
+      <button type="button" class="auth-dialog-close-btn" id="signup-otp-close-btn" aria-label="Close">&times;</button>
+
+      <h2 class="auth-dialog-title" id="signup-otp-title">Verify your email</h2>
+      <p class="auth-dialog-sub">We sent a 6-digit code to <strong id="signup-otp-email"></strong>. Enter it to create your account. It expires in 10 minutes.</p>
+
+      <form id="signup-otp-form" class="auth-dialog-form" novalidate>
+        <div class="auth-field-box">
+          <label for="signup-otp" class="auth-field-label">VERIFICATION CODE</label>
+          <input type="text" id="signup-otp" class="auth-field-input auth-otp-input" autocomplete="one-time-code" inputmode="numeric" maxlength="6" placeholder="000000" required />
+        </div>
+        <button type="submit" id="signup-otp-verify-btn" class="auth-dialog-submit-btn">Verify and create account</button>
+        <div id="signup-otp-turnstile" class="auth-turnstile auth-turnstile-below"></div>
+        <div class="auth-mode-row">
+          <span>Didn't get a code?</span>
+          <button type="button" class="auth-text-btn" id="signup-otp-resend-btn">Send again</button>
+        </div>
+      </form>
+
+      <div id="signup-otp-status" class="auth-status" role="status" aria-live="polite"></div>
+    </div>
+  </div>
+
+  <!-- 16-done. Shown once after a new guardian account is created -->
+  <div class="modal-overlay" id="account-created-modal">
+    <div class="modal-box auth-dialog-card auth-success-card" role="dialog" aria-modal="true" aria-labelledby="account-created-title">
+      <div class="auth-success-icon" aria-hidden="true">
+        <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+      </div>
+      <h2 class="auth-dialog-title" id="account-created-title">Account created!</h2>
+      <p class="auth-dialog-sub">Welcome to PawTrack, <strong id="account-created-name"></strong>. Your account is ready. Register your pet and link its NFC tag to get started.</p>
+      <button type="button" id="account-created-continue-btn" class="auth-dialog-submit-btn">Continue to dashboard</button>
+    </div>
+  </div>
+
+  <!-- Session expired: shown before the login screen -->
+  <div class="modal-overlay" id="session-expired-modal">
+    <div class="modal-box auth-dialog-card" role="dialog" aria-modal="true" aria-labelledby="session-expired-title">
+      <h2 class="auth-dialog-title" id="session-expired-title">Session expired</h2>
+      <p class="auth-dialog-sub">For your security you were signed out. Please log in again to continue.</p>
+      <button type="button" id="session-expired-continue-btn" class="auth-dialog-submit-btn">Continue to login</button>
+    </div>
+  </div>
+
+  <!-- Log out confirmation -->
+  <div class="modal-overlay" id="logout-confirm-modal">
+    <div class="modal-box auth-dialog-card logout-confirm-card" role="alertdialog" aria-modal="true" aria-labelledby="logout-confirm-title" aria-describedby="logout-confirm-sub">
+      <span class="logout-confirm-icon" aria-hidden="true">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+      </span>
+      <h2 class="auth-dialog-title" id="logout-confirm-title">Log out of PawTrack?</h2>
+      <p class="auth-dialog-sub" id="logout-confirm-sub">You'll need to log in again to manage your pets and see recovery alerts.</p>
+      <div class="logout-confirm-actions">
+        <button type="button" id="logout-confirm-cancel-btn" class="logout-confirm-btn logout-confirm-btn-ghost">Stay logged in</button>
+        <button type="button" id="logout-confirm-yes-btn" class="logout-confirm-btn logout-confirm-btn-danger">Log out</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Sign-up: the email already has an account -->
+  <div class="modal-overlay" id="email-in-use-modal">
+    <div class="modal-box auth-dialog-card" role="dialog" aria-modal="true" aria-labelledby="email-in-use-title">
+      <h2 class="auth-dialog-title" id="email-in-use-title">Email already in use</h2>
+      <p class="auth-dialog-sub"><strong id="email-in-use-email"></strong> already has a PawTrack account. Log in instead, or sign up with a different email.</p>
+      <button type="button" id="email-in-use-login-btn" class="auth-dialog-submit-btn">Log in instead</button>
+      <button type="button" id="email-in-use-close-btn" class="auth-text-btn" style="margin-top:10px;">Use a different email</button>
     </div>
   </div>
 
@@ -2280,7 +2413,7 @@
           </div>
         </div>
         <ul class="auth-rules" id="reset-password-rules" aria-live="polite">
-          <li data-rule="length">At least 8 characters</li>
+          <li data-rule="length">At least 10 characters</li>
           <li data-rule="upper">One uppercase letter (A-Z)</li>
           <li data-rule="lower">One lowercase letter (a-z)</li>
           <li data-rule="number">One number (0-9)</li>
@@ -2383,6 +2516,22 @@
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-primary" onclick="window.notifManager.closeModal('terms-modal')">Accept &amp; Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Sign-up: Terms of Service + Privacy Policy in one dialog; "I agree" unlocks after scrolling to the end.
+       The text is copied from the two policy dialogs above when this one opens. -->
+  <div class="modal-overlay" id="terms-agree-modal">
+    <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="terms-agree-title" style="max-width: 640px; max-height: 85vh; display: flex; flex-direction: column;">
+      <div class="modal-header">
+        <h3 id="terms-agree-title">Terms of Service &amp; Privacy Policy</h3>
+      </div>
+      <div class="modal-body" id="terms-agree-body" tabindex="0" style="padding: 16px 20px; overflow-y: auto; font-size: 13.5px; line-height: 1.6; color: var(--text-muted);"></div>
+      <div class="modal-footer terms-agree-footer">
+        <span class="terms-agree-hint" id="terms-agree-hint">Scroll to the bottom to continue</span>
+        <button type="button" class="btn btn-outline" id="terms-agree-cancel-btn">Cancel</button>
+        <button type="button" class="btn btn-primary" id="terms-agree-accept-btn" disabled>I agree</button>
       </div>
     </div>
   </div>

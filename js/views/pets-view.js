@@ -16,7 +16,6 @@ class PetsView {
     this.fetchedAt = 0;
     this.container = null;
     this.openPetId = null;
-    this.confirmDeleteId = null;
     this.attempts = 0;
     window.pawStore.subscribe((event) => { if (event === 'pets_updated') this.fetchedAt = 0; });
   }
@@ -70,7 +69,7 @@ class PetsView {
       if (ids.length) {
         const res = await client
           .from('pet_vaccinations')
-          .select('id, pet_id, vaccine_name, date_given, next_due_date, veterinarian, clinic, notes, created_at')
+          .select('id, pet_id, vaccine_name, date_given, next_due_date, veterinarian, clinic, notes, document_path, document_name, document_type, created_at')
           .in('pet_id', ids)
           .order('date_given', { ascending: false });
         if (res.error) throw new Error(res.error.message);
@@ -229,7 +228,6 @@ class PetsView {
 
   open(petId) {
     this.openPetId = petId;
-    this.confirmDeleteId = null;
     this.renderDetail();
     window.notifManager.openModal('pet-detail-modal');
   }
@@ -244,6 +242,7 @@ class PetsView {
     const pet = this.pets.find((p) => p.id === this.openPetId);
     if (!body || !pet) return;
     const rows = this.vaccines[pet.id] || [];
+    const missing = pet.status === 'missing';
     const today = new Date();
     today.setMinutes(today.getMinutes() - today.getTimezoneOffset());
     const todayIso = today.toISOString().slice(0, 10);
@@ -274,10 +273,10 @@ class PetsView {
       <section class="vax-section">
         <h3><i data-lucide="syringe"></i> Vaccinations <span class="vax-count">${rows.length}</span></h3>
         <div class="vax-list" id="vax-list">
-          ${rows.length ? rows.map((r) => this.vaxRowHtml(r)).join('') : '<p class="vax-empty">No vaccinations recorded yet. Add the first one below.</p>'}
+          ${rows.length ? rows.map((r) => this.vaxRowHtml(r)).join('') : `<p class="vax-empty">No vaccinations recorded yet.${missing ? '' : ' Add the first one below.'}</p>`}
         </div>
 
-        <form class="vax-form" id="vax-form" novalidate>
+        ${missing ? `<div class="pet-missing-note"><i data-lucide="lock"></i><span>Vaccinations can't be added while ${this.esc(pet.name)} is missing. Mark ${this.esc(pet.name)} as found to add one.</span></div>` : `<form class="vax-form" id="vax-form" novalidate>
           <h4>Add a vaccination</h4>
           <div class="vax-msg" id="vax-msg" role="alert" hidden></div>
           <div class="vax-field" id="vax-name-field">
@@ -312,11 +311,18 @@ class PetsView {
             <label for="vax-notes">Notes <span class="vax-opt">(optional)</span></label>
             <textarea id="vax-notes" maxlength="1000" rows="2" placeholder="Batch number, reactions, reminders"></textarea>
           </div>
+          <div class="vax-field" id="vax-doc-field">
+            <label for="vax-doc">Vaccination document <span class="vax-opt">(photo or PDF, up to 8 MB)</span></label>
+            <input id="vax-doc" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" />
+            <span class="vax-error" id="vax-doc-error">Choose a JPG, PNG, WebP or PDF file under 8 MB.</span>
+            <span class="vax-hint">Attach the vaccination card or vet certificate so it is kept safely with this record.</span>
+          </div>
           <button type="submit" class="btn btn-primary" id="vax-submit"><i data-lucide="plus"></i> Add vaccination</button>
-        </form>
+        </form>`}
       </section>`;
 
-    body.querySelector('#vax-form').addEventListener('submit', (e) => { e.preventDefault(); this.addVaccination(pet.id); });
+    const form = body.querySelector('#vax-form');
+    if (form) form.addEventListener('submit', (e) => { e.preventDefault(); this.addVaccination(pet.id); });
     if (window.lucide) window.lucide.createIcons({ root: body });
   }
 
@@ -393,7 +399,6 @@ class PetsView {
   vaxRowHtml(r) {
     const info = this.dueInfo(r);
     const who = [r.veterinarian, r.clinic].filter(Boolean).join(' · ');
-    const confirming = this.confirmDeleteId === r.id;
     return `
       <div class="vax-item">
         <div class="vax-item-main">
@@ -403,17 +408,45 @@ class PetsView {
           ${info ? `<span class="vax-chip vax-${info.cls}">${this.esc(info.label)}</span>` : ''}
         </div>
         <div class="vax-item-actions">
-          ${confirming
-            ? `<button type="button" class="btn btn-danger btn-sm" onclick="window.petsView.deleteVaccination('${this.esc(r.id)}')">Delete</button>
-               <button type="button" class="btn btn-outline btn-sm" onclick="window.petsView.askDelete(null)">Keep</button>`
-            : `<button type="button" class="vax-del" onclick="window.petsView.askDelete('${this.esc(r.id)}')" aria-label="Delete ${this.esc(r.vaccine_name)}" title="Delete"><i data-lucide="trash-2"></i></button>`}
+          ${r.document_path ? `<button type="button" class="vax-del" onclick="window.petsView.viewDocument('${this.esc(r.id)}')" aria-label="View document" title="View document"><i data-lucide="file-text"></i></button>` : ''}
+          <button type="button" class="vax-del" onclick="window.petsView.askDelete('${this.esc(r.id)}')" aria-label="Delete ${this.esc(r.vaccine_name)}" title="Delete"><i data-lucide="trash-2"></i></button>
         </div>
       </div>`;
   }
 
+  // Asks in a modal before a vaccination record is deleted
   askDelete(id) {
-    this.confirmDeleteId = id;
-    this.renderVaxList();
+    const rec = (this.vaccines[this.openPetId] || []).find((r) => r.id === id);
+    if (!rec) return;
+    let modal = document.getElementById('vax-delete-modal');
+    if (!modal) {
+      modal = document.createElement('div');
+      modal.className = 'modal-overlay';
+      modal.id = 'vax-delete-modal';
+      modal.addEventListener('mousedown', (e) => { if (e.target === modal) window.notifManager.closeModal('vax-delete-modal'); });
+      document.body.appendChild(modal);
+    }
+    const who = [rec.veterinarian, rec.clinic].filter(Boolean).join(' · ');
+    modal.innerHTML = `
+      <div class="modal-box" role="alertdialog" aria-modal="true" aria-labelledby="vax-delete-title" style="max-width:420px;">
+        <div class="modal-header">
+          <h3 id="vax-delete-title">Delete vaccination?</h3>
+          <button type="button" class="btn-outline btn-sm" onclick="window.notifManager.closeModal('vax-delete-modal')" aria-label="Close">&times;</button>
+        </div>
+        <div class="modal-body">
+          <p style="margin:0 0 0.6rem;">Are you sure you want to delete this vaccination record? This can't be undone.</p>
+          <div class="vax-item-main">
+            <div class="vax-item-name">${this.esc(rec.vaccine_name)}</div>
+            <div class="vax-item-sub">Given ${this.esc(this.fmtDate(rec.date_given))}${who ? ` · ${this.esc(who)}` : ''}</div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline" onclick="window.notifManager.closeModal('vax-delete-modal')">Keep it</button>
+          <button type="button" class="btn btn-danger" id="vax-delete-confirm" onclick="window.petsView.deleteVaccination('${this.esc(rec.id)}')"><i data-lucide="trash-2"></i> Yes, delete</button>
+        </div>
+      </div>`;
+    window.notifManager.openModal('vax-delete-modal');
+    if (window.lucide) window.lucide.createIcons({ root: modal });
   }
 
   renderVaxList() {
@@ -435,6 +468,8 @@ class PetsView {
   }
 
   async addVaccination(petId) {
+    const current = this.pets.find((p) => p.id === petId);
+    if (current && current.status === 'missing') return;
     const val = (id) => (document.getElementById(id)?.value || '').trim();
     const name = val('vax-name');
     const given = val('vax-given');
@@ -452,11 +487,41 @@ class PetsView {
       return;
     }
 
+    const file = document.getElementById('vax-doc')?.files?.[0] || null;
+    const DOC_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
+    const docField = document.getElementById('vax-doc-field');
+    if (file && (!DOC_TYPES.includes(file.type) || file.size > 8 * 1024 * 1024)) {
+      docField.classList.add('has-error');
+      return;
+    }
+    docField.classList.remove('has-error');
+
+    // Prompt once for a document; a second tap on the button saves without one
+    if (!file && !this.skipDocPrompt) {
+      this.skipDocPrompt = true;
+      this.setMsg('Please add the vaccination document (card or vet certificate) so it stays on record. Tap "Add vaccination" again to save without one.');
+      document.getElementById('vax-doc')?.focus();
+      return;
+    }
+    this.skipDocPrompt = false;
+
     const client = this.client();
     const btn = document.getElementById('vax-submit');
     this.setMsg('');
     btn.disabled = true;
+    let uploadedPath = null;
     try {
+      let doc = { document_path: null, document_name: null, document_type: null };
+      if (file) {
+        const { data: userData } = await client.auth.getUser();
+        const uid = userData && userData.user && userData.user.id;
+        if (!uid) throw new Error('Please sign in again.');
+        const ext = ({ 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'application/pdf': 'pdf' })[file.type];
+        uploadedPath = `${uid}/${petId}/${crypto.randomUUID()}.${ext}`;
+        const up = await client.storage.from('vaccination-documents').upload(uploadedPath, file, { contentType: file.type });
+        if (up.error) { uploadedPath = null; throw new Error(`Document upload failed: ${up.error.message}`); }
+        doc = { document_path: uploadedPath, document_name: file.name.slice(0, 200), document_type: file.type };
+      }
       const { data, error } = await client.from('pet_vaccinations').insert({
         pet_id: petId,
         vaccine_name: name,
@@ -464,8 +529,9 @@ class PetsView {
         next_due_date: due || null,
         veterinarian: val('vax-vet') || null,
         clinic: val('vax-clinic') || null,
-        notes: val('vax-notes') || null
-      }).select('id, pet_id, vaccine_name, date_given, next_due_date, veterinarian, clinic, notes, created_at').single();
+        notes: val('vax-notes') || null,
+        ...doc
+      }).select('id, pet_id, vaccine_name, date_given, next_due_date, veterinarian, clinic, notes, document_path, document_name, document_type, created_at').single();
       if (error) throw new Error(error.message);
 
       this.vaccines[petId] = [data, ...(this.vaccines[petId] || [])].sort((a, b) => (a.date_given < b.date_given ? 1 : -1));
@@ -474,23 +540,44 @@ class PetsView {
       if (window.notifManager) window.notifManager.showToast(`${name} added.`, 'success', 3000);
     } catch (err) {
       console.warn('[Pets] add vaccination failed:', err);
+      // Don't leave an orphan file behind if the record itself could not be saved
+      if (uploadedPath) client.storage.from('vaccination-documents').remove([uploadedPath]).catch(() => {});
       btn.disabled = false;
       this.setMsg(`Could not save the vaccination: ${err.message}`);
+    }
+  }
+
+  // Opens the stored document through a short-lived signed link (the bucket is private)
+  async viewDocument(id) {
+    const rec = (this.vaccines[this.openPetId] || []).find((r) => r.id === id);
+    if (!rec || !rec.document_path) return;
+    const win = window.open('', '_blank');
+    try {
+      const { data, error } = await this.client().storage.from('vaccination-documents').createSignedUrl(rec.document_path, 120);
+      if (error || !data) throw new Error(error ? error.message : 'No link');
+      if (win) win.location.href = data.signedUrl; else window.location.href = data.signedUrl;
+    } catch (err) {
+      if (win) win.close();
+      this.setMsg(`Could not open the document: ${err.message}`);
     }
   }
 
   async deleteVaccination(id) {
     const petId = this.openPetId;
     const client = this.client();
+    const btn = document.getElementById('vax-delete-confirm');
+    if (btn) btn.disabled = true;
     try {
+      const rec = (this.vaccines[petId] || []).find((r) => r.id === id);
       const { error } = await client.from('pet_vaccinations').delete().eq('id', id);
       if (error) throw new Error(error.message);
+      if (rec && rec.document_path) client.storage.from('vaccination-documents').remove([rec.document_path]).catch(() => {});
       this.vaccines[petId] = (this.vaccines[petId] || []).filter((r) => r.id !== id);
-      this.confirmDeleteId = null;
+      window.notifManager.closeModal('vax-delete-modal');
       this.renderVaxList();
       this.draw();
     } catch (err) {
-      this.confirmDeleteId = null;
+      window.notifManager.closeModal('vax-delete-modal');
       this.renderVaxList();
       this.setMsg(`Could not delete the record: ${err.message}`);
     }

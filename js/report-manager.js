@@ -1796,10 +1796,12 @@ class ReportManager {
     const phoneInput = document.getElementById('sighting-reporter-phone');
     const nameInput = document.getElementById('sighting-reporter-name');
 
+    // A signed-in guardian's name and mobile number are filled in (and can still be edited)
+    const account = (window.pawStore.getGoogleUser && window.pawStore.getGoogleUser()) || null;
     if (notesInput) notesInput.value = '';
-    if (phoneInput) phoneInput.value = '';
-    if (nameInput)  nameInput.value  = '';
-    this.sightingSavedName = '';
+    if (phoneInput) phoneInput.value = account && account.phone ? this.formatLocalMobile(account.phone) : '';
+    if (nameInput)  nameInput.value  = account && account.name ? account.name : '';
+    this.sightingSavedName = nameInput ? nameInput.value : '';
     this.setSightingNameMode('named');
 
     // Set default datetime to now
@@ -1895,6 +1897,7 @@ class ReportManager {
     // The starting pin is only a guess: the finder must place it (tap, drag, search or current location).
     // Until then the location box stays empty, so a sighting is never saved at a spot nobody chose.
     this.sightingPinChosen = false;
+    this._sightingPinTouched = false;
     const sightingLoc = document.getElementById('sighting-location-input');
     if (sightingLoc) sightingLoc.value = '';
     const sightingClear = document.getElementById('sighting-search-clear-btn');
@@ -1918,6 +1921,35 @@ class ReportManager {
     setTimeout(() => {
       this.initSightingPinMap();
     }, 180);
+
+    this.defaultSightingToMyLocation();
+  }
+
+  // +639171234567 -> 0917 123 4567, the way the form asks for it
+  formatLocalMobile(value) {
+    const digits = String(value || '').replace(/\D/g, '').replace(/^63/, '0');
+    const local = digits.startsWith('0') ? digits : `0${digits}`;
+    return local.length === 11 ? `${local.slice(0, 4)} ${local.slice(4, 7)} ${local.slice(7)}` : String(value || '');
+  }
+
+  // Starts the sighting pin at the finder's own position (they are usually standing where they saw the pet).
+  // Quiet when location is blocked: the pin then starts on the pet's last seen place as before.
+  defaultSightingToMyLocation() {
+    if (!navigator.geolocation || !window.isSecureContext) return;
+    const token = (this._sightingLocateToken = (this._sightingLocateToken || 0) + 1);
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        const modal = document.getElementById('sighting-submission-modal');
+        // The modal was closed, reopened, or the finder already placed the pin themselves
+        if (token !== this._sightingLocateToken || !modal || !modal.classList.contains('active') || this._sightingPinTouched) return;
+        const { latitude, longitude } = pos.coords;
+        const name = (await this.reverseGeocode(latitude, longitude)) || 'My current location';
+        if (token !== this._sightingLocateToken || this._sightingPinTouched || !this.sightingMap) return;
+        this.jumpToSightingLocation(latitude, longitude, name);
+      },
+      () => {},
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+    );
   }
 
   timeAgoLabel(value) {
@@ -2053,6 +2085,7 @@ class ReportManager {
   }
 
   locateSightingMe() {
+    this._sightingPinTouched = true;
     this.useMyLocation('sighting');
   }
 
@@ -2108,10 +2141,12 @@ class ReportManager {
 
     this.sightingMarker.on('dragend', (e) => {
       const pos = e.target.getLatLng();
+      this._sightingPinTouched = true;
       this.updateSightingCoords(pos.lat, pos.lng);
     });
 
     this.sightingMap.on('click', (e) => {
+      this._sightingPinTouched = true;
       this.updateSightingCoords(e.latlng.lat, e.latlng.lng);
       if (this.sightingMarker) {
         this.sightingMarker.setLatLng(e.latlng);
@@ -2238,6 +2273,7 @@ class ReportManager {
     const input = document.getElementById('sighting-location-input');
     if (input) input.value = name;
     this.hideSightingSuggestions();
+    this._sightingPinTouched = true;
     this.jumpToSightingLocation(lat, lng, name);
   }
 

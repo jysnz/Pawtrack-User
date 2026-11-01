@@ -7,7 +7,7 @@
 
 class SightingsView {
   constructor() {
-    this.currentFilter = 'all';      // 'all' | 'possible' | 'confirmed' | 'archived'
+    this.currentFilter = 'all';      // 'all' | 'possible' | 'confirmed' | 'archived' | 'reunited'
     this.currentSort   = 'newest';   // 'newest' | 'oldest' | 'confirmed_first'
     this.searchQuery   = '';
     this.selectedCommunity = 'all';
@@ -73,6 +73,7 @@ class SightingsView {
           ${this._filterPill('possible',  'Possible',   stats.possible,  this.currentFilter === 'possible')}
           ${this._filterPill('confirmed', 'Confirmed',  stats.confirmed, this.currentFilter === 'confirmed')}
           ${this._filterPill('archived',  'Archived',   stats.archived,  this.currentFilter === 'archived')}
+          ${this._filterPill('reunited',  'Reunited',   stats.reunited,  this.currentFilter === 'reunited')}
         </div>
 
         <!-- Sort -->
@@ -184,6 +185,7 @@ class SightingsView {
       confirmed: active.filter(s => s.status === 'confirmed_sighting').length,
       archived:  sightings.filter(s => s.status === 'dismissed' || s.status === 'archived').length,
       linked:    active.filter(s => !!s.missing_report_id).length,
+      reunited:  window.pawStore.getReunitedPets().length,
     };
   }
 
@@ -293,7 +295,48 @@ class SightingsView {
     return opts.join('');
   }
 
+  // A reunited pet: the pet's photo, where it was last seen, how long it was missing, and when it got home
+  _renderReunionCard(r) {
+    const photo = r.photoUrl || window.PET_PHOTO_PLACEHOLDER;
+    const days = r.daysMissing == null ? '' : (r.daysMissing === 0 ? 'Found the same day' : `Missing for ${r.daysMissing} day${r.daysMissing === 1 ? '' : 's'}`);
+    return `
+      <div class="sighting-card glass-card">
+        <div class="sighting-card-photo-wrap">
+          <img src="${this._esc(photo)}" alt="${this._esc(r.name)}" class="sighting-card-photo" onerror="this.src='${window.PET_PHOTO_PLACEHOLDER}'" />
+          <span class="sighting-card-status-badge" style="background:rgba(22,163,74,0.12); color:#16a34a; border-color:rgba(22,163,74,0.3);">Reunited</span>
+        </div>
+        <div class="sighting-card-body">
+          <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:0.4rem; gap:0.5rem;">
+            <div>
+              <div style="font-size:1rem; font-weight:800; color:var(--text-main); line-height:1.2;">${this._esc(r.name)}</div>
+              <div style="font-size:0.75rem; color:var(--text-muted);">${this._esc([r.species, r.breed].filter(Boolean).join(' · '))}</div>
+            </div>
+            <span style="font-size:0.72rem; color:var(--text-muted); white-space:nowrap; flex-shrink:0;">${this._timeAgo(r.reunitedAt)}</span>
+          </div>
+          ${r.location ? `<div class="sighting-card-detail-row"><span>Last seen: ${this._esc(r.location)}</span></div>` : ''}
+          ${days ? `<div class="sighting-card-detail-row"><span>${days}</span></div>` : ''}
+          <div class="sighting-card-detail-row"><span>${this._esc(r.outcome || 'Returned to owner')}</span></div>
+          ${r.story ? `<div class="sighting-card-notes">"${this._esc(r.story)}"</div>` : ''}
+        </div>
+      </div>`;
+  }
+
+  _renderReunions() {
+    const list = window.pawStore.getReunitedPets();
+    const q = this.searchQuery.trim().toLowerCase();
+    const shown = q ? list.filter(r => [r.name, r.breed, r.species, r.location].some(v => (v || '').toLowerCase().includes(q))) : list;
+    if (!shown.length) {
+      return `
+        <div class="sightings-empty-state glass-card">
+          <h3>No reunited pets yet</h3>
+          <p>Pets marked as found will show up here.</p>
+        </div>`;
+    }
+    return `<div class="sightings-cards-grid">${shown.map(r => this._renderReunionCard(r)).join('')}</div>`;
+  }
+
   _renderGrid(sightings) {
+    if (this.currentFilter === 'reunited') return this._renderReunions();
     const list = this._filteredSorted(sightings);
 
     if (list.length === 0) {
@@ -329,7 +372,8 @@ class SightingsView {
     const isArchived  = s.status === 'dismissed' || s.status === 'archived';
     const isPossible  = s.status === 'possible_sighting';
 
-    const statusColor  = isConfirmed ? '#16a34a' : isPossible ? '#ea9d1e' : '#b85410';
+    const palette      = window.MAP_COLORS || {};
+    const statusColor  = isConfirmed ? (palette.confirmed || '#16a34a') : isPossible ? (palette.sighting || '#ea9d1e') : '#b85410';
     const statusLabel  = isConfirmed ? 'Confirmed Sighting' : isPossible ? 'Possible Sighting' : 'Archived';
     const statusBg     = isConfirmed ? 'rgba(22,163,74,0.12)' : isPossible ? 'rgba(234,157,30,0.12)' : 'rgba(184,84,16,0.12)';
     const statusBorder = isConfirmed ? 'rgba(22,163,74,0.3)'  : isPossible ? 'rgba(234,157,30,0.3)'  : 'rgba(184,84,16,0.3)';
@@ -359,9 +403,16 @@ class SightingsView {
       }
     }
 
+    // Only the guardian who reported the pet missing reviews its sightings; the finder who sent this one never does
+    const isOwner = this._isOwnerOfSightedPet(s);
+
     // Action buttons
     let actionHtml = '';
-    if (isArchived) {
+    if (!isOwner) {
+      actionHtml = isConfirmed
+        ? `<span class="btn btn-sm" style="flex:1; background:rgba(22,163,74,0.1); color:#16a34a; border:1px solid rgba(22,163,74,0.3); cursor:default; display:flex; align-items:center; gap:5px; justify-content:center;"><i data-lucide="check-circle-2"></i> Owner Confirmed</span>`
+        : '';
+    } else if (isArchived) {
       // Archived actions: Retrieve & Delete
       actionHtml = `
         <button class="btn btn-success btn-sm" style="flex:1; background:#16a34a; border-color:#16a34a; color:#ffffff; display:flex; align-items:center; gap:5px; justify-content:center;" onclick="window.sightingsView.retrieveSighting('${this._esc(s.id)}')">
@@ -457,6 +508,16 @@ class SightingsView {
   // ─────────────────────────────────────────────────
   // UTILITIES
   // ─────────────────────────────────────────────────
+  // The signed-in guardian reported the pet this sighting is about, and did not send the sighting themselves
+  _isOwnerOfSightedPet(s) {
+    const store = window.pawStore;
+    const user = store && store.getGoogleUser && store.getGoogleUser();
+    if (!user || !user.id || !s.missing_report_id) return false;
+    if (s.reporterId && s.reporterId === user.id) return false;
+    const report = store.getMissingReportById(s.missing_report_id);
+    return !!report && !!report.reporterId && report.reporterId === user.id;
+  }
+
   _timeAgo(value) {
     if (!value) return 'Unknown time';
     const mins = Math.max(1, Math.round((Date.now() - new Date(value).getTime()) / 60000));

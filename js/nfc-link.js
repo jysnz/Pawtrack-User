@@ -138,7 +138,10 @@ class NfcLinkFlow {
     this.busy = false;
     this.linking = false;
     document.getElementById('nfc-link-modal')?.classList.remove('active');
-    if (!this.done) document.getElementById('register-pet-modal')?.classList.add('active');
+    if (!this.done) {
+      const regModal = document.getElementById('register-pet-modal');
+      if (regModal) { regModal.style.display = ''; regModal.classList.add('active'); }
+    }
   }
 
   finish() {

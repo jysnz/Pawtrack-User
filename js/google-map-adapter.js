@@ -285,12 +285,20 @@
         this._kind = /World_Imagery/i.test(url) ? 'satellite'
           : /lyrs=y/i.test(url) ? 'hybrid'
           : /dark_all/i.test(url) ? 'dark'
+          : /light_all/i.test(url) ? 'light'
           : 'roadmap';
       }
       on() { return this; }
       _attach(map) { this._map = map; map._setKind(this._kind); }
       _detach() { this._map = null; }
     }
+
+    const allMaps = new Set();
+    const appIsDark = () => document.documentElement.getAttribute('data-theme') !== 'light';
+
+    // Switching the app between light and dark re-themes every open street map
+    new MutationObserver(() => allMaps.forEach(m => m._syncTheme()))
+      .observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
 
     class GMap {
       constructor(target, opts = {}) {
@@ -301,7 +309,19 @@
         this._kind = 'roadmap';
         this._center = { lat: 14.63, lng: 121.04 };
         this._zoom = 12;
-        this._build(false);
+        this._build(this._wantDark());
+        allMaps.add(this);
+      }
+
+      // The street map follows the app theme; satellite and hybrid stay as photographs
+      _wantDark() {
+        return this._kind === 'dark' || (this._kind === 'roadmap' && appIsDark());
+      }
+
+      _syncTheme() {
+        if (!this._el || !this._el.isConnected) { allMaps.delete(this); return; }
+        const dark = this._wantDark();
+        if (dark !== this._dark) this._build(dark);
       }
 
       _build(dark) {
@@ -358,7 +378,7 @@
 
       _setKind(kind) {
         this._kind = kind;
-        const dark = kind === 'dark';
+        const dark = this._wantDark();
         if (dark !== this._dark) this._build(dark); // the colour scheme can only be set when the map is created
         else this._g.setMapTypeId(this._typeId());
       }
