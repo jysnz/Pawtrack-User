@@ -1,0 +1,1199 @@
+/* ==========================================================================
+   Sign In & Registration (Supabase Auth: email + password, Turnstile, Google)
+   Shared by the start screen, the guardian registration modal and the
+   set-new-password modal. Accent colour follows the app's --primary token.
+   ========================================================================== */
+
+.auth-dialog-card {
+  --auth-accent: #b85410;
+  --auth-accent-hover: #9c450c;
+  --auth-accent-ring: rgba(184, 84, 16, 0.18);
+  --auth-on-accent: #ffffff;
+  --auth-ink: #111827;
+  --auth-ink-muted: #6b7280;
+  --auth-field-bg: #f3f4f6;
+  --auth-field-border: #e5e7eb;
+  --auth-surface: #ffffff;
+  --auth-border: #e7e5e4;
+
+  max-width: 420px !important;
+  width: 100% !important;
+  background: var(--auth-surface) !important;
+  color: var(--auth-ink) !important;
+  border: 1px solid var(--auth-border) !important;
+  border-radius: 18px !important;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.18) !important;
+  padding: 22px 28px 18px !important;
+  position: relative !important;
+  box-sizing: border-box !important;
+  font-family: var(--font-body) !important;
+}
+
+[data-theme="dark"] .auth-dialog-card {
+  --auth-accent: #ea9d1e;
+  --auth-accent-hover: #f5aa2d;
+  --auth-accent-ring: rgba(234, 157, 30, 0.22);
+  --auth-on-accent: #1a1206;
+  --auth-ink: #f3f4f6;
+  --auth-ink-muted: #9ca3af;
+  --auth-field-bg: #1f2128;
+  --auth-field-border: #2e323b;
+  --auth-surface: #17181c;
+  --auth-border: #2a2d35;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.7) !important;
+}
+
+.modal-overlay .auth-dialog-card {
+  width: 92% !important;
+}
+
+.auth-dialog-close-btn {
+  position: absolute;
+  top: 12px;
+  right: 14px;
+  width: 32px;
+  height: 32px;
+  background: transparent;
+  border: none;
+  font-size: 22px;
+  line-height: 1;
+  color: var(--auth-ink-muted);
+  cursor: pointer;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  transition: background 0.15s, color 0.15s;
+}
+
+.auth-dialog-close-btn:hover {
+  background: var(--auth-field-bg);
+  color: var(--auth-ink);
+}
+
+.auth-dialog-title {
+  font-family: var(--font-heading) !important;
+  font-size: 22px !important;
+  font-weight: 700 !important;
+  text-align: center !important;
+  color: var(--auth-ink) !important;
+  line-height: 1.2 !important;
+  margin: 0 0 4px !important;
+  letter-spacing: -0.02em !important;
+}
+
+.auth-dialog-sub {
+  text-align: center;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--auth-ink-muted);
+  margin: 0 0 16px;
+}
+
+/* --- Fields --- */
+.auth-dialog-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.auth-field-box {
+  background: var(--auth-field-bg);
+  border: 1px solid var(--auth-field-border);
+  border-radius: 10px;
+  padding: 6px 14px 7px;
+  display: flex;
+  flex-direction: column;
+  transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
+}
+
+.auth-field-box:focus-within {
+  border-color: var(--auth-accent);
+  background: var(--auth-surface);
+  box-shadow: 0 0 0 3px var(--auth-accent-ring);
+}
+
+.auth-field-box[hidden],
+.auth-forgot-row[hidden] {
+  display: none;
+}
+
+.auth-field-label {
+  font-size: 10.5px;
+  letter-spacing: 0.05em;
+  font-weight: 600;
+  color: var(--auth-ink-muted);
+  margin-bottom: 1px;
+  user-select: none;
+}
+
+.auth-field-input {
+  width: 100%;
+  background: transparent;
+  border: none;
+  outline: none;
+  font-family: var(--font-body);
+  font-size: 15px;
+  color: var(--auth-ink);
+  padding: 0;
+  border-radius: 0;
+}
+
+/* The surrounding .auth-field-box shows focus; skip the global input ring and height */
+.auth-field-input,
+.auth-field-input:focus {
+  min-height: 0;
+  box-shadow: none;
+}
+
+/* Browser autofill paints its own light background; repaint it with the field colour instead.
+   The inset shadow covers the autofill fill, and the long transition stops Chrome flashing it back. */
+.auth-field-input:-webkit-autofill,
+.auth-field-input:-webkit-autofill:hover,
+.auth-field-input:-webkit-autofill:active {
+  -webkit-box-shadow: 0 0 0 1000px var(--auth-field-bg) inset !important;
+  box-shadow: 0 0 0 1000px var(--auth-field-bg) inset !important;
+  -webkit-text-fill-color: var(--auth-ink) !important;
+  caret-color: var(--auth-ink);
+  transition: background-color 600000s 0s, color 600000s 0s;
+}
+
+/* A focused field switches to the surface colour, so its autofilled input follows */
+.auth-field-input:-webkit-autofill:focus {
+  -webkit-box-shadow: 0 0 0 1000px var(--auth-surface) inset !important;
+  box-shadow: 0 0 0 1000px var(--auth-surface) inset !important;
+  -webkit-text-fill-color: var(--auth-ink) !important;
+  caret-color: var(--auth-ink);
+  transition: background-color 600000s 0s, color 600000s 0s;
+}
+
+.auth-field-input::placeholder {
+  color: var(--auth-ink-muted);
+  opacity: 0.7;
+}
+
+.auth-field-box-locked {
+  opacity: 0.7;
+}
+
+.auth-field-hint {
+  font-size: 11.5px;
+  color: var(--auth-ink-muted);
+  margin: -6px 0 2px 2px;
+}
+
+/* Mobile number: fixed "+63 |" prefix, then the 10-digit number */
+.auth-phone-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.auth-phone-prefix {
+  flex: none;
+  font-size: 15px;
+  color: var(--auth-ink);
+  padding-right: 8px;
+  border-right: 1.5px solid var(--auth-ink-muted);
+  line-height: 1.2;
+}
+
+.auth-dialog-form[hidden] {
+  display: none;
+}
+
+/* Password updated confirmation */
+.auth-success-card {
+  text-align: center;
+}
+
+.auth-success-icon {
+  width: 64px;
+  height: 64px;
+  margin: 6px auto 14px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: #15803d;
+  background: rgba(21, 128, 61, 0.12);
+  box-shadow: 0 0 0 8px rgba(21, 128, 61, 0.06);
+  animation: auth-pop 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+[data-theme="dark"] .auth-success-icon {
+  color: #4ade80;
+  background: rgba(74, 222, 128, 0.14);
+  box-shadow: 0 0 0 8px rgba(74, 222, 128, 0.07);
+}
+
+@keyframes auth-pop {
+  from { transform: scale(0.6); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .auth-success-icon { animation: none; }
+}
+
+/* Step indicator: Email > Code > New password */
+.auth-steps {
+  list-style: none;
+  display: flex;
+  justify-content: center;
+  gap: 14px;
+  margin: 0 0 14px;
+  padding: 0;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--auth-ink-muted);
+}
+
+.auth-steps li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.auth-steps li span {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 11px;
+  background: var(--auth-field-bg);
+  border: 1px solid var(--auth-field-border);
+  transition: background 0.2s, color 0.2s, border-color 0.2s;
+}
+
+.auth-steps li.is-active {
+  color: var(--auth-ink);
+}
+
+.auth-steps li.is-active span {
+  background: var(--auth-accent);
+  border-color: var(--auth-accent);
+  color: var(--auth-on-accent);
+}
+
+.auth-steps li.is-done span {
+  background: #15803d;
+  border-color: #15803d;
+  color: #fff;
+}
+
+@media (max-width: 400px) {
+  .auth-steps {
+    gap: 8px;
+    font-size: 10.5px;
+  }
+}
+
+/* Back arrow on the code step */
+.auth-dialog-back-btn {
+  position: absolute;
+  top: 12px;
+  left: 14px;
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  background: transparent;
+  border: none;
+  border-radius: 50%;
+  color: var(--auth-ink-muted);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.auth-dialog-back-btn[hidden] {
+  display: none;
+}
+
+.auth-dialog-back-btn:hover {
+  background: var(--auth-field-bg);
+  color: var(--auth-ink);
+}
+
+.auth-dialog-back-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--auth-accent-ring);
+}
+
+/* Spinner while a request is in flight */
+.auth-dialog-submit-btn.is-loading {
+  position: relative;
+  color: transparent;
+  cursor: progress;
+}
+
+.auth-dialog-submit-btn.is-loading::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2.5px solid var(--auth-on-accent);
+  border-right-color: transparent;
+  animation: auth-spin 0.7s linear infinite;
+}
+
+@keyframes auth-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .auth-dialog-submit-btn.is-loading::after { animation-duration: 1.6s; }
+}
+
+/* Terms + Privacy agreement dialog (sign-up) */
+.terms-agree-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.terms-agree-hint {
+  margin-right: auto;
+  font-size: 12px;
+  color: var(--text-dim, #78716c);
+}
+
+#terms-agree-accept-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+#terms-agree-body h3.terms-agree-section {
+  color: var(--text-main);
+  font-size: 16px;
+  margin: 0 0 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border-subtle, rgba(128, 128, 128, 0.25));
+}
+
+#terms-agree-body h3.terms-agree-section:not(:first-child) {
+  margin-top: 28px;
+}
+
+/* Terms line right above "Create account" (sign-up only), so it is visible without scrolling */
+.auth-terms-inline {
+  margin: 0 !important;
+  padding: 0 !important;
+  border-top: 0 !important;
+  text-align: center;
+}
+
+.auth-terms-inline[hidden] {
+  display: none;
+}
+
+/* First / last name side by side (sign-up only) */
+.auth-name-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.auth-name-row[hidden],
+.auth-rules[hidden] {
+  display: none;
+}
+
+/* Live password requirements */
+.auth-rules {
+  list-style: none;
+  margin: 2px 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px 12px;
+  font-size: 12px;
+  color: var(--auth-ink-muted);
+}
+
+.auth-rules li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  line-height: 1.3;
+  transition: color 0.15s;
+}
+
+.auth-rules li::before {
+  content: '';
+  flex: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 1.5px solid var(--auth-field-border);
+  background: transparent center / 9px no-repeat;
+  transition: background-color 0.15s, border-color 0.15s;
+}
+
+.auth-rules li.is-met {
+  color: #15803d;
+}
+
+.auth-rules li.is-met::before {
+  border-color: #15803d;
+  background-color: #15803d;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12l5 5L20 7'/%3E%3C/svg%3E");
+}
+
+[data-theme="dark"] .auth-rules li.is-met {
+  color: #4ade80;
+}
+
+[data-theme="dark"] .auth-rules li.is-met::before {
+  border-color: #4ade80;
+  background-color: #4ade80;
+}
+
+@media (max-width: 380px) {
+  .auth-rules {
+    grid-template-columns: 1fr;
+  }
+}
+
+.auth-otp-input {
+  font-size: 22px;
+  letter-spacing: 0.4em;
+  font-weight: 600;
+}
+
+/* "Account created" dialog */
+.auth-success-card {
+  text-align: center;
+}
+
+.auth-success-icon {
+  width: 68px;
+  height: 68px;
+  margin: 4px auto 14px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+  background: #16a34a;
+  box-shadow: 0 0 0 8px rgba(22, 163, 74, 0.14);
+}
+
+.auth-password-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.auth-password-toggle {
+  flex: none;
+  background: none;
+  border: none;
+  padding: 2px 0;
+  font-family: var(--font-body);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--auth-ink-muted);
+  cursor: pointer;
+}
+
+.auth-password-toggle {
+  display: grid;
+  place-items: center;
+}
+
+.auth-password-toggle svg {
+  display: block;
+}
+
+/* Eye = password hidden (click to show); eye-off = password visible */
+.auth-password-toggle .icon-eye-off,
+.auth-password-toggle[aria-pressed="true"] .icon-eye {
+  display: none;
+}
+
+.auth-password-toggle[aria-pressed="true"] .icon-eye-off {
+  display: block;
+}
+
+.auth-password-toggle:hover {
+  color: var(--auth-ink);
+}
+
+/* "Forgot password?" sits under the password field, aligned right */
+.auth-forgot-row {
+  display: flex;
+  justify-content: flex-end;
+  margin: -2px 0 0;
+}
+
+.auth-text-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--auth-accent);
+  cursor: pointer;
+}
+
+.auth-text-btn:hover {
+  color: var(--auth-accent-hover);
+  text-decoration: underline;
+}
+
+/* --- Buttons --- */
+.auth-dialog-submit-btn {
+  width: 100%;
+  height: 44px;
+  background: var(--auth-accent);
+  color: var(--auth-on-accent);
+  border: none;
+  border-radius: 10px;
+  font-family: var(--font-body);
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  margin-top: 2px;
+  transition: background 0.15s, transform 0.1s, box-shadow 0.15s;
+}
+
+.auth-dialog-submit-btn:hover {
+  background: var(--auth-accent-hover);
+}
+
+.auth-dialog-submit-btn:active {
+  transform: scale(0.99);
+}
+
+.auth-google-continue-btn {
+  width: 100%;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  border: 1px solid var(--auth-field-border);
+  border-radius: 10px;
+  background: var(--auth-surface);
+  color: var(--auth-ink);
+  font-family: var(--font-body);
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.auth-google-continue-btn:hover {
+  background: var(--auth-field-bg);
+  border-color: var(--auth-ink-muted);
+}
+
+.auth-dialog-submit-btn:focus-visible,
+.auth-google-continue-btn:focus-visible,
+.auth-text-btn:focus-visible,
+.auth-password-toggle:focus-visible,
+.auth-dialog-close-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--auth-accent-ring);
+}
+
+.auth-text-btn:disabled,
+.auth-google-continue-btn:disabled,
+.auth-dialog-submit-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* --- Turnstile, divider, status --- */
+/* Rendered with size: 'flexible', so the widget fills this full-width box like the buttons */
+.auth-turnstile {
+  width: 100%;
+  min-height: 65px;
+}
+
+.auth-turnstile iframe {
+  display: block;
+  width: 100% !important;
+}
+
+/* Sits between the Log in button and Continue with Google */
+.auth-turnstile-below {
+  margin-top: 12px;
+}
+
+.auth-dialog-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 10px 0;
+  color: var(--auth-ink-muted);
+  font-size: 12px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.auth-dialog-divider::before,
+.auth-dialog-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--auth-border);
+}
+
+.auth-status {
+  margin-top: 12px;
+  font-size: 13px;
+  line-height: 1.45;
+  text-align: center;
+  color: var(--auth-ink-muted);
+}
+
+.auth-status:empty {
+  display: none;
+}
+
+.auth-status.is-error {
+  color: #dc2626;
+  font-weight: 500;
+}
+
+[data-theme="dark"] .auth-status.is-error {
+  color: #f87171;
+}
+
+/* --- Footer rows --- */
+.auth-signup-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px;
+  color: var(--auth-ink-muted);
+}
+
+.auth-mode-row {
+  justify-content: center;
+  margin-top: 12px;
+  font-size: 13.5px;
+}
+
+.auth-terms-note {
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--auth-ink-muted);
+  text-align: center;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--auth-border);
+}
+
+.auth-terms-note a {
+  color: var(--auth-ink);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  font-weight: 500;
+}
+
+.auth-terms-note a:hover {
+  color: var(--auth-accent);
+}
+
+/* =====================================================================
+   Start screen: Log in / Create account (split layout)
+   Shared .auth-field-* / .auth-rules / .auth-password-* styles above still style the fields.
+   ===================================================================== */
+.auth-landing {
+  --auth-accent: #b85410;
+  --auth-accent-hover: #9c450c;
+  --auth-accent-ring: rgba(184, 84, 16, 0.18);
+  --auth-on-accent: #ffffff;
+  --auth-ink: #111827;
+  --auth-ink-muted: #6b7280;
+  --auth-field-bg: #f3f4f6;
+  --auth-field-border: #e5e7eb;
+  --auth-surface: #ffffff;
+  --auth-border: #e7e5e4;
+
+  /* Spacing scales with the window height, so the screen breathes on tall displays and tightens on short ones */
+  --al-gap-xs: clamp(4px, 0.9vh, 8px);
+  --al-gap-sm: clamp(6px, 1.4vh, 12px);
+  --al-gap-md: clamp(8px, 2vh, 18px);
+  --al-gap-lg: clamp(12px, 3.4vh, 34px);
+  --al-field-pad: clamp(4px, 0.9vh, 9px);
+  --al-btn-h: clamp(40px, 5.8vh, 52px);
+  --al-tab-h: clamp(32px, 4.6vh, 42px);
+  --al-title-size: clamp(21px, 3.4vh, 28px);
+
+  position: fixed;
+  inset: 0;
+  z-index: 9000;
+  overflow-y: auto;
+  display: flex;
+  justify-content: center;
+  padding: clamp(6px, 2.4vh, 28px) 24px;
+  font-family: var(--font-body);
+  scrollbar-width: thin !important;
+  scrollbar-color: rgba(120, 113, 108, 0.45) transparent;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  background:
+    radial-gradient(circle at 15% 10%, rgba(194, 65, 12, 0.12), transparent 45%),
+    radial-gradient(circle at 90% 90%, rgba(37, 99, 235, 0.08), transparent 45%),
+    #f6f4f1;
+}
+
+[data-theme="dark"] .auth-landing {
+  --auth-accent: #ea9d1e;
+  --auth-accent-hover: #f5aa2d;
+  --auth-accent-ring: rgba(234, 157, 30, 0.22);
+  --auth-on-accent: #1a1206;
+  --auth-ink: #f3f4f6;
+  --auth-ink-muted: #9ca3af;
+  --auth-field-bg: #1f2128;
+  --auth-field-border: #2e323b;
+  --auth-surface: #17181c;
+  --auth-border: #2a2d35;
+  background:
+    radial-gradient(circle at 15% 10%, rgba(194, 65, 12, 0.2), transparent 45%),
+    radial-gradient(circle at 90% 90%, rgba(37, 99, 235, 0.1), transparent 45%),
+    #0f1013;
+}
+
+.auth-landing::-webkit-scrollbar {
+  display: block !important;
+  width: 8px !important;
+}
+
+.auth-landing::-webkit-scrollbar-thumb {
+  background: rgba(120, 113, 108, 0.45);
+  border-radius: 8px;
+}
+
+body.auth-locked {
+  overflow: hidden;
+}
+
+/* --- Shell: brand panel + form panel --- */
+.al-shell {
+  width: 100%;
+  max-width: 1000px;
+  margin: auto;
+  /* Same box for Log in and Create account: fixed height, the form panel scrolls inside it */
+  height: min(700px, 100%);
+  min-height: 460px;
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
+  grid-template-rows: minmax(0, 1fr);
+  background: var(--auth-surface);
+  color: var(--auth-ink);
+  border: 1px solid var(--auth-border);
+  border-radius: 24px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.16);
+  overflow: hidden;
+}
+
+[data-theme="dark"] .al-shell {
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.65);
+}
+
+/* --- Brand panel --- */
+.al-aside {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  gap: calc(var(--al-gap-lg) * 1.4);
+  padding: calc(var(--al-gap-lg) * 1.2) 40px;
+  color: #fff;
+  overflow: hidden;
+  background: linear-gradient(155deg, #c2410c 0%, #9a3412 55%, #7c2d12 100%);
+}
+
+.al-aside::before,
+.al-aside::after {
+  content: '';
+  position: absolute;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.07);
+  pointer-events: none;
+}
+
+.al-aside::before { width: 320px; height: 320px; right: -120px; top: -110px; }
+.al-aside::after { width: 240px; height: 240px; left: -90px; bottom: -90px; }
+
+.al-aside > * { position: relative; z-index: 1; }
+
+.al-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.al-logo {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 11px;
+  background: rgba(255, 255, 255, 0.18);
+  color: #fff;
+}
+
+.al-brand-name {
+  font-family: var(--font-heading);
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.al-pitch h2 {
+  font-family: var(--font-heading);
+  font-size: 30px;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  margin: 0 0 12px;
+  color: #fff;
+}
+
+.al-pitch > p {
+  font-size: 14.5px;
+  line-height: 1.6;
+  color: rgba(255, 255, 255, 0.85);
+  margin: 0 0 24px;
+}
+
+.al-points {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 16px;
+}
+
+.al-points li {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  font-size: 13.5px;
+  line-height: 1.45;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.al-points strong {
+  color: #fff;
+  font-size: 14px;
+}
+
+.al-point-icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+}
+
+/* --- Form panel --- */
+.al-main {
+  position: relative;
+  display: flex;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--al-gap-lg) 44px var(--al-gap-md);
+  scrollbar-width: thin !important;
+  scrollbar-color: rgba(120, 113, 108, 0.45) transparent;
+}
+
+.al-main::-webkit-scrollbar { display: block !important; width: 8px !important; }
+.al-main::-webkit-scrollbar-thumb { background: rgba(120, 113, 108, 0.45); border-radius: 8px; }
+
+.al-main-inner {
+  width: 100%;
+  max-width: 390px;
+  margin: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Create account: "Continue with Google" comes first, then "or", then the form */
+.auth-landing.is-signup .al-main-inner > * { order: 4; }
+.auth-landing.is-signup .al-main-inner > .al-brand-mobile,
+.auth-landing.is-signup .al-main-inner > .al-tabs,
+.auth-landing.is-signup .al-main-inner > .al-title,
+.auth-landing.is-signup .al-main-inner > .al-sub { order: 0; }
+.auth-landing.is-signup .al-main-inner > .auth-google-continue-btn { order: 1; }
+.auth-landing.is-signup .al-main-inner > .auth-dialog-divider { order: 2; margin-top: var(--al-gap-sm); }
+.auth-landing.is-signup .al-main-inner > .al-form { order: 3; }
+
+.al-close {
+  position: absolute;
+  top: 14px;
+  right: 16px;
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--auth-ink-muted);
+  font-size: 24px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.al-close:hover { background: var(--auth-field-bg); color: var(--auth-ink); }
+.al-close:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--auth-accent-ring); }
+
+/* The logo row only shows on small screens, where the brand panel is hidden */
+.al-brand-mobile {
+  display: none;
+  justify-content: center;
+  margin-bottom: 18px;
+  color: var(--auth-ink);
+}
+
+.al-brand-mobile .al-logo {
+  background: var(--auth-accent);
+  color: var(--auth-on-accent);
+}
+
+/* Log in / Create account switch */
+.al-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  padding: 4px;
+  margin-bottom: var(--al-gap-md);
+  background: var(--auth-field-bg);
+  border: 1px solid var(--auth-field-border);
+  border-radius: 12px;
+}
+
+.al-tab {
+  height: var(--al-tab-h);
+  border: none;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--auth-ink-muted);
+  font-family: var(--font-body);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, box-shadow 0.15s;
+}
+
+.al-tab:hover { color: var(--auth-ink); }
+
+.al-tab[aria-selected="true"] {
+  background: var(--auth-surface);
+  color: var(--auth-ink);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.14);
+}
+
+.al-tab:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--auth-accent-ring); }
+.al-tab:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.al-title {
+  font-family: var(--font-heading);
+  font-size: var(--al-title-size);
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+  color: var(--auth-ink);
+  margin: 0 0 var(--al-gap-md);
+}
+
+.al-sub {
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--auth-ink-muted);
+  margin: calc(var(--al-gap-sm) * -0.7) 0 var(--al-gap-md);
+}
+
+/* Log in stays short enough for one screen: the title says enough, the sub-line is for sign-up only */
+.auth-landing:not(.is-signup) .al-sub { display: none; }
+
+.al-form { gap: var(--al-gap-sm); }
+
+.al-section {
+  margin: var(--al-gap-xs) 0 -2px;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--auth-ink-muted);
+}
+
+.auth-mode-row[hidden],
+.al-section[hidden],
+.al-hint[hidden],
+.al-terms[hidden] {
+  display: none;
+}
+
+.al-hint {
+  margin: -4px 2px 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--auth-ink-muted);
+}
+
+/* Fields inside the start screen: sentence-case labels, roomier boxes */
+.auth-landing .auth-field-box {
+  padding: var(--al-field-pad) 14px calc(var(--al-field-pad) + 1px);
+  border-radius: 12px;
+}
+
+.auth-landing .auth-field-label {
+  font-size: 12px;
+  letter-spacing: 0;
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+
+.auth-landing .auth-field-input {
+  font-size: 15.5px;
+}
+
+.auth-landing .auth-dialog-submit-btn,
+.auth-landing .auth-google-continue-btn {
+  height: var(--al-btn-h);
+  border-radius: 12px;
+}
+
+.auth-landing .auth-dialog-submit-btn {
+  margin-top: 2px;
+  box-shadow: 0 6px 16px -6px var(--auth-accent);
+}
+
+.auth-landing .auth-forgot-row { margin: -2px 0 0; }
+
+/* Password rules as compact chips */
+.auth-landing .auth-rules {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: -2px 0 0;
+}
+
+.auth-landing .auth-rules[hidden] { display: none; }
+
+.auth-landing .auth-rules li {
+  padding: 4px 10px 4px 8px;
+  border: 1px solid var(--auth-field-border);
+  border-radius: 999px;
+  font-size: 12px;
+}
+
+.auth-landing .auth-rules li.is-met {
+  border-color: transparent;
+  background: rgba(22, 163, 74, 0.12);
+}
+
+/* Status sits right above the button, where the guardian is looking */
+.auth-landing .auth-status { margin: 0; }
+.auth-landing .auth-turnstile-below { margin: 2px 0 0; }
+.auth-landing .auth-dialog-divider { margin: var(--al-gap-sm) 0; }
+
+.al-terms {
+  margin: 2px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  text-align: center;
+  color: var(--auth-ink-muted);
+}
+
+.al-terms a {
+  color: var(--auth-ink);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  font-weight: 500;
+}
+
+.al-terms a:hover { color: var(--auth-accent); }
+.al-terms[data-signin-only] { margin-top: var(--al-gap-sm); }
+
+.al-guest {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 6px;
+  margin-top: var(--al-gap-sm);
+  padding-top: var(--al-gap-sm);
+  border-top: 1px solid var(--auth-border);
+  font-size: 13.5px;
+  color: var(--auth-ink-muted);
+}
+
+.al-guest-btn {
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--auth-accent);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.al-guest-btn:hover { color: var(--auth-accent-hover); }
+.al-guest-btn:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--auth-accent-ring); border-radius: 4px; }
+
+/* --- Tablets and phones: single column, brand panel hidden --- */
+@media (max-width: 900px) {
+  .auth-landing { padding: 16px 12px; }
+
+  .al-shell {
+    max-width: 460px;
+    grid-template-columns: minmax(0, 1fr);
+    border-radius: 20px;
+  }
+
+  .al-aside { display: none; }
+  .al-brand-mobile { display: flex; }
+  .al-main { padding: 28px 22px 24px; }
+  .al-main-inner { max-width: none; }
+}
+
+@media (max-width: 400px) {
+  .auth-landing { padding: 10px 8px; }
+  .al-main { padding: 24px 16px 20px; }
+  .al-title { font-size: 23px; }
+  .auth-name-row { grid-template-columns: 1fr; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .al-tab, .al-close { transition: none; }
+}
+
+
+/* --- Admin glue: tokens the owner app defines globally, and a few admin-specific tweaks --- */
+#admin-login-screen {
+  --font-body: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-heading: 'Outfit', 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --primary: #c2410c;
+  z-index: 3000;
+}
+
+/* The owner start screen hides the subtitle on Log in; the admin panels need it */
+#admin-login-screen .al-sub { display: block; }
+#admin-login-screen .admin-login-panel { display: flex; flex-direction: column; gap: var(--al-gap-sm); }
+#admin-login-screen .admin-login-panel[hidden] { display: none; }
+#admin-login-screen .auth-turnstile { display: block; width: 100%; min-height: 65px; }
+#admin-login-screen .auth-turnstile > div { width: 100% !important; }
+#admin-login-screen .auth-status { margin-top: var(--al-gap-sm); text-align: center; }
+#admin-login-screen .al-tabs[hidden] { display: none; }
+#admin-login-screen input[type="date"].auth-field-input { min-height: 22px; font-family: var(--font-body); color-scheme: light; }
+#admin-login-screen .al-terms .auth-text-btn { font-size: inherit; }

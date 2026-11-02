@@ -61,6 +61,8 @@ class PetsView {
       const { data: pets, error } = await client
         .from('registered_pets')
         .select('id, name, species, breed, gender, color, age_months, status, nfc_tag, photo_url, registered_on, created_at, description')
+        // Only this account's pets: an account that is also an approved admin can read every pet through RLS
+        .eq('owner_id', session.session.user.id)
         .order('created_at', { ascending: false });
       if (error) throw new Error(error.message);
 

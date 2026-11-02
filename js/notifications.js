@@ -184,7 +184,7 @@ class NotificationManager {
           cardClass += ' unread-standard';
         }
 
-        const iconLetter = isFoundMatch ? 'F' : n.type === 'impound_alert' ? 'S' : n.type === 'reunited' ? 'R' : 'A';
+        const iconLetter = isFoundMatch ? 'F' : n.type === 'impound_alert' ? 'S' : n.type === 'reunited' ? 'R' : (n.type === 'comment' || n.type === 'reply') ? 'C' : n.type === 'like' ? 'L' : 'A';
         const iconBg = isRead 
           ? 'rgba(255, 255, 255, 0.08)' 
           : isFoundMatch 
@@ -257,6 +257,10 @@ class NotificationManager {
 
     if (notif.caseId) {
       this.openReunionCase(notif.caseId);
+    } else if (notif.postId && (notif.type === 'comment' || notif.type === 'reply' || notif.type === 'like')) {
+      // A comment, reply or like on a post: open the sightings feed at that post (comments showing, the comment highlighted)
+      window.location.hash = '#sightings';
+      setTimeout(() => { if (window.sightingsView) window.sightingsView.openPostComments(notif.postId, notif.postKind, notif.commentId); }, 350);
     } else if (notif.claimId && window.sightingsView) {
       window.sightingsView.openClaimDetail(notif.claimId);
     } else if (notif.type === 'sighting_verification' || notif.sightingId) {

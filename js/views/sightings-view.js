@@ -5,6 +5,10 @@
  * incident map, and owner verification modal.
  */
 
+const REACTION_KEYS = ['like', 'love', 'haha', 'wow', 'sad', 'angry'];
+const REACTION_EMOJI = { like: '👍', love: '❤️', haha: '😂', wow: '😮', sad: '😢', angry: '😡' };
+const REACTION_LABELS = { like: 'Like', love: 'Love', haha: 'Haha', wow: 'Wow', sad: 'Sad', angry: 'Angry' };
+
 class SightingsView {
   constructor() {
     this.currentFilter = 'all';      // 'all' | 'possible' | 'confirmed' | 'archived' | 'reunited'
@@ -355,17 +359,56 @@ class SightingsView {
       s.__assumed = !(linked || breed === 'Breed not specified');
     }
 
+    // Comments are threads: a top-level comment, then its replies (a reply to a reply stays in the same thread)
+    const canReact = !!(me.id && social);
+    const target = this.replyTarget && this.replyTarget.postId === s.id ? this.replyTarget : null;
+    const reactionBar = (c) => {
+      const r = store.getReactions(c.id);
+      const summary = r.total ? `<span class="spost-rsummary" title="${this._esc(r.top.map((k) => `${REACTION_LABELS[k]}: ${r.byType[k]}`).join(', '))}">${r.top.slice(0, 3).map((k) => REACTION_EMOJI[k]).join('')}<b>${r.total}</b></span>` : '';
+      const mineLabel = r.mine ? REACTION_LABELS[r.mine] : 'Like';
+      const picker = REACTION_KEYS.map((k) => `<button type="button" class="spost-rpick${r.mine === k ? ' is-mine' : ''}" data-feed="reactpick" data-cid="${this._esc(c.id)}" data-reaction="${k}" title="${REACTION_LABELS[k]}" aria-label="${REACTION_LABELS[k]}">${REACTION_EMOJI[k]}</button>`).join('');
+      const react = canReact ? `<span class="spost-react">
+            <button type="button" class="spost-link spost-rbtn${r.mine ? ' is-mine' : ''}" data-feed="react" data-cid="${this._esc(c.id)}" aria-pressed="${r.mine ? 'true' : 'false'}">${r.mine ? REACTION_EMOJI[r.mine] + ' ' : ''}${this._esc(mineLabel)}</button>
+            <span class="spost-picker" role="group" aria-label="Choose a reaction">${picker}</span>
+          </span>` : '';
+      return { summary, react };
+    };
+    const commentHtml = (c, isReply) => {
+      const bar = reactionBar(c);
+      const mention = c.reply_to_name && c.reply_to_id && c.reply_to_id !== c.parent_id ? `<span class="spost-mention">${this._esc(c.reply_to_name)}</span> ` : '';
+      const mine = me.id && c.user_id === me.id;
+      return `
+          <div class="spost-comment${isReply ? ' is-reply' : ''}" data-comment="${this._esc(c.id)}">
+            ${this._avatar(c.author_name, 'sm', c.author_avatar || (mine ? me.picture : ''))}
+            <div class="spost-cbody">
+              <div class="spost-bubble">
+                <strong>${this._esc(c.author_name || 'A PawTrack guardian')}</strong>
+                <p>${mention}${this._esc(c.body)}</p>
+                ${bar.summary}
+              </div>
+              <small class="spost-cmeta">${this._esc(this._timeAgo(c.created_at))}${bar.react ? ' · ' + bar.react : ''}${canReact ? ` · <button type="button" class="spost-link" data-feed="reply" data-cid="${this._esc(c.id)}">Reply</button>` : ''}${mine ? ` · <button type="button" class="spost-link" data-feed="delcomment" data-cid="${this._esc(c.id)}">Delete</button>` : ''}</small>
+            </div>
+          </div>`;
+    };
+    const replyForm = (threadId) => target && target.threadId === threadId ? `
+          <form class="spost-compose spost-reply-compose" data-sid="${this._esc(s.id)}" data-kind="${missing ? 'missing' : 'sighting'}" data-reply-to="${this._esc(target.commentId)}">
+            ${this._avatar(me.name || 'You', 'sm', me.picture)}
+            <input type="text" maxlength="500" placeholder="Reply to ${this._esc(target.name)}..." aria-label="Write a reply" autocomplete="off" />
+            <button type="submit" class="btn btn-primary btn-sm" aria-label="Send reply"><i data-lucide="send"></i></button>
+            <button type="button" class="spost-link spost-cancel" data-feed="cancelreply" aria-label="Cancel reply">Cancel</button>
+          </form>` : '';
+    const tops = comments.filter((c) => !c.parent_id);
+    const threadsHtml = tops.map((c) => {
+      const replies = comments.filter((r) => r.parent_id === c.id);
+      return `<div class="spost-thread">
+          ${commentHtml(c, false)}
+          ${replies.length || (target && target.threadId === c.id) ? `<div class="spost-replies">${replies.map((r) => commentHtml(r, true)).join('')}${replyForm(c.id)}</div>` : ''}
+        </div>`;
+    }).join('');
+
     const commentsHtml = open ? `
       <div class="spost-comments">
-        ${comments.map((c) => `
-          <div class="spost-comment">
-            ${this._avatar(c.author_name, 'sm', c.author_avatar || (me.id && c.user_id === me.id ? me.picture : ''))}
-            <div class="spost-bubble">
-              <strong>${this._esc(c.author_name || 'A PawTrack guardian')}</strong>
-              <p>${this._esc(c.body)}</p>
-              <small>${this._esc(this._timeAgo(c.created_at))}${me.id && c.user_id === me.id ? ` · <button type="button" class="spost-link" data-feed="delcomment" data-cid="${this._esc(c.id)}">Delete</button>` : ''}</small>
-            </div>
-          </div>`).join('') || '<p class="spost-nocomments">No comments yet. Be the first to comment.</p>'}
+        ${threadsHtml || '<p class="spost-nocomments">No comments yet. Be the first to comment.</p>'}
         ${me.id && social ? `<form class="spost-compose" data-sid="${this._esc(s.id)}" data-kind="${missing ? 'missing' : 'sighting'}">
             ${this._avatar(me.name || 'You', 'sm', me.picture)}
             <input type="text" maxlength="500" placeholder="Write a comment..." aria-label="Write a comment" autocomplete="off" />
@@ -469,6 +512,7 @@ class SightingsView {
     if (!this.container || this.container.__feedBound) return;
     this.container.__feedBound = true;
     this.openComments = this.openComments || new Set();
+    this._bindReactionLongPress();
 
     document.addEventListener('click', (e) => {
       if (e.target.closest && e.target.closest('.spost-more')) return;
@@ -519,7 +563,26 @@ class SightingsView {
       } else if (act === 'archive') {
         this.archiveSighting(id);
       } else if (act === 'delcomment') {
+        if (this.replyTarget && this.replyTarget.postId === id) this.replyTarget = null;
         if (await window.pawStore.deleteComment(id, btn.dataset.cid)) this._redrawPost(id);
+      } else if (act === 'reply') {
+        // Replies sit under the top-level comment, so a reply to a reply opens the same thread
+        const list = window.pawStore.getComments(id);
+        const c = list.find((x) => x.id === btn.dataset.cid);
+        if (!c) return;
+        this.replyTarget = { postId: id, commentId: c.id, threadId: c.parent_id || c.id, name: c.author_name || 'this comment' };
+        this.openComments.add(id);
+        this._redrawPost(id)?.querySelector('.spost-reply-compose input')?.focus();
+      } else if (act === 'cancelreply') {
+        this.replyTarget = null;
+        this._redrawPost(id);
+      } else if (act === 'react' || act === 'reactpick') {
+        // Tap Like to like or unlike; the picker (hover, or long-press on a phone) chooses another reaction
+        if (this._pickerOpened && act === 'react') { this._pickerOpened = false; return; }
+        btn.disabled = true;
+        const reaction = act === 'react' ? (window.pawStore.getReactions(btn.dataset.cid).mine || 'like') : btn.dataset.reaction;
+        await window.pawStore.toggleReaction(btn.dataset.cid, reaction);
+        this._redrawPost(id);
       }
     });
 
@@ -532,15 +595,66 @@ class SightingsView {
       if (!body) return;
       const sid = form.dataset.sid;
       form.querySelector('button').disabled = true;
-      const res = await window.pawStore.addComment(sid, body, form.dataset.kind);
+      const replyTo = form.dataset.replyTo || null;
+      const res = await window.pawStore.addComment(sid, body, form.dataset.kind, replyTo);
       if (!res.ok) {
-        window.notifManager?.showToast(res.error || 'Could not post your comment.', 'danger', 4500);
+        window.notifManager?.showToast(res.error || (replyTo ? 'Could not post your reply.' : 'Could not post your comment.'), 'danger', 4500);
         form.querySelector('button').disabled = false;
         return;
       }
       this.openComments.add(sid);
-      this._redrawPost(sid)?.querySelector('.spost-compose input')?.focus();
+      if (replyTo) this.replyTarget = null;
+      this._redrawPost(sid)?.querySelector('.spost-compose:not(.spost-reply-compose) input')?.focus();
     });
+  }
+
+  // Phones have no hover: holding the Like button opens the reaction picker
+  _bindReactionLongPress() {
+    if (!this.container || this.container.__pressBound) return;
+    this.container.__pressBound = true;
+    let timer = null;
+    const clear = () => { clearTimeout(timer); timer = null; };
+    this.container.addEventListener('pointerdown', (e) => {
+      const btn = e.target.closest && e.target.closest('.spost-rbtn');
+      if (!btn || e.pointerType === 'mouse') return;
+      clear();
+      timer = setTimeout(() => {
+        this.container.querySelectorAll('.spost-react.is-open').forEach((w) => w.classList.remove('is-open'));
+        btn.closest('.spost-react')?.classList.add('is-open');
+        this._pickerOpened = true;
+      }, 450);
+    });
+    ['pointerup', 'pointercancel', 'pointerleave', 'scroll'].forEach((ev) => this.container.addEventListener(ev, clear, true));
+    document.addEventListener('click', (e) => {
+      if (e.target.closest && e.target.closest('.spost-react')) return;
+      this.container?.querySelectorAll('.spost-react.is-open').forEach((w) => w.classList.remove('is-open'));
+    });
+  }
+
+  // From a notification about a comment or reply: show the feed with that post's comments open, and scroll to it
+  async openPostComments(postId, kind, commentId) {
+    if (!postId) return;
+    const store = window.pawStore;
+    this.openComments = this.openComments || new Set();
+    this.openComments.add(postId);
+    this.replyTarget = null;
+    this.currentFilter = 'all';
+    this.searchQuery = '';
+    this.selectedCommunity = 'all';
+    // Everything is loaded so the post is in the list wherever it sits
+    this.feedLimit = 100000;
+    this.refresh();
+    await store.loadSocial();
+    this.refresh();
+    const find = () => document.querySelector(`.spost[data-post="${CSS.escape(String(postId))}"]`);
+    let post = find();
+    for (let i = 0; i < 10 && !post; i++) { await new Promise((r) => setTimeout(r, 150)); post = find(); }
+    this.feedLimit = 5;
+    if (!post) { window.notifManager?.showToast('That post is no longer in the feed.', 'warning', 4000); return; }
+    const target = (commentId && post.querySelector(`[data-comment="${CSS.escape(String(commentId))}"]`)) || post;
+    target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    target.classList.add('is-flash');
+    setTimeout(() => target.classList.remove('is-flash'), 2600);
   }
 
   async _loadMyClaims() {

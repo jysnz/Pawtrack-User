@@ -78,6 +78,9 @@ const isDemoRecord = (x) => {
   });
 };
 
+const COMMENT_COLUMNS = 'id, sighting_id, missing_pet_id, user_id, author_name, author_avatar, body, created_at, parent_id, reply_to_id, reply_to_name';
+const LEGACY_COMMENT_COLUMNS = 'id, sighting_id, missing_pet_id, user_id, author_name, author_avatar, body, created_at';
+const REACTIONS = ['like', 'love', 'haha', 'wow', 'sad', 'angry'];
 const SEED_PETS = []; // no demo records: pets, reports and sightings come from real registrations
 
 const SEED_MISSING_REPORTS = []; // no demo records: pets, reports and sightings come from real registrations
@@ -226,7 +229,8 @@ class Store {
         sb.from('community_sightings').select('*').order('created_at', { ascending: false }).limit(500),
         sb.from('shelters').select('*').order('name'),
         sb.from('impounded_pets').select('*').order('intake_at', { ascending: false }).limit(200),
-        signedIn ? sb.from('registered_pets').select('*').order('created_at') : none,
+        // Filter by owner here too: an account that is also an approved admin can read every pet through RLS
+        signedIn ? sb.from('registered_pets').select('*').eq('owner_id', user.id).order('created_at') : none,
         // Only this person's own alerts: an approved admin could otherwise read everyone's
         signedIn ? sb.from('notifications').select('*').eq('recipient_id', user.id).order('created_at', { ascending: false }).limit(100) : none,
         sb.from('reunited_pets').select('*').order('reunited_at', { ascending: false }).limit(200),
@@ -428,6 +432,9 @@ class Store {
       finderNotes: (message.match(/Message: "([^"]*)"/) || [])[1] || '',
       claimId: n.sighting_claim_id || undefined, // set on pet-claim alerts: tapping one opens the claim
       caseId: n.reunion_case_id || undefined, // set on reunion alerts: tapping one opens the case
+      commentId: n.comment_id || undefined, // set on comment and reply alerts: tapping one opens that post's comments
+      postId: n.post_id || undefined,
+      postKind: n.post_kind || undefined,
       timestamp: n.created_at,
       read: !!n.is_read
     };
@@ -842,15 +849,63 @@ class Store {
   async loadSocial() {
     const sb = await this.waitForClient(5000);
     if (!sb) return this.social;
-    const [likes, comments] = await Promise.all([
+    const loadComments = (cols) => sb.from('sighting_comments').select(cols).order('created_at', { ascending: true }).limit(5000);
+    let [likes, comments, reactions] = await Promise.all([
       sb.from('sighting_likes').select('sighting_id, missing_pet_id, user_id').limit(5000),
-      sb.from('sighting_comments').select('id, sighting_id, missing_pet_id, user_id, author_name, author_avatar, body, created_at').order('created_at', { ascending: true }).limit(5000)
+      loadComments(this._legacyComments ? LEGACY_COMMENT_COLUMNS : COMMENT_COLUMNS),
+      sb.from('comment_reactions').select('comment_id, user_id, reaction').limit(20000)
     ]);
-    const social = { likes: {}, comments: {} };
+    // Until the replies migration is applied the new columns do not exist: keep comments working without them
+    if (comments.error && !this._legacyComments && /parent_id|reply_to/i.test(comments.error.message || '')) {
+      this._legacyComments = true;
+      comments = await loadComments(LEGACY_COMMENT_COLUMNS);
+    }
+    const social = { likes: {}, comments: {}, reactions: {} };
     (likes.data || []).forEach((l) => { const k = l.sighting_id || l.missing_pet_id; (social.likes[k] = social.likes[k] || []).push(l.user_id); });
     (comments.data || []).forEach((c) => { const k = c.sighting_id || c.missing_pet_id; (social.comments[k] = social.comments[k] || []).push(c); });
+    // A failed reactions request (the table is not there yet, say) leaves comments working without them
+    (reactions.data || []).forEach((r) => { (social.reactions[r.comment_id] = social.reactions[r.comment_id] || []).push({ user_id: r.user_id, reaction: r.reaction }); });
     this.social = social;
     return social;
+  }
+
+  // Reactions on one comment or reply: how many of each kind, the total, and the signed-in guardian's own
+  getReactions(commentId) {
+    const me = (this.getGoogleUser() || {}).id;
+    const list = ((this.social || {}).reactions || {})[commentId] || [];
+    const byType = {};
+    list.forEach((r) => { byType[r.reaction] = (byType[r.reaction] || 0) + 1; });
+    const mine = me ? (list.find((r) => r.user_id === me) || {}).reaction || null : null;
+    const top = Object.keys(byType).sort((a, b) => byType[b] - byType[a]);
+    return { total: list.length, byType, top, mine };
+  }
+
+  // Picks a reaction, changes it, or (choosing the same one again) takes it back. Shown at once; undone if refused.
+  async toggleReaction(commentId, reaction) {
+    const me = (this.getGoogleUser() || {}).id;
+    const sb = await this.waitForClient(5000);
+    if (!me || !sb || !this.isDbId(commentId) || !REACTIONS.includes(reaction)) return false;
+    this.social = this.social || { likes: {}, comments: {}, reactions: {} };
+    this.social.reactions = this.social.reactions || {};
+    const list = this.social.reactions[commentId] = this.social.reactions[commentId] || [];
+    const existing = list.find((r) => r.user_id === me);
+    const before = existing ? existing.reaction : null;
+    const removing = before === reaction;
+    const apply = (value) => {
+      const row = list.find((r) => r.user_id === me);
+      if (!value) { if (row) list.splice(list.indexOf(row), 1); return; }
+      if (row) row.reaction = value; else list.push({ user_id: me, reaction: value });
+    };
+    apply(removing ? null : reaction);
+    const res = removing
+      ? await sb.from('comment_reactions').delete().eq('comment_id', commentId).eq('user_id', me)
+      : await sb.from('comment_reactions').upsert({ comment_id: commentId, user_id: me, reaction }, { onConflict: 'comment_id,user_id' });
+    if (res.error) {
+      apply(before);
+      this.dbError('Could not save your reaction', res.error);
+      return false;
+    }
+    return true;
   }
 
   getLikes(sightingId) {
@@ -884,14 +939,19 @@ class Store {
     return true;
   }
 
-  async addComment(sightingId, body, kind = 'sighting') {
+  // replyToId: the comment (or reply) being answered. The database works out the top-level parent from it.
+  async addComment(sightingId, body, kind = 'sighting', replyToId = null) {
     const col = kind === 'missing' ? 'missing_pet_id' : 'sighting_id';
     const sb = await this.waitForClient(5000);
     if (!sb || !this.isDbId(sightingId)) return { ok: false, error: 'This report is not saved online yet.' };
-    const { data, error } = await sb.from('sighting_comments').insert({ [col]: sightingId, body: String(body || '').trim() })
-      .select('id, sighting_id, missing_pet_id, user_id, author_name, author_avatar, body, created_at').single();
+    const row = { [col]: sightingId, body: String(body || '').trim() };
+    if (replyToId && this.isDbId(replyToId)) {
+      if (this._legacyComments) return { ok: false, error: 'Replies are not available yet.' };
+      row.reply_to_id = replyToId;
+    }
+    const { data, error } = await sb.from('sighting_comments').insert(row).select(this._legacyComments ? LEGACY_COMMENT_COLUMNS : COMMENT_COLUMNS).single();
     if (error) return { ok: false, error: error.message };
-    this.social = this.social || { likes: {}, comments: {} };
+    this.social = this.social || { likes: {}, comments: {}, reactions: {} };
     (this.social.comments[sightingId] = this.social.comments[sightingId] || []).push(data);
     return { ok: true };
   }
@@ -902,8 +962,10 @@ class Store {
     const { error } = await sb.from('sighting_comments').delete().eq('id', commentId);
     if (error) { this.dbError('Could not delete the comment', error); return false; }
     const list = ((this.social || {}).comments || {})[sightingId] || [];
-    const i = list.findIndex((c) => c.id === commentId);
-    if (i !== -1) list.splice(i, 1);
+    // Replies go with their comment (the database removes them too)
+    const gone = new Set([commentId, ...list.filter((c) => c.parent_id === commentId).map((c) => c.id)]);
+    for (let i = list.length - 1; i >= 0; i--) if (gone.has(list[i].id)) list.splice(i, 1);
+    gone.forEach((id) => { if (this.social && this.social.reactions) delete this.social.reactions[id]; });
     return true;
   }
 

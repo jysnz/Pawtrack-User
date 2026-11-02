@@ -113,8 +113,15 @@ const server = http.createServer((req, res) => {
 
   // API 2: Full State Sync (GET)
   // Static File Serving
+  // Admin console lives at /admin (trailing slash keeps its relative asset paths working)
+  if (parsedUrl === '/admin') {
+    res.writeHead(301, { Location: '/admin/' + (req.url.includes('?') ? req.url.slice(req.url.indexOf('?')) : '') });
+    res.end();
+    return;
+  }
+
   let safeUrl = parsedUrl;
-  if (safeUrl === '/') safeUrl = '/index.html';
+  if (safeUrl.endsWith('/')) safeUrl += 'index.html';
 
   const filePath = path.join(PUBLIC_DIR, safeUrl);
 

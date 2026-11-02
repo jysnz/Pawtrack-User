@@ -10275,3 +10275,41 @@ html[data-theme="light"] .gmap-layer-btn-light { display: none; }
 .spost-meta svg { width: 12px; height: 12px; margin-right: 7px; color: var(--primary); flex: none; }
 .spost-meta span + span::before { content: ''; display: inline-block; width: 1px; height: 11px; margin: 0 9px; background: var(--border-glass, currentColor); opacity: 0.7; vertical-align: -1px; }
 .spost-tags { display: none; }
+
+/* =====================================================================
+   Comment threads: replies and reactions (sightings feed)
+   ===================================================================== */
+.spost-thread { display: grid; gap: 8px; }
+.spost-cbody { min-width: 0; flex: 1; }
+.spost-bubble { display: inline-block; max-width: 100%; }
+.spost-cmeta { display: block; margin: 3px 0 0 12px; color: var(--text-muted); font-size: 0.72rem; }
+.spost-cmeta .spost-link { font-size: 0.72rem; font-weight: 600; color: var(--text-muted); }
+.spost-cmeta .spost-link:hover { color: var(--primary); }
+.spost-replies { display: grid; gap: 8px; margin-left: 20px; padding-left: 12px; border-left: 2px solid var(--border-subtle); }
+.spost-mention { color: var(--primary); font-weight: 700; }
+
+.spost-rsummary { display: inline-flex; align-items: center; gap: 3px; margin-left: 6px; padding: 0 7px; border-radius: 999px; border: 1px solid var(--border-subtle); background: var(--bg-surface, transparent); font-size: 0.72rem; line-height: 1.6; vertical-align: middle; }
+.spost-rsummary b { font-weight: 600; color: var(--text-muted); }
+
+.spost-react { position: relative; display: inline-block; }
+.spost-cmeta .spost-rbtn.is-mine { color: var(--primary); font-weight: 700; }
+.spost-picker { position: absolute; left: -8px; bottom: calc(100% - 2px); z-index: 20; display: none; gap: 2px; padding: 5px 8px; border-radius: 999px; border: 1px solid var(--border-subtle); background: var(--bg-surface-elevated); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28); white-space: nowrap; }
+.spost-react:hover .spost-picker,
+.spost-react:focus-within .spost-picker,
+.spost-react.is-open .spost-picker { display: inline-flex; }
+.spost-rpick { padding: 2px 4px; border: none; border-radius: 50%; background: none; font-size: 1.35rem; line-height: 1.2; cursor: pointer; transition: transform 0.12s ease; }
+.spost-rpick:hover { transform: scale(1.3) translateY(-2px); }
+.spost-rpick.is-mine { background: color-mix(in srgb, var(--primary) 22%, transparent); }
+
+.spost-reply-compose { margin-top: 2px; }
+.spost-reply-compose .spost-cancel { flex: none; font-size: 0.78rem; color: var(--text-muted); }
+
+.spost.is-flash, .spost-comment.is-flash { animation: spostFlash 2.4s ease; }
+.spost-comment.is-flash .spost-bubble { animation: spostFlashBg 2.4s ease; }
+@keyframes spostFlash { 0%, 60% { box-shadow: 0 0 0 3px var(--primary); } 100% { box-shadow: 0 0 0 0 transparent; } }
+@keyframes spostFlashBg { 0%, 60% { background: color-mix(in srgb, var(--primary) 28%, var(--bg-surface-elevated)); } 100% { background: var(--bg-surface-elevated); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .spost.is-flash, .spost-comment.is-flash, .spost-comment.is-flash .spost-bubble { animation: none; }
+  .spost-rpick { transition: none; }
+}
