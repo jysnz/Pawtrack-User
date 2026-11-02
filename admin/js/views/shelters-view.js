@@ -145,10 +145,16 @@ window.SheltersView = {
       <div class="facilities-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 14px;">
         ${displayShelters.length === 0 ? `
           <div class="nock-card" style="grid-column: 1 / -1; text-align: center; padding: 48px 24px; color: var(--ink-muted);">
-            <div style="font-weight: 700; color: var(--ink-primary); font-size: 14px; margin-bottom: 4px;">No Shelter Facilities Match Criteria</div>
-            <div style="font-size: 12px; max-width: 420px; margin: 0 auto; line-height: 1.5; color: var(--ink-muted);">
-              ${this.searchQuery ? `No records matched "${this.searchQuery}". Try clearing the search filter.` : 'No shelter facilities found under this filter.'}
-            </div>
+            ${shelters.length === 0 ? `
+              <div style="font-weight: 700; color: var(--ink-primary); font-size: 15px; margin-bottom: 4px;">No impound facility yet</div>
+              <div style="font-size: 12px; max-width: 420px; margin: 0 auto 14px; line-height: 1.5; color: var(--ink-muted);">Facilities are stored in the database. Add the first shelter or pound and it will appear here, in the Shelter Terminal and in Impoundments.</div>
+              <button class="btn btn-primary btn-sm" id="btn-add-shelter-empty">Add a shelter</button>
+            ` : `
+              <div style="font-weight: 700; color: var(--ink-primary); font-size: 14px; margin-bottom: 4px;">No Shelter Facilities Match Criteria</div>
+              <div style="font-size: 12px; max-width: 420px; margin: 0 auto; line-height: 1.5; color: var(--ink-muted);">
+                ${this.searchQuery ? `No records matched "${this.searchQuery}". Try clearing the search filter.` : 'No shelter facilities found under this filter.'}
+              </div>
+            `}
           </div>
         ` : displayShelters.map(sh => {
           const capPercent = Math.round(((sh.occupied || 0) / (sh.capacity || 50)) * 100);
@@ -267,6 +273,7 @@ window.SheltersView = {
     });
 
     // Add Shelter Button
+    container.querySelector('#btn-add-shelter-empty')?.addEventListener('click', () => this.openShelterModal(null));
     container.querySelector('#btn-add-shelter')?.addEventListener('click', () => {
       this.openShelterModal(null);
     });
@@ -305,7 +312,23 @@ window.SheltersView = {
     });
   },
 
-  openShelterModal(initial = null) {
+  // Looks up the coordinates of an address with Google (null when unavailable)
+  async geocodeAddress(address) {
+    try {
+      if (!window.PawGoogleMaps || !(await window.PawGoogleMaps.isConfigured())) return null;
+      const timeout = new Promise(resolve => setTimeout(() => resolve(null), 6000));
+      const lookup = (async () => {
+        await window.PawGoogleMaps.load();
+        const { Geocoder } = await google.maps.importLibrary('geocoding');
+        const { results } = await new Geocoder().geocode({ address, region: 'PH' });
+        const loc = results && results[0] && results[0].geometry.location;
+        return loc ? { lat: loc.lat(), lng: loc.lng() } : null;
+      })().catch(() => null);
+      return await Promise.race([lookup, timeout]);
+    } catch (e) { return null; }
+  },
+
+  openShelterModal(initial = null, opts = {}) {
     const isEdit = !!initial;
     const store = window.adminStore;
     const isPartner = initial ? initial.partnered === true : true;
@@ -345,7 +368,7 @@ window.SheltersView = {
 
           <div class="form-group form-full">
             <label class="form-label">City / Municipality Jurisdiction *</label>
-            <input type="text" class="form-control" name="city" value="${initial && initial.city ? initial.city : 'Quezon City (District 2)'}" placeholder="e.g. Quezon City (District 2), City of Manila, Pasig City" required />
+            <input type="text" class="form-control" name="city" value="${initial && initial.city ? initial.city : ''}" placeholder="e.g. Quezon City (District 2), City of Manila, Pasig City" required />
           </div>
 
           <div class="form-group form-full">
@@ -355,17 +378,17 @@ window.SheltersView = {
 
           <div class="form-group">
             <label class="form-label">Contact Phone</label>
-            <input type="text" class="form-control" name="phone" value="${initial ? initial.phone : '+63 (2) 8000-0000'}" />
+            <input type="text" class="form-control" name="phone" value="${initial ? initial.phone : ''}" placeholder="e.g. +63 (2) 8123-4567" />
           </div>
 
           <div class="form-group">
             <label class="form-label">Official Email</label>
-            <input type="email" class="form-control" name="email" value="${initial ? initial.email : 'animalcare@quezoncity.gov.ph'}" />
+            <input type="email" class="form-control" name="email" value="${initial ? initial.email : ''}" placeholder="e.g. shelter@city.gov.ph" />
           </div>
 
           <div class="form-group">
             <label class="form-label">Daily Holding Tariff</label>
-            <input type="text" class="form-control" name="fee" value="${initial ? initial.fee : 'PHP 500 / day'}" />
+            <input type="text" class="form-control" name="fee" value="${initial ? initial.fee : ''}" placeholder="e.g. PHP 500 / day" />
           </div>
 
           <div class="form-group">
@@ -375,12 +398,12 @@ window.SheltersView = {
 
           <div class="form-group form-full">
             <label class="form-label">Operating Schedule</label>
-            <input type="text" class="form-control" name="hours" value="${initial ? initial.hours : 'Mon - Fri: 8:00 AM - 5:00 PM'}" />
+            <input type="text" class="form-control" name="hours" value="${initial ? initial.hours : ''}" placeholder="e.g. Mon - Fri: 8:00 AM - 5:00 PM" />
           </div>
 
           <div class="form-group form-full">
             <label class="form-label">Officer In Charge / Head Veterinarian</label>
-            <input type="text" class="form-control" name="officerInCharge" value="${initial && initial.officerInCharge ? initial.officerInCharge : 'Dr. Fernando Gomez, DVM'}" placeholder="e.g. Dr. Fernando Gomez, DVM" />
+            <input type="text" class="form-control" name="officerInCharge" value="${initial && initial.officerInCharge ? initial.officerInCharge : ''}" placeholder="Name of the officer or head veterinarian" placeholder="e.g. Dr. Fernando Gomez, DVM" />
           </div>
         </form>
       </div>
@@ -395,13 +418,23 @@ window.SheltersView = {
     modal.querySelector('#shelter-close-btn')?.addEventListener('click', () => window.adminApp.closeModal());
     modal.querySelector('#shelter-cancel-btn')?.addEventListener('click', () => window.adminApp.closeModal());
 
-    modal.querySelector('#shelter-save-btn')?.addEventListener('click', () => {
+    modal.querySelector('#shelter-save-btn')?.addEventListener('click', async () => {
       const form = modal.querySelector('#shelter-form');
       if (!form.checkValidity()) {
         form.reportValidity();
         return;
       }
+      const saveBtn = modal.querySelector('#shelter-save-btn');
+      saveBtn.disabled = true;
+      saveBtn.textContent = 'Saving…';
       const formData = new FormData(form);
+      const address = formData.get('address');
+
+      // Pin the facility on the map from its address; keep the old pin when editing without an address change
+      let coords = initial && initial.address === address && Number.isFinite(+initial.lat) ? { lat: +initial.lat, lng: +initial.lng } : null;
+      if (!coords) coords = await this.geocodeAddress(`${address}, ${formData.get('city') || ''}, Philippines`);
+      if (!coords && initial && Number.isFinite(+initial.lat)) coords = { lat: +initial.lat, lng: +initial.lng };
+      if (!coords) coords = { lat: 14.676, lng: 121.0437 }; // Quezon City centre when the address cannot be located
 
       const shelterData = {
         id: initial ? initial.id : 'sh-' + Date.now(),
@@ -409,7 +442,7 @@ window.SheltersView = {
         type: formData.get('type') || 'Municipal LGU Facility',
         city: formData.get('city') || 'Quezon City',
         partnered: formData.get('partnered') === 'true',
-        address: formData.get('address'),
+        address,
         phone: formData.get('phone'),
         email: formData.get('email'),
         fee: formData.get('fee'),
@@ -417,15 +450,19 @@ window.SheltersView = {
         occupied: initial ? initial.occupied : 0,
         hours: formData.get('hours'),
         officerInCharge: formData.get('officerInCharge') || '',
-        lat: initial ? initial.lat : 14.7118,
-        lng: initial ? initial.lng : 121.1037,
-        holdingPeriodDays: 3
+        lat: coords.lat,
+        lng: coords.lng,
+        holdingPeriodDays: initial && initial.holdingPeriodDays ? initial.holdingPeriodDays : 3
       };
 
-      store.saveShelter(shelterData);
       window.adminApp.closeModal();
       window.adminApp.showToast(`Saved facility "${shelterData.name}"`, 'success');
-      window.adminApp.renderView('shelters');
+      if (typeof opts.onCreated === 'function' && !isEdit) {
+        store.saveShelter(shelterData, opts.onCreated);
+      } else {
+        store.saveShelter(shelterData);
+        window.adminApp.renderView('shelters');
+      }
     });
   }
 };

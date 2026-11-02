@@ -617,9 +617,16 @@ html, body {
   color: var(--ink-muted);
 }
 
+/* Topbar greeting + live clock (left), search sits on the right */
+.topbar-greeting { min-width: 0; display: flex; flex-direction: column; justify-content: center; line-height: 1.2; }
+.topbar-greeting-hello { font-size: 14px; font-weight: 750; color: var(--ink-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.topbar-greeting-meta { font-size: 11px; color: var(--ink-muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.topbar-greeting-meta #topbar-clock-time { color: var(--brand-terracotta); font-weight: 700; font-family: var(--font-mono); }
+.topbar-greeting-dot { margin: 0 5px; }
+.nock-topbar .global-search-trigger { margin-left: auto; }
+
 /* Topbar Right Controls */
 .topbar-right {
-  margin-left: auto;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -1125,6 +1132,7 @@ body.auth-locked {
     max-width: 220px;
     min-width: 0;
   }
+  .topbar-greeting-meta #topbar-clock-date, .topbar-greeting-dot { display: none; }
 
   .view-viewport {
     flex: 1;

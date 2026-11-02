@@ -14,6 +14,25 @@
   <link rel="stylesheet" href="css/admin.css" />
   <link rel="stylesheet" href="css/components.css" />
   <link rel="stylesheet" href="css/auth-landing.css" />
+  <script>
+    /* A saved Supabase session means the page is about to resume signed in, so keep both the login form
+       and the half-loaded console hidden until the access check finishes (no login flash on reload). */
+    (function () {
+      try {
+        var resuming = false;
+        for (var i = 0; i < localStorage.length; i++) {
+          if (/^sb-.+-auth-token$/.test(localStorage.key(i))) { resuming = true; break; }
+        }
+        if (!resuming) return;
+        document.documentElement.classList.add('auth-resuming');
+        setTimeout(function () { document.documentElement.classList.remove('auth-resuming'); }, 8000);
+      } catch (e) {}
+    })();
+  </script>
+  <style>
+    html.auth-resuming #admin-login-screen,
+    html.auth-resuming #app-layout { visibility: hidden; }
+  </style>
 </head>
 <body>
   <div id="app-layout">
@@ -159,15 +178,6 @@
         <!-- Group 2: Operations -->
         <div class="nav-group">
           <div class="nav-group-label">Operations</div>
-          <div class="nav-item" data-route="cases">
-            <span class="nav-item-text">Cases &amp; Analytics</span>
-          </div>
-
-          <div class="nav-item" data-route="pets">
-            <span class="nav-item-text">Pet Registry</span>
-            <span class="nav-badge" id="badge-pets-count" style="display: none;"></span>
-          </div>
-
           <div class="nav-item" data-route="terminal">
             <span class="nav-item-text">Shelter Terminal</span>
           </div>
@@ -226,6 +236,11 @@
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 3v18"/><path d="m14 15 3-3-3-3"/></svg>
         </button>
 
+        <div class="topbar-greeting" aria-label="Greeting and current time">
+          <div class="topbar-greeting-hello" id="topbar-greeting-hello">Hello</div>
+          <div class="topbar-greeting-meta"><span id="topbar-clock-date"></span><span class="topbar-greeting-dot" aria-hidden="true">·</span><span id="topbar-clock-time"></span></div>
+        </div>
+
         <div class="global-search-trigger" id="global-search-trigger">
           <div class="search-placeholder">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
@@ -235,12 +250,6 @@
         </div>
 
         <div class="topbar-right">
-          <div class="live-sync-indicator" id="live-sync-indicator-badge" title="Data is syncing live with the Pet Owner App">
-            <span class="pulse-emerald" id="live-sync-indicator-dot"></span>
-            <span id="live-sync-indicator-text">Live</span>
-          </div>
-
-
           <!-- Super Admin Avatar Dropdown -->
           <div class="admin-user-menu-wrapper" id="admin-user-menu-wrapper">
             <div class="admin-avatar-btn" id="admin-avatar-trigger" title="Super Admin Account (Click for Menu)">
@@ -564,16 +573,16 @@
 
   <!-- Scripts -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="js/supabase-config.js"></script>
+  <script src="../js/google-maps.js"></script>
   <script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit" async defer></script>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
   <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
   <script src="js/admin-store.js"></script>
   <script src="js/views/activation-view.js"></script>
   <script src="js/views/heatmap-view.js"></script>
-  <script src="js/views/pets-view.js"></script>
   <script src="js/views/impoundments-view.js"></script>
-  <script src="js/views/cases-view.js"></script>
   <script src="js/views/breakdown-view.js"></script>
   <script src="js/views/shelters-view.js"></script>
   <script src="js/views/rfid-view.js"></script>

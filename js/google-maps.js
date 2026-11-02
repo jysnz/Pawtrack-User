@@ -39,7 +39,7 @@
       loading = (async () => {
         const { apiKey, mapId } = await readConfig();
         if (!apiKey) throw new Error('Google Maps is not configured. Set the GOOGLE_MAPS_API_KEY secret in Supabase.');
-        api.mapId = mapId || '';
+        api.mapId = String(mapId || '').replace(/^.*=/, '').trim();
 
         if (!(window.google && window.google.maps && window.google.maps.importLibrary)) {
           await new Promise((resolve, reject) => {

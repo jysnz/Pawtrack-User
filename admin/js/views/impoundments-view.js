@@ -249,6 +249,30 @@ window.ImpoundmentsView = {
     const pets = store.getPets();
     const shelters = store.getShelters();
 
+    if (shelters.length === 0) {
+      const empty = window.adminApp.openModalContent(`
+        <div class="modal-header">
+          <div class="nock-card-title">Log Animal Control Intake</div>
+          <button class="icon-btn-subtle" id="intake-empty-close">&times;</button>
+        </div>
+        <div class="modal-body" style="text-align: center; padding: 28px 8px;">
+          <div style="font-weight: 700; font-size: 15px; color: var(--ink-primary); margin-bottom: 6px;">No impound facility yet</div>
+          <div style="font-size: 12.5px; color: var(--ink-muted); line-height: 1.55; max-width: 380px; margin: 0 auto;">An intake has to be logged into a facility. Add a shelter first, then come back.</div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" id="intake-empty-cancel">Cancel</button>
+          <button class="btn btn-primary" id="intake-empty-add">Add a shelter</button>
+        </div>`);
+      empty.querySelector('#intake-empty-close')?.addEventListener('click', () => window.adminApp.closeModal());
+      empty.querySelector('#intake-empty-cancel')?.addEventListener('click', () => window.adminApp.closeModal());
+      empty.querySelector('#intake-empty-add')?.addEventListener('click', () => {
+        window.adminApp.closeModal();
+        window.location.hash = '#shelters';
+        setTimeout(() => window.SheltersView && window.SheltersView.openShelterModal(null), 150);
+      });
+      return;
+    }
+
     const modalHtml = `
       <div class="modal-header">
         <div class="nock-card-title">Log Animal Control Intake</div>

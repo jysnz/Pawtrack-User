@@ -1,22 +1,25 @@
 /**
  * PawTrack Admin — Missing Pet Breakdown & Segmentation
- * Who goes missing (species, breed, age), how impound cases end, and where reports come from
+ * Who goes missing (species, breed, age), how impound cases end, and where reports come from.
+ * Charts are plain SVG / CSS (no libraries) so they follow the admin theme.
  */
 
 window.BreakdownView = {
+  filter: 'all', // all | Dog | Cat | Other
+
   speciesMeta: {
-    Dog: { label: 'Dogs (Aso)', color: 'var(--brand-terracotta)' },
-    Cat: { label: 'Cats (Pusa)', color: 'var(--color-blue)' },
-    Other: { label: 'Other animals', color: 'var(--color-purple)' },
-    Unknown: { label: 'Not recorded', color: 'var(--ink-subtle)' }
+    Dog: { label: 'Dogs (Aso)', short: 'Dogs', color: 'var(--brand-terracotta)' },
+    Cat: { label: 'Cats (Pusa)', short: 'Cats', color: 'var(--color-blue)' },
+    Other: { label: 'Other animals', short: 'Other', color: 'var(--color-purple)' },
+    Unknown: { label: 'Not recorded', short: 'Unknown', color: 'var(--ink-subtle)' }
   },
 
   ageBrackets: [
-    { key: 'baby', label: 'Puppy / kitten (under 1 yr)', color: 'var(--color-amber)' },
-    { key: 'young', label: 'Young (1–3 yrs)', color: 'var(--brand-terracotta)' },
-    { key: 'adult', label: 'Adult (4–7 yrs)', color: 'var(--color-blue)' },
-    { key: 'senior', label: 'Senior (8+ yrs)', color: 'var(--color-purple)' },
-    { key: 'unknown', label: 'Age not recorded', color: 'var(--ink-subtle)' }
+    { key: 'baby', label: 'Under 1 yr', long: 'Puppy / kitten (under 1 yr)', color: 'var(--color-amber)' },
+    { key: 'young', label: '1–3 yrs', long: 'Young (1–3 yrs)', color: 'var(--brand-terracotta)' },
+    { key: 'adult', label: '4–7 yrs', long: 'Adult (4–7 yrs)', color: 'var(--color-blue)' },
+    { key: 'senior', label: '8+ yrs', long: 'Senior (8+ yrs)', color: 'var(--color-purple)' },
+    { key: 'unknown', label: 'Not recorded', long: 'Age not recorded', color: 'var(--ink-subtle)' }
   ],
 
   sourceMeta: [
@@ -59,18 +62,27 @@ window.BreakdownView = {
     return String(value).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   },
 
+  toTime(v) {
+    if (v == null || v === '') return null;
+    const t = typeof v === 'number' ? v : new Date(v).getTime();
+    return Number.isFinite(t) ? t : null;
+  },
+
   // One record per missing / found case, tagged with how it reached us.
   collectCases(store) {
     const pets = store.getPets();
     const petById = Object.fromEntries(pets.map(p => [p.id, p]));
+    const missingByPet = {};
+    (store.getCases ? store.getCases() : []).forEach(c => { if (c.petId) missingByPet[c.petId] = c; });
     const cases = [];
 
     pets.filter(p => p.status === 'lost' || p.status === 'reunited').forEach(p => {
-      cases.push({ source: 'self', species: p.species, breed: p.breed, age: p.age, identified: !!(p.microchipNo || p.rfidTag) });
+      const mc = missingByPet[p.id];
+      cases.push({ source: 'self', species: p.species, breed: p.breed, age: p.age, identified: !!(p.microchipNo || p.rfidTag), date: this.toTime(mc && mc.createdAt) });
     });
 
     store.getSightings().forEach(s => {
-      cases.push({ source: 'community', species: s.species, breed: s.breed, age: s.age, identified: !!(s.microchipNo || s.rfidTag) });
+      cases.push({ source: 'community', species: s.species, breed: s.breed, age: s.age, identified: !!(s.microchipNo || s.rfidTag), date: this.toTime(s.createdAt || s.timestamp) });
     });
 
     store.getImpoundments().forEach(i => {
@@ -80,35 +92,117 @@ window.BreakdownView = {
         species: i.species || pet.species,
         breed: i.breed || pet.breed,
         age: i.age || pet.age,
-        identified: !!(i.rfidTag || pet.microchipNo || pet.rfidTag)
+        identified: !!(i.rfidTag || pet.microchipNo || pet.rfidTag),
+        date: this.toTime(i.intakeDate)
       });
     });
 
     return cases;
   },
 
-  barRows(rows, total) {
-    return rows.map(r => {
-      const pct = total > 0 ? Math.round((r.count / total) * 100) : 0;
-      return `
-        <div class="breakdown-row">
-          <div class="breakdown-row-head">
-            <span class="breakdown-row-label">${this.esc(r.label)}${r.hint ? `<span class="breakdown-row-hint">${this.esc(r.hint)}</span>` : ''}</span>
-            <span class="breakdown-row-value"><b>${r.count}</b> · ${pct}%</span>
-          </div>
-          <div class="funnel-track"><div class="funnel-fill" style="width: ${pct}%; background: ${r.color};"></div></div>
-        </div>
-      `;
-    }).join('');
-  },
+  // ---------- Chart helpers ----------
 
   emptyState(text) {
     return `<div class="breakdown-empty">${text}</div>`;
   },
 
+  info(text) {
+    return `<span class="bd-info" tabindex="0" aria-label="${this.esc(text)}" title="${this.esc(text)}">i</span>`;
+  },
+
+  card(title, right, body, opts = {}) {
+    return `
+      <section class="nock-card bd-card ${opts.cls || ''}">
+        <div class="nock-card-head">
+          <span class="nock-card-title">${title}${opts.help ? this.info(opts.help) : ''}</span>
+          <span class="nock-card-right">${right || ''}</span>
+        </div>
+        ${body}
+      </section>`;
+  },
+
+  // rows: [{label, count, color, hint?}]. Ring with the total in the middle plus a legend.
+  donut(rows, centerLabel) {
+    const total = rows.reduce((a, r) => a + r.count, 0);
+    if (!total) return this.emptyState('Nothing to chart yet.');
+    let offset = 25; // start at 12 o'clock
+    const segs = rows.filter(r => r.count > 0).map(r => {
+      const pct = (r.count / total) * 100;
+      const seg = `<circle class="bd-donut-seg" cx="21" cy="21" r="15.9155" fill="none" stroke-width="5.5" style="stroke:${r.color}" stroke-dasharray="${Math.max(pct - 0.6, 0.1).toFixed(2)} ${(100 - pct + 0.6).toFixed(2)}" stroke-dashoffset="${offset.toFixed(2)}"><title>${this.esc(r.label)}: ${r.count} (${Math.round(pct)}%)</title></circle>`;
+      offset -= pct;
+      return seg;
+    }).join('');
+    return `
+      <div class="bd-donut-wrap">
+        <div class="bd-donut">
+          <svg viewBox="0 0 42 42" role="img" aria-label="${this.esc(centerLabel)} breakdown">
+            <circle cx="21" cy="21" r="15.9155" fill="none" stroke-width="5.5" class="bd-donut-track"/>
+            ${segs}
+          </svg>
+          <div class="bd-donut-center"><b>${total}</b><span>${this.esc(centerLabel)}</span></div>
+        </div>
+        <ul class="bd-legend">
+          ${rows.map(r => `
+            <li class="${r.count ? '' : 'is-zero'}">
+              <i style="background:${r.color}"></i>
+              <span class="bd-legend-label">${this.esc(r.label)}</span>
+              <span class="bd-legend-val"><b>${r.count}</b><em>${Math.round((r.count / total) * 100)}%</em></span>
+            </li>`).join('')}
+        </ul>
+      </div>`;
+  },
+
+  // Vertical columns. rows: [{label, count, color}]
+  columns(rows) {
+    const max = Math.max(...rows.map(r => r.count), 1);
+    const total = rows.reduce((a, r) => a + r.count, 0);
+    return `
+      <div class="bd-cols">
+        ${rows.map(r => `
+          <div class="bd-col" title="${this.esc(r.label)}: ${r.count} (${total ? Math.round(r.count / total * 100) : 0}%)">
+            <div class="bd-col-plot">
+              <span class="bd-col-val">${r.count || ''}</span>
+              <div class="bd-col-bar" style="height:${r.count ? Math.max((r.count / max) * 100, 4) : 0}%; background:${r.color}"></div>
+            </div>
+            <span class="bd-col-label">${this.esc(r.label)}</span>
+          </div>`).join('')}
+      </div>`;
+  },
+
+  // Horizontal progress rows. rows: [{label, count, color, hint?}]
+  hbars(rows, total) {
+    const max = Math.max(...rows.map(r => r.count), 1);
+    return `<div class="bd-hbars">${rows.map(r => {
+      const pct = total > 0 ? Math.round((r.count / total) * 100) : 0;
+      return `
+        <div class="bd-hbar">
+          <div class="bd-hbar-head">
+            <span>${this.esc(r.label)}${r.hint ? `<small>${this.esc(r.hint)}</small>` : ''}</span>
+            <span><b>${r.count}</b><em>${pct}%</em></span>
+          </div>
+          <div class="bd-track"><div class="bd-fill" style="width:${r.count ? Math.max((r.count / max) * 100, 3) : 0}%; background:${r.color}"></div></div>
+        </div>`;
+    }).join('')}</div>`;
+  },
+
+  kpi(label, value, sub, tone) {
+    return `
+      <div class="kpi-card bd-kpi">
+        <div class="kpi-label"><span>${label}</span></div>
+        <div class="kpi-value">${value}</div>
+        <div class="kpi-delta ${tone || 'neutral'}">${sub}</div>
+      </div>`;
+  },
+
+  // ---------- Render ----------
+
   render(container) {
+    this._container = container;
     const store = window.adminStore;
-    const cases = this.collectCases(store);
+    const allCases = this.collectCases(store);
+    const f = this.filter;
+    const inFilter = (species) => f === 'all' || this.normalizeSpecies(species) === f;
+    const cases = allCases.filter(c => inFilter(c.species));
     const total = cases.length;
 
     // --- Species & breed ---
@@ -127,8 +221,15 @@ window.BreakdownView = {
     const speciesRows = Object.entries(speciesCounts)
       .filter(([key, count]) => count > 0 || key === 'Dog' || key === 'Cat')
       .map(([key, count]) => ({ label: this.speciesMeta[key].label, color: this.speciesMeta[key].color, count }));
-    const topBreeds = Object.values(breedStats).sort((a, b) => b.count - a.count).slice(0, 6);
-    const topBreed = topBreeds[0];
+    const breeds = Object.values(breedStats).sort((a, b) => b.count - a.count);
+    const topBreeds = breeds.slice(0, 5);
+    const topBreed = breeds[0];
+    const topSpecies = Object.entries(speciesCounts).filter(([k]) => k !== 'Unknown').sort((a, b) => b[1] - a[1])[0];
+
+    // --- Identification ---
+    const identified = cases.filter(c => c.identified).length;
+    const unidentified = total - identified;
+    const unidentifiedPct = total ? Math.round((unidentified / total) * 100) : 0;
 
     // --- Age ---
     const ageCounts = Object.fromEntries(this.ageBrackets.map(b => [b.key, 0]));
@@ -136,117 +237,97 @@ window.BreakdownView = {
     const ageRows = this.ageBrackets.map(b => ({ label: b.label, color: b.color, count: ageCounts[b.key] }));
 
     // --- Outcome (impound cases) ---
-    const impoundments = store.getImpoundments();
-    const outcomes = window.IMPOUND_OUTCOMES;
+    const impoundments = store.getImpoundments().filter(i => inFilter(i.species));
+    const outcomes = window.IMPOUND_OUTCOMES || {};
     const closed = impoundments.filter(i => outcomes[i.status]);
     const stillHolding = impoundments.filter(i => i.status === 'active_impounded');
     const pastWindow = stillHolding.filter(i => new Date(i.claimDeadline).getTime() < Date.now()).length;
     const outcomeRows = Object.entries(outcomes).map(([status, meta]) => ({
-      label: meta.label,
-      color: meta.color,
-      count: closed.filter(i => i.status === status).length
+      label: meta.label, color: meta.color, count: closed.filter(i => i.status === status).length
     }));
+    const reunitedCount = closed.filter(i => i.status === 'claimed').length;
+    const reunitedPct = closed.length ? Math.round((reunitedCount / closed.length) * 100) : null;
 
     // --- Reporting source ---
     const sourceRows = this.sourceMeta.map(s => ({
-      label: s.label,
-      hint: s.hint,
-      color: s.color,
-      count: cases.filter(c => c.source === s.key).length
+      label: s.label, hint: s.hint, color: s.color, count: cases.filter(c => c.source === s.key).length
     }));
 
+    const chip = (key, label) => `<button class="${f === key ? 'active' : ''}" data-bd-filter="${key}" role="tab" aria-selected="${f === key}">${label}</button>`;
+    const filterLabel = f === 'all' ? 'all animals' : this.speciesMeta[f].short.toLowerCase();
+
     container.innerHTML = `
-      <div class="view-header">
-        <div class="view-header-titles">
-          <h1>Breakdown</h1>
-          <div class="subtitle">
-            <span>Which pets go missing, how impound cases end, and where reports come from</span>
+      <div class="bd-page dash-pro">
+        <div class="view-header">
+          <div class="view-header-titles">
+            <div class="dash-eyebrow bd-eyebrow">Insights</div>
+            <h1>Breakdown</h1>
+            <div class="subtitle"><span>Which pets go missing, how impound cases end, and where reports come from</span></div>
+          </div>
+          <div class="view-header-actions">
+            <div class="dash-segmented" role="tablist" aria-label="Filter by species">
+              ${chip('all', 'All')}${chip('Dog', 'Dogs')}${chip('Cat', 'Cats')}${chip('Other', 'Other')}
+            </div>
           </div>
         </div>
-        <div class="view-header-actions">
-          <span class="breakdown-total"><b>${total}</b> case${total === 1 ? '' : 's'} counted</span>
+
+        <div class="kpi-grid bd-kpis">
+          ${this.kpi('Cases counted', total, total ? `Showing ${filterLabel}` : 'No cases yet', 'neutral')}
+          ${this.kpi('Most affected', topSpecies && topSpecies[1] ? this.speciesMeta[topSpecies[0]].short : '—',
+            topSpecies && topSpecies[1] ? `${Math.round((topSpecies[1] / total) * 100)}% of cases` : 'No data', 'neutral')}
+          ${this.kpi('Without chip or tag', total ? `${unidentifiedPct}%` : '—',
+            total ? `${unidentified} of ${total} could not be identified` : 'No data', unidentifiedPct >= 50 ? 'down' : 'up')}
         </div>
-      </div>
 
-      <div class="breakdown-grid">
-        <!-- Species & Breed -->
-        <div class="nock-card">
-          <div class="nock-card-head">
-            <span class="nock-card-title">By species &amp; breed</span>
-            <span class="nock-card-right">${total} cases</span>
-          </div>
-          ${total === 0 ? this.emptyState('No missing, found or impounded pets recorded yet.') : `
-            <div class="funnel-list">${this.barRows(speciesRows, total)}</div>
+        <div class="bd-section-label">Who goes missing</div>
+        <div class="bd-grid">
+          ${this.card('Species', '',
+            total === 0 ? this.emptyState('No cases recorded yet.') : this.donut(speciesRows, 'cases'),
+            { cls: 'bd-span-6' })}
+          ${this.card('Age', ageCounts.unknown ? `${total - ageCounts.unknown} of ${total} have an age` : '',
+            total === 0 ? this.emptyState('No cases recorded yet.') : this.columns(ageRows.filter(r => r.label !== 'Not recorded')),
+            { cls: 'bd-span-6' })}
+        </div>
 
-            <div class="breakdown-subhead">Breeds that go missing most</div>
-            ${topBreeds.length === 0 ? this.emptyState('No breeds recorded on these cases.') : `
-              <table class="breakdown-table">
+        <div class="bd-section-label">How cases are handled</div>
+        <div class="bd-grid">
+          ${this.card('How impound cases end', closed.length ? `${closed.length} closed` : '',
+            closed.length === 0 ? this.emptyState('No impound cases have been closed yet.') : this.donut(outcomeRows, 'closed')
+              + (stillHolding.length > 0 ? `<div class="breakdown-note">${stillHolding.length} still in holding${pastWindow > 0 ? `, ${pastWindow} past the 72-hour window` : ''}.</div>` : ''),
+            { cls: 'bd-span-6' })}
+          ${this.card('Where reports come from', '',
+            total === 0 ? this.emptyState('No reports received yet.') : this.hbars(sourceRows, total),
+            { cls: 'bd-span-6' })}
+        </div>
+
+        <div class="bd-section-label">Where to focus</div>
+        <div class="bd-grid">
+          ${this.card('Breeds that go missing most', topBreeds.length ? `Top ${topBreeds.length}` : '',
+            topBreeds.length === 0 ? this.emptyState('No breeds recorded on these cases.') : `
+              <table class="breakdown-table bd-table">
                 <thead>
-                  <tr><th>Breed</th><th>Species</th><th style="text-align: right;">Cases</th><th style="text-align: right;">No chip / tag</th></tr>
+                  <tr><th>Breed</th><th class="bd-share-col"></th><th style="text-align:right">Cases</th><th style="text-align:right">No chip / tag</th></tr>
                 </thead>
                 <tbody>
                   ${topBreeds.map(b => `
                     <tr>
-                      <td>${this.esc(b.breed)}</td>
-                      <td>${this.speciesMeta[b.species].label}</td>
-                      <td style="text-align: right;"><b>${b.count}</b></td>
-                      <td style="text-align: right;">${Math.round((b.unidentified / b.count) * 100)}%</td>
-                    </tr>
-                  `).join('')}
+                      <td><b>${this.esc(b.breed)}</b><small class="bd-sub">${this.speciesMeta[b.species].short}</small></td>
+                      <td class="bd-share-col"><div class="bd-track"><div class="bd-fill" style="width:${Math.max((b.count / topBreeds[0].count) * 100, 4)}%; background:${this.speciesMeta[b.species].color}"></div></div></td>
+                      <td style="text-align:right"><b>${b.count}</b></td>
+                      <td style="text-align:right">${Math.round((b.unidentified / b.count) * 100)}%</td>
+                    </tr>`).join('')}
                 </tbody>
-              </table>
-              ${topBreed && topBreed.unidentified > 0 ? `
-                <div class="breakdown-note">
-                  ${topBreed.unidentified} of ${topBreed.count} missing ${this.esc(topBreed.breed)} cases had no microchip or RFID tag, a good target for the next microchipping drive.
-                </div>
-              ` : ''}
-            `}
-          `}
-        </div>
-
-        <!-- Age -->
-        <div class="nock-card">
-          <div class="nock-card-head">
-            <span class="nock-card-title">By age bracket</span>
-            <span class="nock-card-right">${total - ageCounts.unknown} with age recorded</span>
-          </div>
-          ${total === 0 ? this.emptyState('No cases to segment by age yet.') : `
-            <div class="funnel-list">${this.barRows(ageRows, total)}</div>
-            ${ageCounts.unknown > 0 ? `
-              <div class="breakdown-note">
-                Age is only known for registered pets and intakes where it was entered. Add it in the pet record or intake form to fill this in.
-              </div>
-            ` : ''}
-          `}
-        </div>
-
-        <!-- Outcome -->
-        <div class="nock-card">
-          <div class="nock-card-head">
-            <span class="nock-card-title">By outcome</span>
-            <span class="nock-card-right">${closed.length} closed impound case${closed.length === 1 ? '' : 's'}</span>
-          </div>
-          ${closed.length === 0 ? this.emptyState('No impound cases have been closed yet. Set the outcome from Impoundments → Edit.') : `
-            <div class="funnel-list">${this.barRows(outcomeRows, closed.length)}</div>
-          `}
-          ${stillHolding.length > 0 ? `
-            <div class="breakdown-note">
-              ${stillHolding.length} still in holding${pastWindow > 0 ? `, ${pastWindow} past the 72-hour window and awaiting a decision` : ''}.
-            </div>
-          ` : ''}
-        </div>
-
-        <!-- Reporting source -->
-        <div class="nock-card">
-          <div class="nock-card-head">
-            <span class="nock-card-title">By reporting source</span>
-            <span class="nock-card-right">${total} cases</span>
-          </div>
-          ${total === 0 ? this.emptyState('No reports received yet.') : `
-            <div class="funnel-list">${this.barRows(sourceRows, total)}</div>
-          `}
+              </table>`,
+            { cls: 'bd-span-12' })}
         </div>
       </div>
     `;
+
+    container.querySelectorAll('[data-bd-filter]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        this.filter = btn.getAttribute('data-bd-filter');
+        this.render(container);
+      });
+    });
   }
 };

@@ -29,225 +29,6 @@ const SEED_NOTIFICATIONS = [];
 const SEED_SIGHTINGS = [];
 const SEED_CASES = [];
 
-const SEED_SHELTERS = [
-  {
-    id: 'sh-qc-payatas',
-    name: 'Quezon City Animal Care & Adoption Facility',
-    type: 'Municipal LGU Facility',
-    city: 'Quezon City (District 2)',
-    address: 'Clemente St., Lupang Pangako, Payatas, Quezon City',
-    phone: '+63 (2) 8988-4242 loc 8036',
-    email: 'animalcare@quezoncity.gov.ph',
-    hours: 'Mon - Fri: 8:00 AM - 5:00 PM',
-    lat: 14.7118,
-    lng: 121.1037,
-    fee: 'PHP 500 / day',
-    holdingPeriodDays: 3,
-    capacity: 65,
-    occupied: 0,
-    partnered: true,
-    officerInCharge: 'Dr. Fernando Gomez, DVM'
-  },
-  {
-    id: 'sh-paws-qc',
-    name: 'PAWS Animal Rehabilitation Center (PARC)',
-    type: 'Non-Profit Animal Welfare Sanctuary',
-    city: 'Quezon City (District 3)',
-    address: 'Aurora Blvd. cor. Katipunan Ave., Loyola Heights, Quezon City',
-    phone: '+63 (2) 8475-1688',
-    email: 'philpaws@paws.org.ph',
-    hours: 'Mon - Sat: 10:00 AM - 5:00 PM',
-    lat: 14.6339,
-    lng: 121.0741,
-    fee: 'PHP 0 (NGO Shelter)',
-    holdingPeriodDays: 30,
-    capacity: 120,
-    occupied: 0,
-    partnered: true,
-    officerInCharge: 'Anna Cabrera, Executive Director'
-  },
-  {
-    id: 'sh-cara-mandaluyong',
-    name: 'CARA Welfare Philippines Rescue Clinic',
-    type: 'Non-Profit Rescue Clinic & Sanctuary',
-    city: 'Mandaluyong City (Metro Manila)',
-    address: '175 Lopez Rizal St. cor. Samat St., Mandaluyong City',
-    phone: '+63 (2) 8532-3340',
-    email: 'clinic@carawelfare.ph',
-    hours: 'Tue - Sun: 9:00 AM - 5:00 PM',
-    lat: 14.5886,
-    lng: 121.0345,
-    fee: 'Subsidized NGO Rates',
-    holdingPeriodDays: 14,
-    capacity: 45,
-    occupied: 0,
-    partnered: true,
-    officerInCharge: 'Dr. Riza Zuniga, DVM'
-  },
-  {
-    id: 'sh-akf-rescue',
-    name: 'Animal Kingdom Foundation (AKF) Rescue Network',
-    type: 'Anti-Cruelty Sanctuary & Rescue NGO',
-    city: 'Quezon City / Capas Facility',
-    address: '88 Malakas St., Diliman, Quezon City',
-    phone: '+63 (939) 914-2402',
-    email: 'akfrescue@gmail.com',
-    hours: 'Mon - Sat: 9:00 AM - 5:00 PM',
-    lat: 14.6465,
-    lng: 121.0503,
-    fee: 'PHP 0 (Non-Profit)',
-    holdingPeriodDays: 60,
-    capacity: 150,
-    occupied: 0,
-    partnered: true,
-    officerInCharge: 'Atty. Heidi Caguioa'
-  },
-  {
-    id: 'sh-ppbcc-foundation',
-    name: 'Philippine Pet Birth Control Center Foundation (PPBCC)',
-    type: 'Spay/Neuter & Animal Welfare Center',
-    city: 'Metro Manila (QC Outreach)',
-    address: '391 Boni Ave., Mandaluyong City',
-    phone: '+63 (2) 8983-3933',
-    email: 'ppbccfoundation@gmail.com',
-    hours: 'Mon - Sun: 8:00 AM - 6:00 PM',
-    lat: 14.5768,
-    lng: 121.0381,
-    fee: 'Subsidized Clinic',
-    holdingPeriodDays: 7,
-    capacity: 35,
-    occupied: 0,
-    partnered: true,
-    officerInCharge: 'Dr. Mace Licuanan, DVM'
-  },
-  {
-    id: 'sh-biyaya-care',
-    name: 'Biyaya Animal Care Sanctuary & Hospital',
-    type: 'Animal Welfare Hospital & Sanctuary',
-    city: 'Quezon City / Mandaluyong',
-    address: 'Katarungan St., Mandaluyong / QC Outpost',
-    phone: '+63 (917) 543-3444',
-    email: 'info@biyaya.org.ph',
-    hours: 'Open 24/7 (Emergency & Shelter)',
-    lat: 14.5824,
-    lng: 121.0315,
-    fee: 'Subsidized Rates',
-    holdingPeriodDays: 21,
-    capacity: 80,
-    occupied: 0,
-    partnered: true,
-    officerInCharge: 'Dr. Ronald Santos, DVM'
-  },
-  {
-    id: 'sh-sws-shelter',
-    name: 'Strays Worth Saving (SWS) Rescue Shelter',
-    type: 'Private Animal Rescue Sanctuary',
-    city: 'Greater Manila Area',
-    address: 'Tanauan / Metro Manila Operations Hub',
-    phone: '+63 (917) 835-5177',
-    email: 'straysworthsaving@gmail.com',
-    hours: 'By Appointment',
-    lat: 14.0845,
-    lng: 121.1500,
-    fee: 'PHP 0 (Private NGO)',
-    holdingPeriodDays: 90,
-    capacity: 180,
-    occupied: 0,
-    partnered: false,
-    officerInCharge: 'Reena Del Rosario'
-  },
-  {
-    id: 'sh-manila-vib',
-    name: 'Manila City Pound & Veterinary Inspection Board',
-    type: 'Municipal LGU Pound',
-    city: 'City of Manila',
-    address: 'Vitas St., Tondo, Manila, Metro Manila',
-    phone: '+63 (2) 8243-7952',
-    email: 'vib@manila.gov.ph',
-    hours: 'Mon - Sat: 8:00 AM - 4:00 PM',
-    lat: 14.6231,
-    lng: 120.9634,
-    fee: 'PHP 350 / day',
-    holdingPeriodDays: 3,
-    capacity: 50,
-    occupied: 0,
-    partnered: false,
-    officerInCharge: 'Dr. Manuel Soriano, DVM'
-  },
-  {
-    id: 'sh-pasig-pound',
-    name: 'Pasig City Animal Welfare Facility & Pound',
-    type: 'Municipal LGU Pound',
-    city: 'Pasig City',
-    address: 'Caruncho Ave., San Nicolas, Pasig City',
-    phone: '+63 (2) 8643-1111',
-    email: 'animalwelfare@pasigcity.gov.ph',
-    hours: 'Mon - Fri: 8:00 AM - 5:00 PM',
-    lat: 14.5583,
-    lng: 121.0825,
-    fee: 'PHP 400 / day',
-    holdingPeriodDays: 3,
-    capacity: 40,
-    occupied: 0,
-    partnered: false,
-    officerInCharge: 'Dr. Angela Bautista, DVM'
-  },
-  {
-    id: 'sh-mby-sanctuary',
-    name: 'MBY Pet Rescue & Sanctuary',
-    type: 'Private No-Kill Sanctuary',
-    city: 'Rizal / Metro East',
-    address: '113 Pantay St., Sitio Pantay, Antipolo, Rizal',
-    phone: '+63 (2) 8656-3456',
-    email: 'mbypetrescue@yahoo.com',
-    hours: 'Sat - Sun: 10:00 AM - 4:00 PM',
-    lat: 14.5862,
-    lng: 121.2185,
-    fee: 'PHP 0 (Private Sanctuary)',
-    holdingPeriodDays: 180,
-    capacity: 300,
-    occupied: 0,
-    partnered: false,
-    officerInCharge: 'Marita Baquiran'
-  },
-  {
-    id: 'sh-mandaluyong-pound',
-    name: 'Mandaluyong City Veterinary Services & Pound',
-    type: 'Municipal LGU Pound',
-    city: 'Mandaluyong City',
-    address: 'Martinez St., Barangay Plainview, Mandaluyong City',
-    phone: '+63 (2) 8532-5001 loc 523',
-    email: 'veterinary@mandaluyong.gov.ph',
-    hours: 'Mon - Fri: 8:00 AM - 5:00 PM',
-    lat: 14.5794,
-    lng: 121.0359,
-    fee: 'PHP 300 / day',
-    holdingPeriodDays: 3,
-    capacity: 35,
-    occupied: 0,
-    partnered: false,
-    officerInCharge: 'Dr. Evelyn Morales, DVM'
-  },
-  {
-    id: 'sh-caloocan-pound',
-    name: 'Caloocan City Veterinary Office & Animal Pound',
-    type: 'Municipal LGU Pound',
-    city: 'Caloocan City',
-    address: '8th Ave. cor. 8th St., Grace Park, Caloocan City',
-    phone: '+63 (2) 8288-8811',
-    email: 'vet@caloocancity.gov.ph',
-    hours: 'Mon - Fri: 8:00 AM - 5:00 PM',
-    lat: 14.6507,
-    lng: 120.9830,
-    fee: 'PHP 350 / day',
-    holdingPeriodDays: 3,
-    capacity: 40,
-    occupied: 0,
-    partnered: false,
-    officerInCharge: 'Dr. Teodoro Gomez, DVM'
-  }
-];
-
 const SEED_SETTINGS = {
   systemName: 'PawTrack Municipal Gateway',
   holdingWindowHours: 72,
@@ -542,7 +323,7 @@ class AdminStore {
 
   // Columns from Supabase; the console's own extras (partner flag, officer, capacity, city) from this device
   fromShelterRow(s) {
-    const extras = this.getShelterExtras()[s.id] || SEED_SHELTERS.find((x) => x.name === s.name) || {};
+    const extras = this.getShelterExtras()[s.id] || {};
     return {
       ...extras,
       id: s.id,
@@ -847,13 +628,14 @@ class AdminStore {
   getShelters() {
     try {
       const list = JSON.parse(localStorage.getItem(STORAGE_KEYS.SHELTERS));
-      return Array.isArray(list) && list.length ? list : SEED_SHELTERS;
+      return Array.isArray(list) ? list : [];
     } catch {
-      return SEED_SHELTERS;
+      return [];
     }
   }
 
-  saveShelter(shelterData) {
+  // onDone(databaseId) runs once the database has answered (null if it failed)
+  saveShelter(shelterData, onDone) {
     const shelters = this.getShelters();
     const index = shelters.findIndex(s => s.id === shelterData.id);
     const isNew = index < 0 || !this.isDbId(shelterData.id);
@@ -881,6 +663,7 @@ class AdminStore {
     )).then((rows) => {
       // Fields with no column are kept on this device, keyed by the shelter's database id
       const id = rows && rows[0] && rows[0].id;
+      if (typeof onDone === 'function') onDone(id || null);
       if (id) {
         const { partnered, officerInCharge, capacity, occupied, city, type } = shelterData;
         this.setShelterExtras(id, { partnered, officerInCharge, capacity, occupied, city, type });

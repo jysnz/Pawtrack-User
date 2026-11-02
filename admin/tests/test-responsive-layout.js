@@ -84,7 +84,6 @@ global.window.adminStore = {
 // Load view scripts
 require('../js/views/activation-view.js');
 require('../js/views/heatmap-view.js');
-require('../js/views/pets-view.js');
 require('../js/views/impoundments-view.js');
 require('../js/views/breakdown-view.js');
 require('../js/views/shelters-view.js');
@@ -95,7 +94,6 @@ require('../js/views/settings-view.js');
 const views = [
   { name: 'ActivationView', view: window.ActivationView },
   { name: 'HeatmapView', view: window.HeatmapView },
-  { name: 'PetsView', view: window.PetsView },
   { name: 'ImpoundmentsView', view: window.ImpoundmentsView },
   { name: 'BreakdownView', view: window.BreakdownView },
   { name: 'SheltersView', view: window.SheltersView },

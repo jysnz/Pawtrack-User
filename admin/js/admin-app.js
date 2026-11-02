@@ -357,6 +357,7 @@ class AdminApp {
     };
 
     const lockConsole = (panel) => {
+      document.documentElement.classList.remove('auth-resuming');
       this.currentAdmin = null;
       if (screen) screen.style.display = 'flex';
       document.body.classList.add('auth-locked');
@@ -790,6 +791,7 @@ class AdminApp {
     const screen = document.getElementById('admin-login-screen');
     if (screen) screen.style.display = 'none';
     document.body.classList.remove('auth-locked');
+    document.documentElement.classList.remove('auth-resuming');
 
     const name = account.full_name || account.email;
     const initials = name.split(/\s+/).filter(Boolean).map(w => w[0]).join('').slice(0, 2).toUpperCase();
@@ -800,8 +802,27 @@ class AdminApp {
     const avatar = document.getElementById('admin-avatar-trigger');
     if (avatar) avatar.title = `${name} (click for menu)`;
 
+    this.startTopbarClock();
     this.refreshAccessRequestCount();
     if (isFreshSignIn) this.showToast(`Signed in as ${this.esc(name)}`, 'success');
+  }
+
+  // Topbar greeting by time of day, plus a live date and time. Only text changes, so nothing re-renders.
+  startTopbarClock() {
+    clearInterval(this._clockTimer);
+    const tick = () => {
+      const now = new Date();
+      const h = now.getHours();
+      const part = h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';
+      const full = (this.currentAdmin && this.currentAdmin.full_name) || '';
+      const first = String(full).trim().split(/\s+/)[0];
+      const set = (id, text) => { const el = document.getElementById(id); if (el && el.textContent !== text) el.textContent = text; };
+      set('topbar-greeting-hello', first ? `${part}, ${first}` : part);
+      set('topbar-clock-date', now.toLocaleDateString('en-PH', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }));
+      set('topbar-clock-time', now.toLocaleTimeString('en-PH', { hour: 'numeric', minute: '2-digit', second: '2-digit' }));
+    };
+    tick();
+    this._clockTimer = setInterval(tick, 1000);
   }
 
   esc(value) {
@@ -958,12 +979,7 @@ class AdminApp {
     if (!this.seenCounts) this.initSeenTracking();
     const store = window.adminStore;
 
-    if (route === 'pets' || route === 'unregistered') {
-      const pets = store.getPets ? store.getPets() : [];
-      const sightings = store.getSightings ? store.getSightings() : [];
-      this.seenCounts.pets = pets.length;
-      this.seenCounts.sightings = sightings.length;
-    } else if (route === 'impoundments') {
+    if (route === 'impoundments') {
       const impoundments = store.getImpoundments ? store.getImpoundments() : [];
       this.seenCounts.impoundments = impoundments.filter(i => i.status === 'active_impounded').length;
     } else if (route === 'notifs') {
@@ -980,8 +996,8 @@ class AdminApp {
 
   handleRoute() {
     const rawHash = (window.location.hash || '#activation').replace('#', '');
-    const validRoutes = ['activation', 'breakdown', 'heatmap', 'pets', 'impoundments', 'terminal', 'shelters', 'rfid', 'notifs', 'settings'];
-    this.currentRoute = rawHash === 'unregistered' ? 'pets' : (validRoutes.includes(rawHash) ? rawHash : 'activation');
+    const validRoutes = ['activation', 'breakdown', 'heatmap', 'impoundments', 'terminal', 'shelters', 'rfid', 'notifs', 'settings'];
+    this.currentRoute = validRoutes.includes(rawHash) ? rawHash : 'activation';
 
     // Update active nav state
     document.querySelectorAll('.nav-item').forEach(item => {
@@ -1011,13 +1027,6 @@ class AdminApp {
           break;
         case 'heatmap':
           if (window.HeatmapView) window.HeatmapView.render(container);
-          break;
-        case 'cases':
-          if (window.CasesView) window.CasesView.render(container);
-          break;
-        case 'pets':
-        case 'unregistered':
-          if (window.PetsView) window.PetsView.render(container);
           break;
         case 'impoundments':
           if (window.ImpoundmentsView) window.ImpoundmentsView.render(container);
@@ -1064,22 +1073,8 @@ class AdminApp {
     const unreadNotifs = notifs.filter(n => !n.read).length;
 
     // Only count items added above the last seen count
-    const newPets = Math.max(0, pets.length - (this.seenCounts.pets || 0));
-    const newSightings = Math.max(0, sightings.length - (this.seenCounts.sightings || 0));
-    const newRegistryTotal = newPets + newSightings;
     const newImpounds = Math.max(0, activeImpounds - (this.seenCounts.impoundments || 0));
     const newNotifs = Math.max(0, unreadNotifs - (this.seenCounts.notifs || 0));
-
-    const petBadge = document.getElementById('badge-pets-count');
-    if (petBadge) {
-      if (newRegistryTotal > 0 && this.currentRoute !== 'pets') {
-        petBadge.textContent = `+${newRegistryTotal}`;
-        petBadge.style.display = 'inline-flex';
-      } else {
-        petBadge.textContent = '';
-        petBadge.style.display = 'none';
-      }
-    }
 
     const impoundBadge = document.getElementById('badge-impounds-count');
     if (impoundBadge) {
@@ -1293,39 +1288,15 @@ class AdminApp {
       { label: 'Go to System Activation Dashboard', route: 'activation', cat: 'Navigation' },
       { label: 'Breakdown: Species, Breed, Age, Outcome & Source', route: 'breakdown', cat: 'Navigation' },
       { label: 'View Heatmap Analysis & Lost Pet Hotspots', route: 'heatmap', cat: 'Navigation' },
-      { label: 'Cases & Analytics: Missing-Pet Cases and Recovery Rate', route: 'cases', cat: 'Navigation' },
-      { label: 'Manage Pet Registry (All Registered Pets)', route: 'pets', cat: 'Navigation' },
-      { label: 'View Unregistered Stray & Found Reports', route: 'pets', filter: 'unregistered', cat: 'Navigation' },
       { label: 'View Impoundment Queue & 72h SLA', route: 'impoundments', cat: 'Navigation' },
       { label: 'Shelter Terminal: Scan Tag & Log Intake', route: 'terminal', cat: 'Navigation' },
       { label: 'Inspect Shelter Facilities', route: 'shelters', cat: 'Navigation' },
       { label: 'RFID Tag Provisioning & Hardware', route: 'rfid', cat: 'Navigation' },
       { label: 'Dispatch Emergency Broadcast', route: 'notifs', cat: 'Navigation' },
       { label: 'Municipal Settings & JSON Backup', route: 'settings', cat: 'Navigation' },
-      { label: 'Register New Pet', action: 'add-pet', cat: 'Actions' },
-      { label: 'Log Found Stray Pet Report', action: 'add-report', cat: 'Actions' },
       { label: 'Log Animal Control Intake', action: 'intake', cat: 'Actions' },
       { label: 'Launch RFID Scanner Simulator', action: 'scanner', cat: 'Actions' },
     ];
-
-    // Append dynamic pets
-    pets.forEach(p => {
-      commands.push({
-        label: `Pet: ${p.name} (${p.rfidTag || 'No Tag'}) — ${p.status.toUpperCase()}`,
-        petId: p.id,
-        cat: 'Pets Database'
-      });
-    });
-
-    // Append unregistered sighting reports
-    const sightings = store.getSightings ? store.getSightings() : [];
-    sightings.forEach(r => {
-      commands.push({
-        label: `Unregistered Stray: ${r.species || 'Animal'} (${r.breed || 'Mixed'}) found at ${r.location || 'Metro Manila'}`,
-        reportId: r.id,
-        cat: 'Unregistered Reports'
-      });
-    });
 
     // Append shelters
     shelters.forEach(s => {
@@ -1358,41 +1329,12 @@ class AdminApp {
 
         if (route) {
           window.location.hash = '#' + route;
-          if (filter && window.PetsView) {
-            window.PetsView.currentFilter = filter;
-            const container = document.getElementById('view-container');
-            if (container) window.PetsView.render(container);
-          }
-        } else if (action === 'add-pet') {
-          window.location.hash = '#pets';
-          setTimeout(() => window.PetsView?.openPetEditorModal(null), 100);
-        } else if (action === 'add-report') {
-          window.location.hash = '#pets';
-          if (window.PetsView) {
-            window.PetsView.currentFilter = 'unregistered';
-            const container = document.getElementById('view-container');
-            if (container) window.PetsView.render(container);
-          }
-          setTimeout(() => window.PetsView?.openReportEditorModal(null), 100);
         } else if (action === 'intake') {
           window.location.hash = '#impoundments';
           setTimeout(() => window.ImpoundmentsView?.openIntakeModal(), 100);
         } else if (action === 'scanner') {
           window.location.hash = '#rfid';
           setTimeout(() => window.RfidView?.openScannerSimulatorModal(), 100);
-        } else if (petId) {
-          window.location.hash = '#pets';
-          const pet = store.getPetById(petId);
-          if (pet) setTimeout(() => window.PetsView?.openPetDrawer(pet), 100);
-        } else if (reportId) {
-          window.location.hash = '#pets';
-          if (window.PetsView) {
-            window.PetsView.currentFilter = 'unregistered';
-            const container = document.getElementById('view-container');
-            if (container) window.PetsView.render(container);
-          }
-          const report = store.getSightingById ? store.getSightingById(reportId) : null;
-          if (report) setTimeout(() => window.PetsView?.openReportDrawer(report), 100);
         }
       });
     });
