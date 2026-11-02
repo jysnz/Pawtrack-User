@@ -455,11 +455,14 @@ class SightingsView {
         </div>
         ${photo ? `<img class="spost-photo" src="${this._esc(photo)}" alt="Post photo" loading="lazy" onclick="window.pawApp && window.pawApp.openLightbox('${this._esc(photo)}', '${this._esc(title)}', '${missing ? 'Missing pet' : 'Community sighting'}')" onerror="this.remove()" />` : ''}
         <div class="spost-counts">
-          <span><i data-lucide="thumbs-up"></i> ${likes.count}</span>
+          <span class="spost-psummary" ${likes.count ? `title="${this._esc(likes.top.map((k) => `${REACTION_LABELS[k]}: ${likes.byType[k]}`).join(', '))}"` : ''}>${likes.count ? likes.top.slice(0, 3).map((k) => `<span class="spost-remoji">${REACTION_EMOJI[k]}</span>`).join('') : '<i data-lucide="thumbs-up"></i>'} ${likes.count}</span>
           <button type="button" class="spost-link" data-feed="comments">${comments.length} ${comments.length === 1 ? 'comment' : 'comments'}</button>
         </div>
         <div class="spost-actions">
-          <button type="button" class="${likes.liked ? 'is-liked' : ''}" data-feed="like" ${social && me.id ? '' : 'disabled'}><i data-lucide="thumbs-up"></i> ${likes.liked ? 'Liked' : 'Like'}</button>
+          <span class="spost-react spost-preact">
+            <button type="button" class="spost-rbtn ${likes.liked ? 'is-liked' : ''}" data-feed="like" ${social && me.id ? '' : 'disabled'}>${likes.mine ? `<span class="spost-remoji">${REACTION_EMOJI[likes.mine]}</span> ${REACTION_LABELS[likes.mine]}` : '<i data-lucide="thumbs-up"></i> Like'}</button>
+            ${social && me.id ? `<span class="spost-picker" role="group" aria-label="Choose a reaction">${REACTION_KEYS.map((k) => `<button type="button" class="spost-rpick${likes.mine === k ? ' is-mine' : ''}" data-feed="postreact" data-reaction="${k}" title="${REACTION_LABELS[k]}" aria-label="${REACTION_LABELS[k]}">${REACTION_EMOJI[k]}</button>`).join('')}</span>` : ''}
+          </span>
           <button type="button" data-feed="comments"><i data-lucide="message-circle"></i> Comment</button>
           <span class="spost-secondary">${secondary}</span>
         </div>
@@ -534,9 +537,12 @@ class SightingsView {
         return;
       }
       btn.closest('.spost-more')?.classList.remove('is-open');
-      if (act === 'like') {
+      if (act === 'like' || act === 'postreact') {
+        // Tap Like to like or unlike; the picker (hover, or hold on a phone) chooses another reaction
+        if (this._pickerOpened && act === 'like') { this._pickerOpened = false; return; }
         btn.disabled = true;
-        await window.pawStore.toggleLike(id, kind);
+        const reaction = act === 'like' ? (window.pawStore.getLikes(id).mine || 'like') : btn.dataset.reaction;
+        await window.pawStore.toggleLike(id, kind, reaction);
         this._redrawPost(id);
       } else if (act === 'comments') {
         if (this.openComments.has(id)) this.openComments.delete(id); else this.openComments.add(id);

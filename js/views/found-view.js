@@ -42,6 +42,14 @@ class FoundView {
     return true;
   }
 
+  // "Search by Photo" on the map: open Found a Pet on the "Scan a pet" tab, ready for a photo
+  openScanTab() {
+    this.reset();
+    this.mode = 'scan';
+    if (window.location.hash === '#found') this.render(); else window.location.hash = '#found';
+    this.scrollToStart();
+  }
+
   scrollToStart() {
     const go = () => {
       const vp = document.getElementById('app-viewport');

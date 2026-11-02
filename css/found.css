@@ -258,7 +258,10 @@
 @media (max-width: 640px) { .found-preview { height: 240px; } .found-preview-bar { justify-content: stretch; } .found-preview-bar .btn { flex: 1; justify-content: center; } }
 
 .found-anon { display: flex; align-items: flex-start; gap: 10px; padding: 12px 14px; border: 1px solid var(--border-subtle); border-radius: var(--radius-md); background: var(--bg-surface-elevated); cursor: pointer; }
-.found-anon input { flex: none; width: 18px; height: 18px; margin-top: 2px; accent-color: var(--primary); }
+/* The global input style adds padding, a 42px height and a focus ring, which turns a checkbox into a big box: reset it */
+.found-anon input[type="checkbox"] { flex: none; width: 18px; height: 18px; min-height: 0; margin: 2px 0 0; padding: 0; border-radius: 4px; background: none; box-shadow: none; accent-color: var(--primary); cursor: pointer; }
+.found-anon input[type="checkbox"]:focus { box-shadow: none; }
+.found-anon input[type="checkbox"]:focus-visible { outline: 3px solid var(--border-focus); outline-offset: 2px; }
 .found-anon span { display: grid; gap: 2px; }
 .found-anon small { font-size: 0.78rem; color: var(--text-muted); }
 .found-form .found-anon { grid-column: 1 / -1; }

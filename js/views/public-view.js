@@ -91,7 +91,7 @@ class PublicView {
       <div class="glass-card" style="padding:1rem 1.25rem; margin-bottom:1.5rem; display:flex; flex-wrap:wrap; gap:1rem; align-items:center; justify-content:space-between;">
         <div style="display:flex; gap:0.5rem; flex:1; min-width:260px;">
           <input type="text" id="public-search-input" placeholder="${t('map.searchPh', 'Search by pet name, breed, or barangay...')}" value="${this.searchQuery}" oninput="window.publicView.handleSearch(this.value)" />
-          <button type="button" class="btn btn-outline btn-sm" onclick="window.publicView.openPhotoMatchModal()" title="Upload a photo and let AI compare it with all missing pets" style="display:flex; align-items:center; gap:0.4rem; white-space:nowrap;">
+          <button type="button" class="btn btn-outline btn-sm" onclick="window.foundView ? window.foundView.openScanTab() : (window.location.hash = '#found')" title="Upload a photo and let AI compare it with all missing pets" style="display:flex; align-items:center; gap:0.4rem; white-space:nowrap;">
             <i data-lucide="camera"></i> Search by Photo
           </button>
         </div>

@@ -412,6 +412,14 @@ class Store {
   }
 
   // Supabase notifications are already only the signed-in guardian's (row level security)
+  // The small emoji on the corner of the photo: what kind of alert this is
+  notificationBadge(n) {
+    if (n.type === 'comment' || n.type === 'reply') return '💬';
+    if (n.type === 'like') return ((n.message || '').match(/[❤😂😮😢😡]/u) || ['👍'])[0].replace('❤', '❤️');
+    if (n.type === 'sighting_verification') return /^POSSIBLE SIGHTING/i.test(n.title || '') ? '👀' : '🐾';
+    return '';
+  }
+
   fromNotificationRow(n) {
     const message = n.message || '';
     const found = n.type === 'sighting_verification' && !/^POSSIBLE SIGHTING/i.test(n.title || '');
@@ -432,6 +440,11 @@ class Store {
       finderNotes: (message.match(/Message: "([^"]*)"/) || [])[1] || '',
       claimId: n.sighting_claim_id || undefined, // set on pet-claim alerts: tapping one opens the claim
       caseId: n.reunion_case_id || undefined, // set on reunion alerts: tapping one opens the case
+      // Who did it (the commenter, the person who reacted, the finder), shown as a photo like Facebook
+      actorId: n.actor_id || undefined,
+      actorName: n.actor_name || undefined,
+      actorAvatar: /^https:\/\//.test(n.actor_avatar || '') ? n.actor_avatar : undefined,
+      actorBadge: this.notificationBadge(n),
       commentId: n.comment_id || undefined, // set on comment and reply alerts: tapping one opens that post's comments
       postId: n.post_id || undefined,
       postKind: n.post_kind || undefined,
@@ -850,18 +863,23 @@ class Store {
     const sb = await this.waitForClient(5000);
     if (!sb) return this.social;
     const loadComments = (cols) => sb.from('sighting_comments').select(cols).order('created_at', { ascending: true }).limit(5000);
+    const loadLikes = (cols) => sb.from('sighting_likes').select(cols).limit(5000);
     let [likes, comments, reactions] = await Promise.all([
-      sb.from('sighting_likes').select('sighting_id, missing_pet_id, user_id').limit(5000),
+      loadLikes(this._legacyLikes ? 'sighting_id, missing_pet_id, user_id' : 'sighting_id, missing_pet_id, user_id, reaction'),
       loadComments(this._legacyComments ? LEGACY_COMMENT_COLUMNS : COMMENT_COLUMNS),
       sb.from('comment_reactions').select('comment_id, user_id, reaction').limit(20000)
     ]);
     // Until the replies migration is applied the new columns do not exist: keep comments working without them
+    if (likes.error && !this._legacyLikes && /reaction/i.test(likes.error.message || '')) {
+      this._legacyLikes = true;
+      likes = await loadLikes('sighting_id, missing_pet_id, user_id');
+    }
     if (comments.error && !this._legacyComments && /parent_id|reply_to/i.test(comments.error.message || '')) {
       this._legacyComments = true;
       comments = await loadComments(LEGACY_COMMENT_COLUMNS);
     }
     const social = { likes: {}, comments: {}, reactions: {} };
-    (likes.data || []).forEach((l) => { const k = l.sighting_id || l.missing_pet_id; (social.likes[k] = social.likes[k] || []).push(l.user_id); });
+    (likes.data || []).forEach((l) => { const k = l.sighting_id || l.missing_pet_id; (social.likes[k] = social.likes[k] || []).push({ user_id: l.user_id, reaction: l.reaction || 'like' }); });
     (comments.data || []).forEach((c) => { const k = c.sighting_id || c.missing_pet_id; (social.comments[k] = social.comments[k] || []).push(c); });
     // A failed reactions request (the table is not there yet, say) leaves comments working without them
     (reactions.data || []).forEach((r) => { (social.reactions[r.comment_id] = social.reactions[r.comment_id] || []).push({ user_id: r.user_id, reaction: r.reaction }); });
@@ -908,32 +926,47 @@ class Store {
     return true;
   }
 
+  // Reactions on a post: the total, how many of each kind (most common first), and this guardian's own
   getLikes(sightingId) {
     const me = (this.getGoogleUser() || {}).id;
     const list = ((this.social || {}).likes || {})[sightingId] || [];
-    return { count: list.length, liked: !!me && list.includes(me) };
+    const byType = {};
+    list.forEach((l) => { byType[l.reaction] = (byType[l.reaction] || 0) + 1; });
+    const mine = me ? (list.find((l) => l.user_id === me) || {}).reaction || null : null;
+    const top = Object.keys(byType).sort((a, b) => byType[b] - byType[a]);
+    return { count: list.length, liked: !!mine, mine, byType, top };
   }
 
   getComments(sightingId) {
     return (((this.social || {}).comments || {})[sightingId] || []).slice();
   }
 
-  // Shown at once; the change is undone if the database refuses it
-  async toggleLike(sightingId, kind = 'sighting') {
+  // React to a post. The same reaction again takes it back; a different one replaces it. Shown at once, and
+  // undone if the database refuses it.
+  async toggleLike(sightingId, kind = 'sighting', reaction = 'like') {
     const col = kind === 'missing' ? 'missing_pet_id' : 'sighting_id';
     const me = (this.getGoogleUser() || {}).id;
     const sb = await this.waitForClient(5000);
-    if (!me || !sb || !this.isDbId(sightingId)) return false;
-    this.social = this.social || { likes: {}, comments: {} };
+    if (!me || !sb || !this.isDbId(sightingId) || !REACTIONS.includes(reaction)) return false;
+    if (this._legacyLikes && reaction !== 'like') { this.dbError('Reactions are not available yet', { message: 'Only Like works until the database is updated.' }); return false; }
+    this.social = this.social || { likes: {}, comments: {}, reactions: {} };
     const list = this.social.likes[sightingId] = this.social.likes[sightingId] || [];
-    const had = list.includes(me);
-    if (had) list.splice(list.indexOf(me), 1); else list.push(me);
-    const res = had
-      ? await sb.from('sighting_likes').delete().eq(col, sightingId).eq('user_id', me)
-      : await sb.from('sighting_likes').insert({ [col]: sightingId });
+    const row = list.find((l) => l.user_id === me);
+    const before = row ? row.reaction : null;
+    const removing = before === reaction;
+    const apply = (value) => {
+      const cur = list.find((l) => l.user_id === me);
+      if (!value) { if (cur) list.splice(list.indexOf(cur), 1); return; }
+      if (cur) cur.reaction = value; else list.push({ user_id: me, reaction: value });
+    };
+    apply(removing ? null : reaction);
+    let res;
+    if (removing) res = await sb.from('sighting_likes').delete().eq(col, sightingId).eq('user_id', me);
+    else if (before) res = await sb.from('sighting_likes').update({ reaction }).eq(col, sightingId).eq('user_id', me);
+    else res = await sb.from('sighting_likes').insert(this._legacyLikes ? { [col]: sightingId } : { [col]: sightingId, reaction });
     if (res.error) {
-      if (had) list.push(me); else list.splice(list.indexOf(me), 1);
-      this.dbError('Could not update your like', res.error);
+      apply(before);
+      this.dbError('Could not update your reaction', res.error);
       return false;
     }
     return true;
