@@ -23,6 +23,7 @@ const FOUND_STRINGS = {
     about: 'About {name}',
     species: 'Species', breed: 'Breed', gender: 'Gender', age: 'Age', color: 'Color & markings', registeredOn: 'Registered', area: 'Area',
     notifyTitle: 'Found {name}? Tell the owner',
+    mapHint: 'Tap the map or drag the pin to where the pet is.',
     notifySub: 'The owner gets an alert straight away with where you are and how to reach you.',
     where: 'Where is the pet now?',
     useLocation: 'Use my location',
@@ -78,6 +79,7 @@ const FOUND_STRINGS = {
     about: 'Tungkol kay {name}',
     species: 'Uri', breed: 'Lahi', gender: 'Kasarian', age: 'Edad', color: 'Kulay at palatandaan', registeredOn: 'Nairehistro', area: 'Lugar',
     notifyTitle: 'Nakita si {name}? Sabihan ang may-ari',
+    mapHint: 'I-tap ang mapa o i-drag ang pin kung nasaan ang alaga.',
     notifySub: 'Agad na makakatanggap ng alerto ang may-ari kasama ang lokasyon mo at paraan para tawagan ka.',
     where: 'Nasaan ang alaga ngayon?',
     useLocation: 'Gamitin ang lokasyon ko',
@@ -405,6 +407,8 @@ class FoundPage {
             <button type="button" class="fp-btn fp-btn-icon" id="fp-locate" title="${this.s('useLocation')}" aria-label="${this.s('useLocation')}"><i data-lucide="locate-fixed"></i></button>
           </div>
           <span class="fp-error" id="fp-where-err">${this.s('whereErr')}</span>
+          <div class="fp-map" id="fp-map" aria-label="${this.s('mapHint')}"></div>
+          <span class="fp-map-hint">${this.s('mapHint')}</span>
         </div>
         <div class="fp-field" id="fp-phone-field">
           <label for="fp-phone">${this.s('phone')}</label>
@@ -448,6 +452,9 @@ class FoundPage {
     root.querySelector('#fp-sticky-cta')?.addEventListener('click', toForm);
     root.querySelector('#fp-again')?.addEventListener('click', () => { this.sent = null; this.coords = null; this.renderPet(); toForm(); });
     root.querySelector('#fp-locate')?.addEventListener('click', () => this.locate());
+    // Typing a different address makes the pin stale, so the address is looked up again on send
+    root.querySelector('#fp-where')?.addEventListener('input', () => { this.coords = null; if (this.marker && this.map) { try { this.map.removeLayer(this.marker); } catch (e) {} } });
+    this.initMap();
     root.querySelector('#fp-form')?.addEventListener('submit', (e) => { e.preventDefault(); this.submit(); });
     root.querySelectorAll('.fp-chip').forEach((chip) => {
       chip.addEventListener('click', () => {
@@ -460,6 +467,49 @@ class FoundPage {
         if (!on) notes.value = notes.value.replace(text, '').replace(/^[\s.]+|[\s.]+$/g, '').replace(/\.\s*\./g, '.');
       });
     });
+  }
+
+  // Map with a draggable pin: tapping or dragging sets the coordinates and fills in the address
+  async initMap() {
+    const el = this.root.querySelector('#fp-map');
+    if (!el) return;
+    try { await window.PawMapsReady; } catch (e) { /* fall through */ }
+    if (!window.L || !el.isConnected) { el.hidden = true; return; }
+    if (this.map) { try { this.map.remove(); } catch (e) {} this.map = null; }
+    const start = this.coords || { lat: 14.5995, lng: 120.9842 };
+    this.map = window.L.map(el, { scrollWheelZoom: false, zoomControl: true, doubleClickZoom: false }).setView([start.lat, start.lng], this.coords ? 17 : 13);
+    window.L.tileLayer('https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', { maxZoom: 20 }).addTo(this.map);
+    const icon = window.L.divIcon({
+      className: 'fp-pin-icon',
+      html: '<div style="transform:translate(-50%,-100%);width:34px;height:34px;border-radius:50% 50% 50% 0;background:linear-gradient(135deg,#f59e0b,#b45309);border:2px solid #fff;box-shadow:0 6px 16px rgba(0,0,0,.4);rotate:-45deg"></div>',
+      iconSize: [0, 0], iconAnchor: [0, 0]
+    });
+    this.marker = window.L.marker([start.lat, start.lng], { icon, draggable: true });
+    if (this.coords) this.marker.addTo(this.map);
+    const place = (lat, lng) => {
+      this.coords = { lat: parseFloat(lat.toFixed(5)), lng: parseFloat(lng.toFixed(5)) };
+      if (!this.map.hasLayer || !this.map.hasLayer(this.marker)) this.marker.addTo(this.map);
+      this.marker.setLatLng([lat, lng]);
+      this.root.querySelector('#fp-where-field')?.classList.remove('has-error');
+      this.reverseGeocode(lat, lng);
+    };
+    this.placePin = place;
+    this.map.on('click', (e) => place(e.latlng.lat, e.latlng.lng));
+    this.marker.on('dragend', (e) => { const p = e.target.getLatLng(); place(p.lat, p.lng); });
+    setTimeout(() => this.map && this.map.invalidateSize(), 200);
+  }
+
+  async reverseGeocode(lat, lng) {
+    const input = this.root.querySelector('#fp-where');
+    if (!input) return;
+    const fallback = `Pinned location (${lat.toFixed(5)}, ${lng.toFixed(5)})`;
+    input.value = fallback;
+    try {
+      const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`);
+      const name = (await res.json()).display_name;
+      // Ignore a late answer if the pin has moved on
+      if (name && this.coords && this.coords.lat === parseFloat(lat.toFixed(5)) && input.value === fallback) input.value = name.slice(0, 300);
+    } catch (e) { /* keep the coordinates text */ }
   }
 
   msg(text) {
@@ -480,6 +530,10 @@ class FoundPage {
       input.value = `My current location (${this.coords.lat.toFixed(5)}, ${this.coords.lng.toFixed(5)})`;
       input.placeholder = this.s('wherePh');
       this.root.querySelector('#fp-where-field')?.classList.remove('has-error');
+      if (this.map && this.placePin) {
+        this.map.setView([this.coords.lat, this.coords.lng], 17);
+        this.placePin(this.coords.lat, this.coords.lng);
+      }
       btn.disabled = false;
     }, () => {
       input.placeholder = this.s('wherePh');
@@ -560,19 +614,30 @@ class FoundPage {
   }
 
   // Drops a pin on the public incident map; best effort, the owner alert is what matters
-  addMapSighting(client, location, notes) {
-    if (!this.coords) return;
-    client.from('community_sightings').insert({
+  async addMapSighting(client, location, notes) {
+    let coords = this.coords;
+    if (!coords) {
+      // Typed address only: look it up so the sighting still lands on the community map
+      try {
+        const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(location)}`);
+        const hit = (await res.json())[0];
+        if (hit) coords = { lat: parseFloat(hit.lat), lng: parseFloat(hit.lon) };
+      } catch (err) { /* best effort */ }
+    }
+    if (!coords || !Number.isFinite(coords.lat) || !Number.isFinite(coords.lng)) return;
+    // Public post: anonymous, no phone number, no map link text
+    const publicNotes = (notes || '').replace(/\s*Map: https?:\/\/\S+/g, '').trim();
+    return client.from('community_sightings').insert({
       species: ['Dog', 'Cat', 'Other'].includes(this.pet.species) ? this.pet.species : 'Dog',
       breed: this.pet.breed || null,
       color: this.pet.color || null,
       photo_url: /^https:\/\//.test(this.pet.photo || '') ? this.pet.photo : null,
       location: location.slice(0, 300),
-      lat: this.coords.lat,
-      lng: this.coords.lng,
+      lat: coords.lat,
+      lng: coords.lng,
       seen_at: new Date().toISOString(),
-      notes: (notes || '').slice(0, 1000) || null,
-      reporter_name: 'NFC tag scan',
+      notes: publicNotes.slice(0, 1000) || null,
+      reporter_name: 'Anonymous',
       status: 'possible_sighting'
     }).then(({ error }) => { if (error) console.warn('[Found page] map pin skipped:', error.message); });
   }

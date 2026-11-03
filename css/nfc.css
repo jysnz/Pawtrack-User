@@ -54,6 +54,9 @@ body.found-mode .toast-container, body.found-mode #toast-container { display: no
 .fp-msg { margin-bottom: 14px; padding: 10px 12px; border-radius: var(--radius-md); background: var(--danger-light); border: 1px solid var(--danger); color: var(--text-main); font-size: 0.84rem; font-weight: 600; }
 .fp-msg[hidden] { display: none; }
 body.found-mode > *:not(#found-page):not(script):not(.toast-container):not(#toast-container) { display: none !important; }
+/* The tap page is the whole screen: drop the app shell's sidebar offset and flex layout so it never renders in half the width */
+html:has(body.found-mode), body.found-mode { width: 100%; max-width: 100%; margin: 0 !important; padding: 0 !important; display: block !important; overflow-x: hidden; }
+body.found-mode > #found-page { display: block; width: 100%; max-width: 100vw; margin: 0; }
 .found-page[hidden] { display: none; }
 .found-page { min-height: 100vh; min-height: 100dvh; background: var(--bg-main); color: var(--text-main); font-family: var(--font-body); padding-bottom: 96px; }
 .found-page * { box-sizing: border-box; }
@@ -102,6 +105,9 @@ body.found-mode > *:not(#found-page):not(script):not(.toast-container):not(#toas
 .fp-error { display: none; font-size: 0.76rem; color: var(--danger); font-weight: 600; }
 .fp-field.has-error .fp-error { display: block; }
 .fp-locate-row { display: flex; gap: 8px; }
+.fp-map { height: 240px; margin-top: 4px; border-radius: var(--radius-md); overflow: hidden; border: 1px solid var(--border-glass); position: relative; z-index: 0; }
+.fp-map[hidden] { display: none; }
+.fp-map-hint { font-size: 0.74rem; color: var(--text-dim); }
 .fp-locate-row input { flex: 1; min-width: 0; }
 .fp-chips { display: flex; flex-wrap: wrap; gap: 8px; }
 .fp-chip { border: 1px solid var(--border-glass); background: transparent; color: var(--text-main); border-radius: var(--radius-full); padding: 8px 13px; font-size: 0.8rem; font-weight: 600; cursor: pointer; }
@@ -143,6 +149,28 @@ body.found-mode > *:not(#found-page):not(script):not(.toast-container):not(#toas
 .fp-foot { text-align: center; font-size: 0.72rem; color: var(--text-dim); padding: 4px 16px 8px; }
 .fp-foot a { color: inherit; }
 
+/* Fluid sizing: scales with the screen instead of fixed phone-sized steps */
+.found-page { overflow-x: hidden; }
+.fp-main { width: 100%; padding: clamp(12px, 4vw, 28px); gap: clamp(12px, 3vw, 20px); }
+.fp-main > * { min-width: 0; }
+.fp-top { padding: 12px clamp(12px, 4vw, 32px); }
+.fp-facts { grid-template-columns: repeat(auto-fit, minmax(min(150px, 100%), 1fr)); }
+.fp-photo img { max-width: 100%; }
+.fp-map { height: clamp(200px, 38vh, 340px); }
+.fp-sticky { padding-left: clamp(12px, 4vw, 32px); padding-right: clamp(12px, 4vw, 32px); }
+@media (max-width: 380px) {
+  .fp-btn { padding: 0 14px; font-size: 0.9rem; }
+  .fp-card { padding: 14px; }
+}
+@media (min-width: 960px) {
+  /* Wide screens: photo and summary stay in view on the left, the forms scroll on the right */
+  .fp-main { max-width: 1040px; grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); align-items: start; }
+  .fp-hero { grid-column: 1; grid-row: 1 / span 6; position: sticky; top: 76px; }
+  .fp-main > :not(.fp-hero) { grid-column: 2; }
+  .fp-main > .fp-foot { grid-column: 1 / -1; }
+  .fp-photo { aspect-ratio: 4 / 5; }
+  .fp-hero-cta { display: none; }
+}
 @media (min-width: 720px) {
   .fp-main { padding-top: 28px; }
   .fp-photo { aspect-ratio: 16 / 10; }
