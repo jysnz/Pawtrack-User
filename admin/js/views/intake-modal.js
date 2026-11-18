@@ -150,6 +150,8 @@ window.IntakeModal = {
 
   close() {
     this.stopNfc();
+    if (this.picker) { try { this.picker.destroy(); } catch (e) { /* gone */ } this.picker = null; }
+    this.pickup = null;
     this.draft = null;
     window.adminApp.closeModal();
   },
@@ -178,7 +180,7 @@ window.IntakeModal = {
     return `
       <div class="form-group">
         <label class="form-label" for="in-fac">Receiving facility</label>
-        <select class="form-control" id="in-fac" name="shelterId">${tree.map(s => `<option value="${this.esc(s.id)}" ${s.id === this.facilityId ? 'selected' : ''}>${this.esc(s.name)}${s.parentId ? ' (sub)' : ' (main)'}</option>`).join('')}</select>
+        <select class="form-control" id="in-fac" name="shelterId">${tree.map(s => `<option value="${this.esc(s.id)}" ${s.id === this.facilityId ? 'selected' : ''}>${this.esc(s.name)}</option>`).join('')}</select>
       </div>`;
   },
 
@@ -193,7 +195,6 @@ window.IntakeModal = {
   // ----- Step 1: tap the tag -----
   renderScan() {
     const body = this.root.querySelector('#in-body');
-    const tags = window.adminStore.getRfidTags();
     body.innerHTML = `
       <p class="trm-lead" style="margin:0 0 14px;">Hold the pet's NFC collar tag to the back of this device. The form fills itself in from the tag.</p>
       <div class="trm-scan-form" style="display:flex;gap:8px;flex-wrap:wrap;">
@@ -203,20 +204,10 @@ window.IntakeModal = {
         </button>
       </div>
       <div id="in-nfc" class="trm-nfc" role="status" aria-live="polite" hidden><i aria-hidden="true"></i><span></span></div>
-      <form id="in-code-form" class="trm-scan-form" style="display:flex;gap:8px;margin-top:14px;">
-        <input type="text" class="form-control" id="in-code" list="in-tag-list" placeholder="Or type the tag code or microchip no." autocomplete="off" aria-label="Tag code or microchip number" style="flex:1;" />
-        <datalist id="in-tag-list">${tags.map(t => `<option value="${this.esc(t.code)}">${t.petName ? `Assigned to ${this.esc(t.petName)}` : 'Unassigned'}</option>`).join('')}</datalist>
-        <button type="submit" class="btn btn-secondary">Look up</button>
-      </form>
       ${this.facilityPickHtml() ? `<div style="margin-top:14px;">${this.facilityPickHtml()}</div>` : ''}
       <p class="trm-notag">Pet has no tag? <button type="button" class="trm-link" id="in-notag">Log it without NFC</button></p>`;
 
     body.querySelector('#in-nfc-btn').addEventListener('click', () => (this.nfc.state === 'scanning' ? this.stopNfc() : this.startNfc()));
-    body.querySelector('#in-code-form').addEventListener('submit', (e) => {
-      e.preventDefault();
-      const payload = this.manualPayload(body.querySelector('#in-code').value);
-      if (payload) this.showForm(payload);
-    });
     body.querySelector('#in-notag').addEventListener('click', () => this.showForm(null));
     this.bindFacility(body);
     this.paintNfc();
@@ -259,40 +250,72 @@ window.IntakeModal = {
       ${d.missing && !blocked ? `<div class="trm-nfc" data-state="scanning" role="status" style="margin-top:12px;"><i aria-hidden="true"></i><span>${this.esc(d.petName)} was reported missing. Logging this intake can issue the guardian a penalty ticket.</span></div>` : ''}
       <div class="trm-result" style="margin-top:0;">
         <form id="in-form" class="trm-form" novalidate>
+          <div class="trm-sec">Pet details</div>
           <div class="trm-row">
-            <div class="form-group"><label class="form-label" for="in-name">Name or identifier</label>
+            <div class="form-group"><label class="form-label" for="in-name">Name or identifier <span class="trm-req" aria-hidden="true">*</span></label>
               <input type="text" class="form-control" id="in-name" name="petName" value="${this.esc(d.petName)}" placeholder="e.g. Unidentified dog" required /></div>
-            <div class="form-group"><label class="form-label" for="in-cage">Cage number</label>
-              <input type="text" class="form-control" id="in-cage" name="cageNumber" value="${this.esc(d.cageNumber)}" data-auto="1" required /></div>
-          </div>
-          <div class="trm-row">
             <div class="form-group"><label class="form-label" for="in-species">Species</label>
               <select class="form-control" id="in-species" name="species">${['Dog', 'Cat', 'Other'].map(s => `<option value="${s}" ${d.species === s ? 'selected' : ''}>${s}</option>`).join('')}</select></div>
-            <div class="form-group"><label class="form-label" for="in-breed">Breed <span class="trm-opt">optional</span></label>
-              <input type="text" class="form-control" id="in-breed" name="breed" value="${this.esc(d.breed)}" placeholder="e.g. Aspin, Shih Tzu" /></div>
           </div>
           <div class="trm-row">
+            <div class="form-group"><label class="form-label" for="in-breed">Breed <span class="trm-opt">optional</span></label>
+              <input type="text" class="form-control" id="in-breed" name="breed" value="${this.esc(d.breed)}" placeholder="e.g. Aspin, Shih Tzu" /></div>
             <div class="form-group"><label class="form-label" for="in-age">Age <span class="trm-opt">optional</span></label>
               <input type="text" class="form-control" id="in-age" name="age" value="${this.esc(d.age)}" placeholder="e.g. 2 yrs, 6 mo" /></div>
-            <div class="form-group"><label class="form-label" for="in-photo">Photo <span class="trm-opt">${registered && d.photoUrl ? 'from the pet\'s profile, or replace it' : 'optional, shown to owners'}</span></label>
-              <input type="file" class="form-control" id="in-photo" name="photo" accept="image/*" capture="environment" /></div>
           </div>
-          ${this.facilityPickHtml()}
-          <details class="trm-more" ${d.healthCondition ? 'open' : ''}>
-            <summary>More details</summary>
-            <div class="trm-more-body">
-              <div class="form-group"><label class="form-label" for="in-officer">Receiving officer</label>
-                <input type="text" class="form-control" id="in-officer" name="intakeOfficer" value="${this.esc(d.intakeOfficer)}" /></div>
-              <div class="form-group"><label class="form-label" for="in-loc">Pickup location</label>
-                <input type="text" class="form-control" id="in-loc" name="impoundLocation" placeholder="e.g. Corner E. Rodriguez &amp; Tomas Morato" /></div>
-              <div class="form-group"><label class="form-label" for="in-health">Health observations</label>
-                <input type="text" class="form-control" id="in-health" name="healthCondition" value="${this.esc(d.healthCondition)}" placeholder="e.g. Active, healthy, collar tag verified" /></div>
+          <div class="form-group" id="in-photo-group">
+            <span class="form-label" id="in-photo-label">Photo <span class="trm-req" aria-hidden="true">*</span> <span class="trm-opt">shown to owners</span></span>
+            <div class="trm-photo2 ${registered && d.photoUrl ? 'has-photo' : ''}" role="group" aria-labelledby="in-photo-label">
+              <div class="trm-photo2-prev">
+                <img id="in-photo-prev" alt="Photo of the pet" ${registered && d.photoUrl ? `src="${this.esc(d.photoUrl)}"` : 'hidden'} />
+                <svg class="trm-photo2-ph" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+              </div>
+              <div class="trm-photo2-body">
+                <b id="in-photo-title">${registered && d.photoUrl ? 'Photo from the pet\'s profile' : 'Add a clear photo of the pet'}</b>
+                <small>Owners use this photo to recognise their pet. Show the face, and the whole body if you can.</small>
+                <div class="trm-photo2-actions">
+                  <label class="btn btn-secondary btn-sm" for="in-photo-cam" tabindex="0" id="in-photo-cam-btn">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+                    Take photo
+                  </label>
+                  <label class="btn btn-secondary btn-sm" for="in-photo" tabindex="0">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
+                    Upload
+                  </label>
+                </div>
+                <span class="trm-photo2-name" id="in-photo-name" hidden></span>
+              </div>
+              <input type="file" class="trm-photo-input" id="in-photo-cam" accept="image/*" capture="environment" tabindex="-1" />
+              <input type="file" class="trm-photo-input" id="in-photo" name="photo" accept="image/*" tabindex="-1" />
             </div>
-          </details>
-          <p class="trm-opt" style="margin:0;">Holding starts now and the claim window closes ${this.esc(new Date(d.claimDeadline).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }))} (72 hours).</p>
+            <p class="trm-photo-err" id="in-photo-err" role="alert" hidden>Add a photo of the pet to log the intake.</p>
+          </div>
+          <div class="trm-sec">Intake</div>
+          ${this.facilityPickHtml()}
+          <div class="trm-row">
+            <div class="form-group"><label class="form-label" for="in-cage">Cage number <span class="trm-req" aria-hidden="true">*</span></label>
+              <input type="text" class="form-control" id="in-cage" name="cageNumber" value="${this.esc(d.cageNumber)}" data-auto="1" required /></div>
+            <div class="form-group"><label class="form-label" for="in-officer">Receiving officer</label>
+              <input type="text" class="form-control" id="in-officer" name="intakeOfficer" value="${this.esc(d.intakeOfficer)}" /></div>
+          </div>
+          <div class="form-group" id="in-pickup">
+            <label class="form-label" for="in-loc-search">Pickup location <span class="trm-opt">optional, pin where the animal was found</span></label>
+            <div class="fm-address-row">
+              <input type="text" class="form-control" id="in-loc-search" placeholder="Search a street, landmark or barangay" autocomplete="off" />
+              <button type="button" class="btn btn-secondary" id="in-loc-find">Find on map</button>
+            </div>
+            <div id="in-map" class="fm-map trm-map"><div class="shm-fallback">Loading map…</div></div>
+            <div class="trm-pin-status" id="in-pin-status" aria-live="polite">Click the map or drag the pin to the spot where the animal was picked up.</div>
+          </div>
+          <div class="form-group"><label class="form-label" for="in-loc-desc">Place description <span class="trm-opt">optional</span></label>
+            <input type="text" class="form-control" id="in-loc-desc" name="placeDescription" maxlength="160" placeholder="e.g. Beside the 7-Eleven, near the barangay hall" /></div>
+          <div class="form-group"><label class="form-label" for="in-health">Health observations <span class="trm-opt">optional</span></label>
+            <textarea class="form-control" id="in-health" name="healthCondition" rows="2" placeholder="e.g. Active, healthy, collar tag verified">${this.esc(d.healthCondition)}</textarea></div>
+          <div class="trm-note"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+            <span>Holding starts now. The 72-hour claim window closes <b>${this.esc(new Date(d.claimDeadline).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }))}</b>.</span></div>
         </form>
       </div>
-      <div class="modal-footer" style="padding:16px 0 0;">
+      <div class="modal-footer trm-foot">
         <button class="btn btn-secondary" id="in-cancel">Cancel</button>
         <button class="btn btn-primary" id="in-submit" ${blocked ? 'disabled' : ''}>Log intake${registered && g ? ' and alert guardian' : ''}</button>
       </div>`;
@@ -303,11 +326,105 @@ window.IntakeModal = {
     body.querySelector('#in-cancel').addEventListener('click', () => this.close());
     body.querySelector('#in-submit').addEventListener('click', () => {
       if (!form.checkValidity()) { form.reportValidity(); return; }
+      if (this.photoRequired && !this.photoRequired()) return;
       this.submit(form);
     });
     form.addEventListener('submit', (e) => e.preventDefault());
+    // Photo: the camera and the upload button both fill the one "photo" field; a photo is required
+    const main = body.querySelector('#in-photo');
+    const cam = body.querySelector('#in-photo-cam');
+    const box = body.querySelector('.trm-photo2');
+    const prev = body.querySelector('#in-photo-prev');
+    const hasPhoto = () => !!(main.files && main.files[0]) || !!(registered && d.photoUrl);
+    const showPhoto = (f) => {
+      if (!f || !/^image\//.test(f.type || '')) return;
+      if (prev._url) URL.revokeObjectURL(prev._url);
+      prev._url = URL.createObjectURL(f);
+      prev.src = prev._url; prev.hidden = false;
+      box.classList.add('has-photo'); box.classList.remove('is-invalid');
+      body.querySelector('#in-photo-title').textContent = 'Photo added';
+      const nm = body.querySelector('#in-photo-name');
+      nm.textContent = f.name.length > 34 ? f.name.slice(0, 31) + '...' : f.name; nm.hidden = false;
+      body.querySelector('#in-photo-err').hidden = true;
+    };
+    main.addEventListener('change', () => showPhoto(main.files && main.files[0]));
+    cam.addEventListener('change', () => {
+      const f = cam.files && cam.files[0];
+      if (!f) return;
+      try { const dt = new DataTransfer(); dt.items.add(f); main.files = dt.files; } catch (e) { /* older browsers: keep the camera file only for the preview */ }
+      showPhoto(f);
+    });
+    body.querySelectorAll('.trm-photo2-actions label').forEach((l) => l.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); l.click(); } }));
+    this.photoRequired = () => {
+      if (hasPhoto()) return true;
+      box.classList.add('is-invalid');
+      body.querySelector('#in-photo-err').hidden = false;
+      body.querySelector('#in-photo-group').scrollIntoView({ block: 'center', behavior: 'smooth' });
+      body.querySelector('#in-photo-cam-btn')?.focus({ preventScroll: true });
+      return false;
+    };
     this.bindFacility(body);
+    this.setupPickupMap(body);
     body.querySelector(registered ? '#in-cage' : '#in-name')?.focus({ preventScroll: true });
+  },
+
+  // Pickup location: a Google Map (the same picker as the facility form) to pin the spot, plus an address search.
+  // The typed place description is kept separately and saved together with the map address.
+  setupPickupMap(body) {
+    if (this.picker) { try { this.picker.destroy(); } catch (e) { /* gone */ } this.picker = null; }
+    this.pickup = null;
+    const FF = window.FacilityForm;
+    const mapEl = body.querySelector('#in-map');
+    if (!FF || !FF.MapPicker || !mapEl) return;
+    const status = body.querySelector('#in-pin-status');
+    const search = body.querySelector('#in-loc-search');
+    const findBtn = body.querySelector('#in-loc-find');
+    const say = (t) => { status.textContent = t; };
+    let autoFilled = false;
+
+    const onPick = async (pos) => {
+      this.pickup = { lat: pos.lat, lng: pos.lng, address: '' };
+      say('Pin placed. Drag it to adjust.');
+      if (!this.picker || !this.picker.canGeocode) return;
+      const place = await this.picker.reverse(pos);
+      if (!place || !this.pickup || this.pickup.lat !== pos.lat || this.pickup.lng !== pos.lng) return;
+      this.pickup.address = place.address;
+      say(`Pin placed near ${place.address}`);
+      if (!search.value.trim() || autoFilled) { search.value = place.address; autoFilled = true; }
+    };
+
+    const find = async () => {
+      const text = search.value.trim();
+      if (!text) { search.focus(); return; }
+      if (!this.picker || !this.picker.canGeocode) return;
+      findBtn.disabled = true; findBtn.textContent = 'Finding…';
+      const found = await this.picker.geocode(`${text}, Philippines`);
+      findBtn.disabled = false; findBtn.textContent = 'Find on map';
+      if (!found) { say('We could not find that place. Check the spelling, or click the map to place the pin yourself.'); return; }
+      autoFilled = false;
+      this.picker.setPin({ lat: found.lat, lng: found.lng }, 17);
+      this.pickup = { lat: found.lat, lng: found.lng, address: found.address || text };
+      say(`Pin placed near ${this.pickup.address}`);
+    };
+    findBtn.addEventListener('click', find);
+    search.addEventListener('input', () => { autoFilled = false; });
+    search.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); find(); } });
+
+    FF.MapPicker.create(mapEl, {
+      lat: null, lng: null, onPick,
+      onEngine: (p) => { findBtn.hidden = !p.canGeocode; }
+    }).then((picker) => {
+      if (!body.isConnected) { picker.destroy(); return; }   // the dialog was closed while the map loaded
+      this.picker = picker;
+    });
+  },
+
+  // The text saved as the pickup location: the typed description first, then the map address
+  pickupText(description) {
+    const desc = String(description || '').trim();
+    const addr = this.pickup && this.pickup.address ? this.pickup.address : '';
+    if (desc || addr) return [desc, addr].filter(Boolean).join(' \u2014 ');
+    return this.pickup ? `Pinned on map (${this.pickup.lat.toFixed(5)}, ${this.pickup.lng.toFixed(5)})` : '';
   },
 
   // Shrinks a photo and stores it where the owner app can show it. Returns '' when it cannot be uploaded.
@@ -341,8 +458,20 @@ window.IntakeModal = {
     const file = data.get('photo');
     if (file && file.size) {
       if (btn) btn.textContent = 'Uploading photo…';
-      try { photoUrl = (await this.uploadPhoto(file)) || photoUrl; }
-      catch (e) { window.adminApp.showToast('The photo could not be uploaded. Logging the pet without it.', 'warning'); }
+      let uploaded = '';
+      try { uploaded = await this.uploadPhoto(file); } catch (e) { uploaded = ''; }
+      if (!uploaded) {
+        // A photo is required, so never log the pet without it
+        window.adminApp.showToast('The photo could not be uploaded. Check the connection and try again.', 'error');
+        if (btn) { btn.disabled = false; btn.textContent = 'Log intake'; }
+        return;
+      }
+      photoUrl = uploaded;
+    }
+    if (!photoUrl) {
+      window.adminApp.showToast('Add a photo of the pet to log the intake.', 'warning');
+      if (btn) btn.disabled = false;
+      return;
     }
     const chosen = this.facilities().find(s => s.id === (data.get('shelterId') || this.facilityId)) || home;
 
@@ -358,7 +487,9 @@ window.IntakeModal = {
       shelterAddress: chosen.address || '',
       shelterPhone: chosen.phone || '',
       cageNumber: data.get('cageNumber'),
-      impoundLocation: data.get('impoundLocation'),
+      impoundLocation: this.pickupText(data.get('placeDescription')),
+      impoundLat: this.pickup ? this.pickup.lat : undefined,
+      impoundLng: this.pickup ? this.pickup.lng : undefined,
       intakeOfficer: data.get('intakeOfficer'),
       healthCondition: data.get('healthCondition') || 'Normal upon intake assessment.',
       intakeDate: d.intakeAt,

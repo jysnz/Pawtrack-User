@@ -13,7 +13,10 @@ window.IMPOUND_OUTCOMES = {
 
 window.ImpoundmentsView = {
   currentTab: 'active',
-  facilityFilter: 'all',   // main facility: show all, or one sub-facility's pets
+  // The facility being viewed is the console-wide active facility (remembered across refreshes, shared by every page)
+  get facilityFilter() { return (window.adminStore && window.adminStore.getActiveFacilityId()) || 'all'; },
+  set facilityFilter(id) { if (window.adminStore) window.adminStore.setActiveFacility(id); },
+  setFacility(id) { this.facilityFilter = id; },
   pendingIntake: false,    // open the Scan & intake dialog as soon as the page has drawn
   query: '',               // the search that is applied (set by the Search button or Enter)
   speciesFilter: 'all',    // 'all' | 'Dog' | 'Cat' | 'Other'
@@ -34,7 +37,7 @@ window.ImpoundmentsView = {
 
   // Opens the page showing one facility's pets (tapped on the Facilities page)
   showFacility(id, tab) {
-    this.facilityFilter = id;
+    this.setFacility(id);
     this.currentTab = tab || 'active';
     this.query = '';
     if (window.adminApp && window.adminApp.currentRoute === 'impoundments') window.adminApp.renderView('impoundments');
@@ -75,9 +78,11 @@ window.ImpoundmentsView = {
     const subs = store.getSubFacilities();
     const treeIds = typeof store.getMyFacilityIds === 'function' ? store.getMyFacilityIds() : [];
     const facilityIds = treeIds.length ? treeIds : [mine.id, ...subs.map(x => x.id)];
-    if (this.facilityFilter !== 'all' && !facilityIds.includes(this.facilityFilter)) this.facilityFilter = 'all';
-    const impoundments = this.facilityFilter === 'all' ? allMine : allMine.filter(i => i.shelterId === this.facilityFilter);
-    const incoming = store.getIncomingTransfers();
+    // One facility at a time (a sub-facility is a facility like any other); fall back to the account's own when none/unknown is remembered
+    if (!facilityIds.includes(this.facilityFilter)) this.facilityFilter = facilityIds.includes(mine.id) ? mine.id : facilityIds[0];
+    const impoundments = allMine.filter(i => i.shelterId === this.facilityFilter);
+    // Transfers waiting at a facility are shown with that facility only (all of them when no facility is picked)
+    const incoming = store.getIncomingTransfers().filter(t => t.transferToId === this.facilityFilter);
     const myId = store.myShelterId();
     const isManager = store.isFacilityManager();
     const shelterName = (id) => (store.getShelters().find(x => x.id === id) || {}).name || 'the main facility';
@@ -125,7 +130,7 @@ window.ImpoundmentsView = {
         <div class="view-header-titles">
           <h1>Impoundments</h1>
           <div class="subtitle">
-            <span>Animals in the 72-hour holding window at ${this.esc(mine.name)}${facilityIds.length > 1 ? ` and ${facilityIds.length - 1} more ${facilityIds.length === 2 ? 'facility' : 'facilities'}` : ''}</span>
+            <span>Animals in the 72-hour holding window at ${this.esc(shelterName(this.facilityFilter))}</span>
           </div>
         </div>
         <div class="view-header-actions">
@@ -140,10 +145,13 @@ window.ImpoundmentsView = {
         </div>
       </div>
 
-      ${this.facilityFilter !== 'all' ? `
+      ${facilityIds.length > 1 ? `
       <div class="imp-scope" role="status">
-        <span>Showing only <b>${this.esc(shelterName(this.facilityFilter))}</b></span>
-        <button type="button" class="trm-link" id="imp-show-all">Show all facilities</button>
+        <span class="imp-scope-ic" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18M5 21V7l7-4 7 4v14M9 21v-6h6v6"/></svg></span>
+        <div class="imp-scope-text">
+          <small>Viewing facility</small>
+          <b>${this.esc(shelterName(this.facilityFilter))}${(() => { const f = store.getShelters().find(x => x.id === this.facilityFilter); return f && f.parentId ? ` <em class="imp-scope-tag">Sub of ${this.esc(shelterName(f.parentId))}</em>` : ''; })()}</b>
+        </div>
       </div>` : ''}
 
       <!-- Quick Status Strip -->
@@ -226,8 +234,7 @@ window.ImpoundmentsView = {
           </div>
           ${facilityIds.length > 1 ? `<label class="imp-facility-filter">Facility
             <select id="imp-facility-select" class="form-control">
-              <option value="all" ${this.facilityFilter === 'all' ? 'selected' : ''}>All my facilities</option>
-              ${facilityIds.map(id => `<option value="${this.esc(id)}" ${this.facilityFilter === id ? 'selected' : ''}>${this.esc(shelterName(id))}${facilityIds.length > 1 && !(store.getShelters().find(x => x.id === id) || {}).parentId ? ' (main)' : ''}</option>`).join('')}
+              ${facilityIds.map(id => `<option value="${this.esc(id)}" ${this.facilityFilter === id ? 'selected' : ''}>${this.esc(shelterName(id))}</option>`).join('')}
             </select></label>` : ''}
         </div>
 
@@ -259,6 +266,9 @@ window.ImpoundmentsView = {
                 const nowMs = Date.now();
                 const diffHours = Math.round((deadlineMs - nowMs) / (3600 * 1000));
                 const isExpired = diffHours <= 0;
+                const windowMs = deadlineMs - new Date(imp.intakeDate).getTime();
+                const pct = windowMs > 0 ? Math.max(0, Math.min(100, Math.round(((deadlineMs - nowMs) / windowMs) * 100))) : 0;
+                const tone = pct <= 25 ? 'is-low' : pct <= 50 ? 'is-mid' : '';
                 const outcome = window.IMPOUND_OUTCOMES[imp.status];
                 const tstat = imp.transferStatus;
                 const transferNote = tstat === 'pending' ? `<span class="status-pill status-impounded" title="Not collected in time: being moved to the main facility">Moving to ${this.esc(shelterName(imp.transferToId))}</span>`
@@ -275,51 +285,50 @@ window.ImpoundmentsView = {
                   <tr data-impound-id="${imp.id}">
                     <td>
                       <div class="pet-cell">
-                        <img src="${imp.photoUrl || 'https://images.unsplash.com/photo-1543466835-00a7907e9de1?auto=format&fit=crop&w=150&q=80'}" class="pet-thumb" />
+                        <img src="${this.esc(/^https:\/\//.test(imp.photoUrl || '') ? imp.photoUrl : 'https://images.unsplash.com/photo-1543466835-00a7907e9de1?auto=format&fit=crop&w=150&q=80')}" class="pet-thumb" alt="" />
                         <div class="pet-meta">
                           <span class="pet-name">${hl(imp.petName || 'Unidentified Pet')}</span>
-                          <span class="mono-tag" style="font-size: 9px; width: max-content; margin-top: 2px;">${hl(imp.rfidTag || 'NO TAG')}</span>
+                          <span class="mono-tag imp-tag">${hl(imp.rfidTag || 'NO TAG')}</span>
                         </div>
                       </div>
                     </td>
                     <td>
-                      <div style="display: flex; flex-direction: column;">
-                        <b style="font-size: 11.5px; color: var(--ink-primary);">${imp.shelterName || 'Municipal Shelter'}</b>
-                        <span class="chip-subtle-terracotta" style="width: max-content; font-size: 9.5px; padding: 2px 6px; border-radius: 4px; margin-top: 3px; font-weight: 700;">
-                          ${hl(imp.cageNumber || 'No cage yet')}
-                        </span>
+                      <div class="imp-fac">
+                        <b>${this.esc(imp.shelterName || 'Municipal Shelter')}</b>
+                        <span class="imp-cage"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16M15 4v16"/></svg>${hl(imp.cageNumber || 'No cage yet')}</span>
                       </div>
                     </td>
                     <td>
-                      <div style="display: flex; flex-direction: column; font-size: 11px;">
-                        <span>${new Date(imp.intakeDate).toLocaleDateString()}</span>
-                        <span style="font-family: var(--font-mono); color: var(--ink-muted); font-size: 10px;">${new Date(imp.intakeDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                      <div class="imp-when">
+                        <b>${new Date(imp.intakeDate).toLocaleDateString()}</b>
+                        <span>${new Date(imp.intakeDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                       </div>
                     </td>
                     <td>
                       ${transferNote}
                       ${outcome ? `
-                        <span class="status-pill ${outcome.pill}">${outcome.label}</span>
-                        <div style="font-size: 10px; color: var(--ink-muted); margin-top: 2px; font-family: var(--font-mono);">
-                          ${imp.closedAt || imp.claimedAt ? new Date(imp.closedAt || imp.claimedAt).toLocaleDateString() : 'Case closed'}
+                        <div class="imp-claim">
+                          <span class="status-pill ${outcome.pill}">${outcome.label}</span>
+                          <span class="imp-claim-by">${imp.closedAt || imp.claimedAt ? new Date(imp.closedAt || imp.claimedAt).toLocaleDateString() : 'Case closed'}</span>
                         </div>
                       ` : isExpired ? `
-                        <span class="status-pill status-lost">Overdue by ${Math.abs(diffHours)}h</span>
-                      ` : `
-                        <div style="display: flex; align-items: center; gap: 6px;">
-                          <span class="status-pill status-impounded">${diffHours}h left</span>
+                        <div class="imp-claim">
+                          <span class="status-pill status-lost">Overdue by ${Math.abs(diffHours)}h</span>
+                          <i class="imp-bar is-low" aria-hidden="true"><u style="width:100%"></u></i>
+                          <span class="imp-claim-by">Was due ${new Date(imp.claimDeadline).toLocaleDateString()} ${new Date(imp.claimDeadline).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                         </div>
-                        <div style="font-size: 10px; color: var(--ink-muted); margin-top: 2px; font-family: var(--font-mono);">
-                          Claim by ${new Date(imp.claimDeadline).toLocaleDateString()} ${new Date(imp.claimDeadline).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      ` : `
+                        <div class="imp-claim">
+                          <span class="status-pill status-impounded">${diffHours}h left</span>
+                          <i class="imp-bar ${tone}" aria-hidden="true"><u style="width:${pct}%"></u></i>
+                          <span class="imp-claim-by">Claim by ${new Date(imp.claimDeadline).toLocaleDateString()} ${new Date(imp.claimDeadline).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                         </div>
                       `}
                     </td>
                     <td>${penaltyCell}</td>
                     <td>
-                      <div style="max-width: 200px; font-size: 11px; color: var(--ink-secondary); text-overflow: ellipsis; overflow: hidden; white-space: nowrap;" title="${imp.healthCondition || ''}">
-                        ${imp.healthCondition || 'No condition issues noted upon intake.'}
-                      </div>
-                      <span style="font-size: 10px; color: var(--ink-muted); font-family: var(--font-mono);">${imp.intakeOfficer || 'ACO Officer'}</span>
+                      <div class="imp-note" title="${this.esc(imp.healthCondition || '')}">${this.esc(imp.healthCondition || 'No condition issues noted upon intake.')}</div>
+                      <span class="imp-officer"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>${this.esc(imp.intakeOfficer || 'ACO Officer')}</span>
                     </td>
                     <td style="text-align: right;">
                       <div style="display: flex; justify-content: flex-end; gap: 6px;">
@@ -331,8 +340,8 @@ window.ImpoundmentsView = {
                             +24h
                           </button>
                         ` : ''}
-                        <button class="btn btn-sm btn-secondary btn-edit-impound" data-impound-id="${imp.id}" title="Edit this case">
-                          Edit
+                        <button class="btn btn-sm btn-secondary btn-edit-impound imp-ico" data-impound-id="${imp.id}" title="Edit this case" aria-label="Edit this case">
+                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
                         </button>
                       </div>
                     </td>
@@ -348,7 +357,7 @@ window.ImpoundmentsView = {
     this.attachEvents(container);
     if (this.pendingIntake) {
       this.pendingIntake = false;
-      this.openIntakeModal({ facilityId: this.facilityFilter !== 'all' ? this.facilityFilter : undefined });
+      this.openIntakeModal({ facilityId: this.facilityFilter });
     }
   },
 
@@ -498,9 +507,9 @@ window.ImpoundmentsView = {
     });
     container.querySelector('#imp-export')?.addEventListener('click', () => this.exportCsv(this._listed));
 
-    container.querySelector('#imp-show-all')?.addEventListener('click', () => { this.facilityFilter = 'all'; this.render(container); });
+    if (window.adminApp) window.adminApp.updateFacilityChip();
     container.querySelector('#imp-facility-select')?.addEventListener('change', (e) => {
-      this.facilityFilter = e.target.value;
+      this.setFacility(e.target.value);
       this.render(container);
     });
 
@@ -605,14 +614,17 @@ window.ImpoundmentsView = {
       const form = modal.querySelector('#edit-impound-form');
       const formData = new FormData(form);
 
-      const status = formData.get('status');
+      const chosen = formData.get('status');
+      // Build on the case as it is NOW: someone else may have released or moved it while this dialog was open
+      const latest = (window.adminStore.getImpoundments ? window.adminStore.getImpoundments() : []).find((i) => i.id === imp.id) || imp;
+      const status = chosen === imp.status ? latest.status : chosen; // untouched status field keeps whatever it is now
       const updated = {
-        ...imp,
+        ...latest,
         petName: formData.get('petName'),
         rfidTag: formData.get('rfidTag'),
         cageNumber: formData.get('cageNumber'),
         status,
-        closedAt: status === imp.status ? imp.closedAt : (window.IMPOUND_OUTCOMES[status] ? new Date().toISOString() : null),
+        closedAt: status === latest.status ? latest.closedAt : (window.IMPOUND_OUTCOMES[status] ? new Date().toISOString() : null),
         healthCondition: formData.get('healthCondition')
       };
 

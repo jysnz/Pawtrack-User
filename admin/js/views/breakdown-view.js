@@ -66,8 +66,10 @@ window.BreakdownView = {
 
   // The account's facilities: its own, plus its sub-facilities for a main facility
   tree(store) {
-    const ids = typeof store.getMyFacilityIds === 'function' ? store.getMyFacilityIds() : [];
     const all = typeof store.getShelters === 'function' ? store.getShelters() : [];
+    // One facility at a time: the one chosen in the sidebar
+    const activeId = typeof store.getActiveFacilityId === 'function' ? store.getActiveFacilityId() : null;
+    const ids = activeId ? [activeId] : (typeof store.getMyFacilityIds === 'function' ? store.getMyFacilityIds() : []);
     const list = all.filter(s => ids.includes(s.id));
     const me = typeof store.getMyShelter === 'function' ? store.getMyShelter() : null;
     return list.length ? list : (me ? [me] : []);
@@ -75,7 +77,8 @@ window.BreakdownView = {
 
   // One record per animal this facility (or a sub-facility) took in. A linked pet record only fills in missing details.
   collectCases(store) {
-    const mine = typeof store.getMyImpoundments === 'function' ? (store.getMyImpoundments() || []) : [];
+    const activeId = typeof store.getActiveFacilityId === 'function' ? store.getActiveFacilityId() : null;
+    const mine = (typeof store.getMyImpoundments === 'function' ? (store.getMyImpoundments() || []) : []).filter(i => !activeId || i.shelterId === activeId);
     const linked = mine.filter(i => i.petId);
     const petById = linked.length && typeof store.getPets === 'function'
       ? Object.fromEntries((store.getPets() || []).filter(p => linked.some(i => i.petId === p.id)).map(p => [p.id, p]))
@@ -207,7 +210,7 @@ window.BreakdownView = {
   render(container) {
     this._container = container;
     const store = window.adminStore;
-    const mineShelter = typeof store.getMyShelter === 'function' ? store.getMyShelter() : null;
+    const mineShelter = (typeof store.getActiveFacility === 'function' ? store.getActiveFacility() : null) || (typeof store.getMyShelter === 'function' ? store.getMyShelter() : null);
     if (!mineShelter) return this.renderNoFacility(container);
     const tree = this.tree(store);
     const hasSubs = tree.length > 1;

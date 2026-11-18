@@ -932,3 +932,15 @@ body {
 @media (max-width: 992px) { .header-greeting { margin-right: 0; margin-left: auto; text-align: right; } }
 @media (max-width: 640px) { .header-greeting span { display: none; } .header-greeting strong { font-size: 0.9rem; } }
 @media (max-width: 480px) { .header-greeting { display: none; } }
+
+
+/* Sidebar sections (same idea as the admin console): a small label over each group of links */
+.sidebar-nav { gap: 14px; }
+.sidebar-nav .nav-group { display: flex; flex-direction: column; gap: 4px; }
+.sidebar-nav .nav-group-label {
+  padding: 2px 0.8rem 4px;
+  font: 700 10px var(--font-body);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}

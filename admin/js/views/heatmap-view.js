@@ -685,6 +685,7 @@ window.HeatmapView = {
       this.gmap = new Map(el, {
         center: { lat: district.center[0], lng: district.center[1] },
         zoom: district.zoom,
+        colorScheme: (google.maps.ColorScheme ? (document.documentElement.getAttribute('data-theme') === 'dark' ? google.maps.ColorScheme.DARK : google.maps.ColorScheme.LIGHT) : undefined),
         mapId: window.PawGoogleMaps.mapId || 'DEMO_MAP_ID',
         mapTypeId: this.googleMapType(),
         gestureHandling: 'greedy',
@@ -973,29 +974,29 @@ window.HeatmapView = {
         <div class="pawtrack-infowindow-card">
           <div class="infowindow-header">
             <div>
-              <div class="infowindow-id">${inc.name} (${inc.id})</div>
-              <div class="infowindow-species">${inc.speciesTag}</div>
+              <div class="infowindow-id">${this.esc(inc.name)} (${this.esc(inc.id)})</div>
+              <div class="infowindow-species">${this.esc(inc.speciesTag)}</div>
             </div>
             <button class="infowindow-close-btn" onclick="window.HeatmapView.mapInstance.closePopup()">✕</button>
           </div>
 
           <div class="infowindow-status-banner">
             <span class="status-label">Status:</span>
-            <strong class="status-val-lost">${inc.status.toUpperCase()}</strong>
+            <strong class="status-val-lost">${this.esc(String(inc.status).toUpperCase())}</strong>
           </div>
 
           <div class="infowindow-details-list">
             <div class="infowindow-row">
               <span class="row-key">Location:</span>
-              <span class="row-val">${inc.location}</span>
+              <span class="row-val">${this.esc(inc.location)}</span>
             </div>
             <div class="infowindow-row">
               <span class="row-key">District:</span>
-              <span class="row-val">${inc.district}</span>
+              <span class="row-val">${this.esc(inc.district)}</span>
             </div>
             <div class="infowindow-row">
               <span class="row-key">Contact:</span>
-              <span class="row-val">${inc.contact} (${inc.phone})</span>
+              <span class="row-val">${this.esc(inc.contact)} (${this.esc(inc.phone)})</span>
             </div>
             <div class="infowindow-row">
               <span class="row-key">Coords:</span>
@@ -1156,9 +1157,9 @@ window.HeatmapView = {
 
       const popupHtml = `
         <div style="padding: 10px 12px; font-family: var(--font-sans); min-width: 200px;">
-          <div style="font-size: 10px; font-weight: 800; font-family: var(--font-mono); color: #ea580c; text-transform: uppercase; margin-bottom: 2px;">${tag}</div>
-          <div style="font-size: 13.5px; font-weight: 800; color: #111827; line-height: 1.25;">${title}</div>
-          <div style="font-size: 11px; color: #6b7280; margin-top: 2px;">${subtitle}</div>
+          <div style="font-size: 10px; font-weight: 800; font-family: var(--font-mono); color: #ea580c; text-transform: uppercase; margin-bottom: 2px;">${this.esc(tag)}</div>
+          <div style="font-size: 13.5px; font-weight: 800; color: #111827; line-height: 1.25;">${this.esc(title)}</div>
+          <div style="font-size: 11px; color: #6b7280; margin-top: 2px;">${this.esc(subtitle)}</div>
           <div style="font-size: 10px; font-family: var(--font-mono); color: #9ca3af; margin-top: 4px;">Lat: ${lat.toFixed(4)}, Lng: ${lng.toFixed(4)}</div>
         </div>
       `;

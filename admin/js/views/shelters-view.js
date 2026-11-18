@@ -53,22 +53,27 @@ window.SheltersView = {
         ? (canAdd ? `<button class="btn btn-primary" id="btn-add-main">${this.plus()}Add facility</button>` : '')
         : '<button class="btn btn-secondary" id="btn-leave-facility">Leave facility</button>';
 
+    // The facility whose pets were last opened (matches the sidebar chip)
+    const viewingId = (store.getActiveFacilityId && store.getActiveFacilityId()) || '';
     const row = (s) => {
       const photo = /^https:\/\//.test(s.photoUrl || '') ? s.photoUrl : '';
       const cap = Number(s.capacity) || 0;
       const canManage = manager && managed.includes(s.id);
       const detail = [s.address, s.phone ? (window.FacilityForm ? window.FacilityForm.phone.format(s.phone) : s.phone) : ''].filter(Boolean).join(' · ');
       return `
-        <div class="shm-frow ${s.sub ? 'is-sub' : ''}" data-id="${esc(s.id)}" role="link" tabindex="0" aria-label="Open the pets at ${esc(s.name)}">
+        <div class="shm-frow ${s.sub ? 'is-sub' : ''} ${viewingId === s.id ? 'is-viewing' : ''}" data-id="${esc(s.id)}" role="link" tabindex="0" aria-label="Open the pets at ${esc(s.name)}"${viewingId === s.id ? ' aria-current="true"' : ''}>
           <span class="shm-frow-thumb ${photo ? '' : 'is-empty'}">${photo ? `<img src="${esc(photo)}" alt="" loading="lazy" />` : '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 21h18M5 21V7l7-4 7 4v14M9 21v-6h6v6"/></svg>'}</span>
           <div class="shm-frow-main">
-            <b>${esc(s.name)} <em class="${s.sub ? 'is-sub' : ''}">${s.sub ? `Sub of ${esc(s.parentName || 'the main facility')}` : 'Main'}</em>${s.mine ? ' <em>Yours</em>' : ''}</b>
+            <b>${esc(s.name)} <em class="${s.sub ? 'is-sub' : ''}">${s.sub ? `Sub of ${esc(s.parentName || 'the main facility')}` : 'Main'}</em></b>
             <span>${esc(detail || 'No address on file')}</span>
           </div>
-          <div class="shm-frow-stat"><b>${s.holding}</b>${cap ? ` of ${cap}` : ''} in holding</div>
+          <div class="shm-frow-stat">
+            <span><b>${s.holding}</b>${cap ? ` of ${cap}` : ''} in holding</span>
+            ${cap ? `<i class="shm-frow-bar ${s.holding >= cap ? 'is-full' : s.holding / cap >= 0.8 ? 'is-high' : ''}" aria-hidden="true"><u style="width:${Math.min(100, Math.round((s.holding / cap) * 100))}%"></u></i>` : ''}
+          </div>
           <svg class="shm-frow-go" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
           <div class="shm-frow-actions">
-            ${canManage ? `<button type="button" class="btn btn-sm btn-secondary" data-team="${esc(s.id)}">Team &amp; code</button><button type="button" class="btn btn-sm btn-secondary" data-edit="${esc(s.id)}">Edit</button>` : ''}
+            ${canManage ? `<button type="button" class="btn btn-sm btn-secondary" data-team="${esc(s.id)}">Team &amp; code</button><button type="button" class="btn btn-sm btn-secondary shm-ico" data-edit="${esc(s.id)}" title="Edit ${esc(s.name)}" aria-label="Edit ${esc(s.name)}"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button><button type="button" class="btn btn-sm btn-secondary shm-ico shm-del" data-del="${esc(s.id)}" title="Delete ${esc(s.name)}" aria-label="Delete ${esc(s.name)}"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg></button>` : ''}
           </div>
         </div>`;
     };
@@ -107,10 +112,97 @@ window.SheltersView = {
       const s = list.find(x => x.id === b.getAttribute('data-team'));
       if (s) this.openTeamModal(s.id, s.name);
     }));
+    container.querySelectorAll('[data-del]').forEach(b => b.addEventListener('click', () => {
+      const s = list.find(x => x.id === b.getAttribute('data-del'));
+      if (s) this.openDeleteModal(s);
+    }));
     container.querySelectorAll('[data-edit]').forEach(b => b.addEventListener('click', () => {
       const s = list.find(x => x.id === b.getAttribute('data-edit'));
       if (s) this.openShelterModal(s);
     }));
+  },
+
+  // Deleting a facility: first say what it affects (or what blocks it), then require a typed phrase
+  async openDeleteModal(facility) {
+    const store = window.adminStore;
+    const esc = (v) => this.esc(v);
+    if (!store.getManagedShelterIds().includes(facility.id)) {
+      window.adminApp.showToast('Only the facility manager can delete a facility.', 'warning');
+      return;
+    }
+    const kind = facility.sub ? 'sub-facility' : 'facility';
+    const modal = window.adminApp.openModalContent(`
+      <div class="modal-header">
+        <div class="nock-card-title">Delete ${kind}</div>
+        <button class="icon-btn-subtle" id="del-close-btn" aria-label="Close">&times;</button>
+      </div>
+      <div class="modal-body" id="del-body"><div class="shm-list-empty">Checking ${esc(facility.name)}…</div></div>
+      <div class="modal-footer" id="del-foot"><button class="btn btn-secondary" id="del-cancel-btn">Cancel</button></div>
+    `);
+    const close = () => window.adminApp.closeModal();
+    modal.querySelector('#del-close-btn')?.addEventListener('click', close);
+    modal.querySelector('#del-cancel-btn')?.addEventListener('click', close);
+
+    const info = await store.facilityDeletePreview(facility.id);
+    if (!info) { close(); return; }
+    const n = (v) => Number(v) || 0;
+    const plural = (c, one, many) => `${c} ${c === 1 ? one : many}`;
+    const body = modal.querySelector('#del-body');
+    const foot = modal.querySelector('#del-foot');
+
+    const blockers = [
+      n(info.in_holding) && `${plural(n(info.in_holding), 'animal is', 'animals are')} still in holding here. Release, claim or move ${n(info.in_holding) === 1 ? 'it' : 'them'} first.`,
+      n(info.pending_transfers) && `${plural(n(info.pending_transfers), 'transfer is', 'transfers are')} waiting to be confirmed. Settle ${n(info.pending_transfers) === 1 ? 'it' : 'them'} first.`,
+      n(info.unpaid_tickets) && `${plural(n(info.unpaid_tickets), 'penalty ticket is', 'penalty tickets are')} unpaid. Collect or waive ${n(info.unpaid_tickets) === 1 ? 'it' : 'them'} first.`
+    ].filter(Boolean);
+
+    if (blockers.length) {
+      body.innerHTML = `
+        <div class="del-box is-blocked" role="alert">
+          <b>${esc(info.name)} can't be deleted yet</b>
+          <ul>${blockers.map(t => `<li>${esc(t)}</li>`).join('')}</ul>
+        </div>`;
+      foot.innerHTML = '<button class="btn btn-secondary" id="del-ok-btn">Close</button>';
+      foot.querySelector('#del-ok-btn')?.addEventListener('click', close);
+      return;
+    }
+
+    const phrase = `delete ${info.name}`;
+    const norm = (v) => String(v || '').trim().replace(/\s+/g, ' ').toLowerCase();
+    const effects = [
+      `<b>${esc(info.name)}</b>, its invite code and its settings are permanently deleted.`,
+      n(info.sub_facilities) && `${plural(n(info.sub_facilities), 'sub-facility', 'sub-facilities')} (${(info.subs || []).map(esc).join(', ')}) will not be deleted. ${n(info.sub_facilities) === 1 ? 'It becomes a main facility' : 'They become main facilities'}, and you keep managing ${n(info.sub_facilities) === 1 ? 'it' : 'them'}.`,
+      n(info.past_records) && `${plural(n(info.past_records), 'finished impound record', 'finished impound records')} of this ${kind}, with their penalty tickets, are deleted too.`,
+      n(info.members) && `${plural(n(info.members), 'team member', 'team members')} will no longer belong to it${info.is_sub ? '' : ' and can join or register a facility again'}.`,
+      'This cannot be undone.'
+    ].filter(Boolean);
+    body.innerHTML = `
+      <div class="del-box" role="alert">
+        <b>Delete ${esc(info.name)}?</b>
+        <ul>${effects.map(t => `<li>${t}</li>`).join('')}</ul>
+      </div>
+      <label class="form-label" for="del-phrase" style="margin-top:16px;display:block;">To confirm, type <code class="del-phrase">${esc(phrase)}</code></label>
+      <input type="text" class="form-control" id="del-phrase" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="${esc(phrase)}" aria-describedby="del-hint" />
+      <p class="trm-opt" id="del-hint" style="margin:6px 0 0;">Capital letters and extra spaces don't matter.</p>`;
+    foot.innerHTML = `<button class="btn btn-secondary" id="del-cancel-btn">Cancel</button>
+      <button class="btn btn-delete" id="del-go-btn" disabled>Delete ${kind}</button>`;
+    foot.querySelector('#del-cancel-btn')?.addEventListener('click', close);
+
+    const input = body.querySelector('#del-phrase');
+    const go = foot.querySelector('#del-go-btn');
+    input.addEventListener('input', () => { go.disabled = norm(input.value) !== norm(phrase); });
+    const run = async () => {
+      if (go.disabled) return;
+      go.disabled = true; input.disabled = true; go.textContent = 'Deleting…';
+      const done = await store.deleteFacility(facility.id);
+      if (!done) { input.disabled = false; go.textContent = `Delete ${kind}`; go.disabled = norm(input.value) !== norm(phrase); return; }
+      close();
+      window.adminApp.showToast(`Deleted "${info.name}".`, 'success');
+      window.adminApp.renderView('shelters');
+    };
+    go.addEventListener('click', run);
+    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); run(); } });
+    input.focus({ preventScroll: true });
   },
 
   // Join an existing facility with the invite code its manager shares (you join as staff)
@@ -317,6 +409,13 @@ window.SheltersView = {
     const asSub = !!opts.asSub && !isEdit;
     const asMain = (!!opts.asMain || chooseType) && !isEdit && !asSub;
     const mains = store.getMainFacilities();
+    // Edit: a manager can switch the facility between main and sub-facility
+    const hasKids = isEdit && store.getShelters().some(x => x.parentId === initial.id);
+    const retypeMains = isEdit ? mains.filter(m => m.id !== initial.id) : [];
+    const retype = isEdit && store.getManagedShelterIds().includes(initial.id);
+    const retypeBlock = !initial || !retype ? '' : (hasKids
+      ? 'Move or delete its sub-facilities first.'
+      : (!initial.parentId && !retypeMains.length ? 'Add another main facility first.' : ''));
     const submitLabel = isEdit ? 'Save changes' : chooseType ? 'Add main facility' : asSub ? 'Add sub-facility' : asMain ? 'Add main facility' : 'Register facility';
 
     if (asSub && !(store.isFacilityManager() && store.isMainFacility())) {
@@ -360,6 +459,13 @@ window.SheltersView = {
             <label class="form-label">Facility name *</label>
             <input type="text" class="form-control" name="name" value="${val('name')}" placeholder="e.g. Quezon City Animal Care & Adoption Facility" required />
           </div>
+          ${retype ? `<div class="form-group form-full fm-type">
+            <label class="fm-check" for="fm-is-sub"><input type="checkbox" id="fm-is-sub" name="isSub" ${initial.parentId ? 'checked' : ''} ${retypeBlock && !initial.parentId ? 'disabled' : ''} /><span><b>This is a sub-facility</b><small>${retypeBlock && !initial.parentId ? esc(retypeBlock) : initial.parentId ? 'Untick to make it a main facility of its own. You keep managing it.' : 'Tick to move it under one of your other main facilities.'}</small></span></label>
+            <div class="fm-type-parent" id="fm-parent-wrap" ${initial.parentId ? '' : 'hidden'}>
+              <label class="form-label" for="fm-parent">Main facility of this sub-facility *</label>
+              <select class="form-control" id="fm-parent" name="parentId"><option value="">Select the main facility</option>${(initial.parentId ? mains : retypeMains).map(m => `<option value="${esc(m.id)}" ${initial.parentId === m.id ? 'selected' : ''}>${esc(m.name)}</option>`).join('')}</select>
+            </div>
+          </div>` : ''}
           ${chooseType ? `<div class="form-group form-full fm-type">
             <label class="fm-check" for="fm-is-sub"><input type="checkbox" id="fm-is-sub" name="isSub" /><span><b>This is a sub-facility</b><small>Leave this unchecked to add a main facility. A sub-facility belongs to one of your main facilities.</small></span></label>
             <div class="fm-type-parent" id="fm-parent-wrap" hidden>
@@ -451,17 +557,18 @@ window.SheltersView = {
     const errorEl = modal.querySelector('#fm-error');
     const locateBtn = modal.querySelector('#fm-locate');
     const saveBtn = modal.querySelector('#shelter-save-btn');
-    const typeBox = chooseType ? form.elements.isSub : null;
+    const typeBox = (chooseType || retype) ? form.elements.isSub : null;
     const parentWrap = modal.querySelector('#fm-parent-wrap');
     const parentSel = modal.querySelector('#fm-parent');
     const titleEl = modal.querySelector('#fm-title');
     const currentLabel = () => (chooseType ? (typeBox.checked ? 'Add sub-facility' : 'Add main facility') : submitLabel);
     // Ticking the box asks which main facility it belongs to; leaving it unticked adds a main facility
     const applyType = () => {
-      if (!chooseType) return;
+      if (!chooseType && !retype) return;
       const sub = !!typeBox.checked;
       parentWrap.hidden = !sub;
       parentSel.required = sub;
+      if (!chooseType) { if (sub && !parentSel.value) parentSel.focus({ preventScroll: true }); return; }
       if (titleEl) titleEl.textContent = sub ? 'Add a sub-facility' : 'Add a main facility';
       if (!saveBtn.disabled) saveBtn.textContent = currentLabel();
       if (sub && !parentSel.value) parentSel.focus({ preventScroll: true });
@@ -570,6 +677,7 @@ window.SheltersView = {
       const hoursError = hoursCtl.validate();
       if (hoursError) { showError(hoursError); return; }
       const isSubNow = chooseType ? !!typeBox.checked : asSub;
+      if (retype && typeBox.checked && !parentSel.value) { showError('Choose the main facility this sub-facility belongs to.'); parentSel.focus(); return; }
       if (chooseType && isSubNow && !parentSel.value) { showError('Choose the main facility this sub-facility belongs to.'); parentSel.focus(); return; }
       const pin = picker && picker.getPin();
       if (!pin) {
@@ -617,6 +725,19 @@ window.SheltersView = {
           saveBtn.disabled = false;
           saveBtn.textContent = currentLabel();
           return;
+        }
+        // Edit: apply a change of type (main <-> sub-facility) once the details are saved
+        if (retype) {
+          const want = typeBox.checked ? parentSel.value : null;
+          if ((initial.parentId || null) !== (want || null)) {
+            saveBtn.textContent = 'Changing type…';
+            if (!(await store.setFacilityParent(initial.id, want))) {
+              saveBtn.disabled = false;
+              saveBtn.textContent = currentLabel();
+              showError('Your changes were saved, but the facility type was not changed.');
+              return;
+            }
+          }
         }
         // The facility exists now, so its photo can be stored in its own folder
         let photoFailed = false;

@@ -253,13 +253,15 @@ window.ActivationView = {
     const store = window.adminStore;
     const fn = (name, fallback) => (typeof store[name] === 'function' ? store[name]() : fallback);
     const hasFacility = typeof store.hasFacility === 'function' ? store.hasFacility() : true;
-    const mine = fn('getMyShelter', null);
-    const impoundments = fn('getMyImpoundments', []) || [];   // this facility (and its sub-facilities) only
-    const facilityIds = fn('getMyFacilityIds', []) || [];
+    // Everything on this page is for ONE facility: the one chosen in the sidebar (a sub-facility counts like any main one)
+    const activeId = fn('getActiveFacilityId', null);
     const allShelters = fn('getShelters', []) || [];
+    const mine = (activeId && allShelters.find((s) => s.id === activeId)) || fn('getMyShelter', null);
+    const impoundments = (fn('getMyImpoundments', []) || []).filter((i) => !activeId || i.shelterId === activeId);
+    const facilityIds = activeId ? [activeId] : (fn('getMyFacilityIds', []) || []);
     const treeShelters = allShelters.filter((s) => facilityIds.includes(s.id));
-    const subs = fn('getSubFacilities', []) || [];
-    const mainFacility = fn('getMainFacility', null);
+    const subs = [];
+    const mainFacility = mine && mine.parentId ? (allShelters.find((s) => s.id === mine.parentId) || null) : null;
     const tickets = (fn('getTickets', []) || []).filter((t) => impoundments.some((i) => i.id === t.impoundId) || facilityIds.includes(t.payeeShelterId));
     const now = Date.now();
 
@@ -269,6 +271,22 @@ window.ActivationView = {
     const waitingOnFacility = !!(account && account.shelter_id) && !treeShelters.length && !store.hasSynced;
     const accountPending = typeof store.currentAdmin === 'function' && !account;
     const loading = (store.syncStatus === 'connecting' && !impoundments.length) || accountPending || waitingOnFacility || (!store.hasSynced && !impoundments.length && !allShelters.length);
+    if (loading && store.syncStatus === 'offline' && !store.hasSynced) {
+      // First load and the database cannot be reached: say so instead of showing a skeleton forever
+      this._wasLoading = true;
+      container.innerHTML = `
+        <div class="view-header"><div class="view-header-titles"><h1>Dashboard</h1></div></div>
+        <div class="card" style="text-align:center; padding: 32px 20px;">
+          <h3 style="margin:0 0 6px; font-size:15px;">Can't reach the database</h3>
+          <p style="margin:0 0 16px; color: var(--ink-muted); font-size:12.5px;">Check your connection. This page will fill in as soon as it is back.</p>
+          <button class="btn btn-primary" id="btn-offline-retry">Try again</button>
+        </div>`;
+      container.querySelector('#btn-offline-retry')?.addEventListener('click', (e) => {
+        e.currentTarget.disabled = true;
+        Promise.resolve(store.syncFromSupabase()).finally(() => { if (window.adminApp) window.adminApp.renderView('activation'); });
+      });
+      return;
+    }
     if (loading) {
       this._wasLoading = true;
       return this.renderSkeleton(container);
@@ -302,8 +320,8 @@ window.ActivationView = {
     const capacityPct = capacity ? Math.min(Math.round((active.length / capacity) * 100), 100) : null;
 
     // ---- Transfers between this facility's sub-facilities and its main facility ----
-    const incoming = fn('getIncomingTransfers', []) || [];
-    const outgoing = (fn('getOutgoingTransfers', []) || []).filter((i) => i.status === 'active_impounded');
+    const incoming = (fn('getIncomingTransfers', []) || []).filter((t) => !activeId || t.transferToId === activeId);
+    const outgoing = (fn('getOutgoingTransfers', []) || []).filter((i) => i.status === 'active_impounded' && (!activeId || i.shelterId === activeId));
     const notArrived = active.filter((i) => i.transferStatus === 'not_arrived');
 
     // ---- Penalty tickets (missing pets impounded at this facility or its sub-facilities) ----
@@ -311,7 +329,7 @@ window.ActivationView = {
     const paidT = tickets.filter((t) => t.status === 'paid');
     const waivedT = tickets.filter((t) => t.status === 'waived');
     const sumPhp = (list) => list.reduce((a, t) => a + (Number(t.amount) || 0), 0);
-    const toCollect = fn('getTicketsToCollect', []) || [];
+    const toCollect = (fn('getTicketsToCollect', []) || []).filter((t) => !activeId || t.payeeShelterId === activeId);
     const showPenalties = !!store.penaltyReady && tickets.length > 0;
 
     // ---- Sparklines (last 7 days) ----
@@ -420,19 +438,15 @@ window.ActivationView = {
     }).sort((a, b) => Number(b.main) - Number(a.main) || b.n - a.n);
 
     const scopeName = mine ? mine.name : 'Your impound facility';
-    const scopeNote = mainFacility ? `Sub-facility of ${mainFacility.name}` : (() => {
-      const mainsMore = Math.max((fn('getMainFacilities', []) || []).length - 1, 0);
-      const bits = [];
-      if (mainsMore) bits.push(`${mainsMore} more main ${mainsMore === 1 ? 'facility' : 'facilities'}`);
-      if (subs.length) bits.push(`${subs.length} sub-${subs.length === 1 ? 'facility' : 'facilities'}`);
-      return bits.length ? `${scopeName} and ${bits.join(' and ')}` : scopeName;
-    })();
+    // The page is for one facility: name it, and say how it relates to its main facility when it is a sub-facility
+    const scopeRole = mainFacility ? `Sub-facility of ${mainFacility.name}` : 'Main facility';
+    const scopeNote = `${scopeName} · ${scopeRole}`;
     const todayLabel = new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
     container.innerHTML = `
      <div class="dash-pro${animate ? ' is-animated' : ''}${fromSkeleton ? ' from-skeleton' : ''}">
       <div class="view-header">
         <div class="view-header-titles">
-          <div class="dash-eyebrow">${escHtml(scopeNote)}</div>
+          <div class="dash-eyebrow"><span class="dash-eyebrow-name">${escHtml(scopeName)}</span><span class="dash-eyebrow-role"> · ${escHtml(scopeRole)}</span></div>
           <h1>Dashboard</h1>
           <div class="subtitle"><span>${todayLabel} · Your facility's impoundments, transfers and penalties, live from the database</span></div>
         </div>

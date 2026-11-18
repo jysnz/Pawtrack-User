@@ -215,7 +215,11 @@ class AdminStore {
     if (this._rtStarting) return;
     this._rtStarting = true;
     const sb = await this.waitForClient();
-    if (!sb || typeof sb.channel !== 'function' || this.rtChannel) return;
+    if (!sb || typeof sb.channel !== 'function' || this.rtChannel) {
+      this._rtStarting = false;
+      if (!sb && !this.rtChannel) setTimeout(() => this.connectRealtime(), 20000); // client was slow: try again
+      return;
+    }
     try {
       const channel = sb.channel('admin-live');
       AdminStore.REALTIME_TABLES.forEach((table) => {
@@ -246,6 +250,22 @@ class AdminStore {
   syncFromSupabase() {
     if (this.syncing) return this.syncing;
     this.syncing = (async () => {
+      try {
+        return await this.runSync();
+      } catch (err) {
+        // A full storage quota or one malformed row must not stop polling or surface as an unhandled rejection
+        console.warn('[AdminStore] Sync failed:', err && (err.message || err));
+        this.syncFailures = (this.syncFailures || 0) + 1;
+        this.setStatus('offline');
+        this.schedulePoll();
+        return false;
+      }
+    })().finally(() => { this.syncing = null; });
+    return this.syncing;
+  }
+
+  async runSync() {
+    {
       const sb = await this.waitForClient();
       if (!sb) { this.syncFailures = (this.syncFailures || 0) + 1; this.setStatus('offline'); this.schedulePoll(); return false; }
       const [pets, reports, sightings, impounded, shelters, tags, notifs, tickets, extraMains] = await Promise.all([
@@ -272,7 +292,7 @@ class AdminStore {
       const put = (key, list) => {
         const next = JSON.stringify(list);
         if (localStorage.getItem(key) === next) return;
-        localStorage.setItem(key, next);
+        try { localStorage.setItem(key, next); } catch (e) { /* storage full: keep it in memory only */ }
         changed = true;
       };
       [['pets', pets], ['missing reports', reports], ['sightings', sightings], ['impounds', impounded], ['shelters', shelters], ['NFC tags', tags], ['notifications', notifs]]
@@ -294,6 +314,10 @@ class AdminStore {
       put(STORAGE_KEYS.TICKETS, tickets.error ? [] : (tickets.data || []).map((t) => this.fromTicketRow(t)));
       // Facility settings that only newer databases have (the penalty amount): used to show or hide those fields
       this.penaltyReady = !shelters.error && (shelters.data || []).some((r) => 'penalty_php' in r);
+      // Pickup pins: only sent once the database has the columns (checked once)
+      if (this.pickupCoordsReady === undefined) {
+        try { this.pickupCoordsReady = !(await sb.from('impounded_pets').select('impound_lat').limit(1)).error; } catch (e) { this.pickupCoordsReady = false; }
+      }
 
       this.syncFailures = 0;
       this.setStatus(this.realtime === 'live' ? 'live' : 'connected');
@@ -308,8 +332,7 @@ class AdminStore {
       // Uncollected pets at sub-facilities move to the main facility after their holding window
       this.runOverdueTransfers().catch(() => {});
       return true;
-    })().finally(() => { this.syncing = null; });
-    return this.syncing;
+    }
   }
 
   // Shows a database error once per action
@@ -324,7 +347,8 @@ class AdminStore {
     if (!sb) { this.dbError(what, { message: 'no connection to the database' }); return null; }
     const { data, error } = await run(sb);
     if (error) { this.dbError(what, error); return null; }
-    this.syncFromSupabase();
+    // A reload already in flight started before this write, so it may carry old rows: reload again after it
+    (this.syncing ? this.syncing.then(() => this.syncFromSupabase()) : this.syncFromSupabase()).catch(() => {});
     return data || [];
   }
 
@@ -429,6 +453,8 @@ class AdminStore {
       rfidTag: i.nfc_tag || '',
       cageNumber: i.kennel || '',
       location: i.impound_location || '',
+      impoundLat: i.impound_lat == null ? null : Number(i.impound_lat),
+      impoundLng: i.impound_lng == null ? null : Number(i.impound_lng),
       intakeOfficer: i.intake_officer || '',
       healthCondition: i.health_condition || '',
       shelterId: i.shelter_id,
@@ -728,6 +754,8 @@ class AdminStore {
       nfc_tag: record.rfidTag || null,
       kennel: record.cageNumber || null,
       impound_location: record.impoundLocation || record.location || null,
+      ...(this.pickupCoordsReady && Number.isFinite(record.impoundLat) && Number.isFinite(record.impoundLng)
+        ? { impound_lat: record.impoundLat, impound_lng: record.impoundLng } : {}),
       intake_officer: record.intakeOfficer || null,
       health_condition: record.healthCondition || null,
       intake_at: record.intakeDate,
@@ -872,6 +900,29 @@ class AdminStore {
       .concat(this.getSubFacilities().map(s => s.id));
   }
 
+  // The facility the whole console is showing (the account's own, or another one in its tree that was picked).
+  // Remembered across refreshes; falls back to the account's own facility when nothing valid is remembered.
+  getActiveFacilityId() {
+    const ids = this.getMyFacilityIds();
+    if (!ids.length) return null;
+    let saved = null;
+    try { saved = localStorage.getItem('pawtrack_active_facility'); } catch (e) { saved = null; }
+    if (saved && ids.includes(saved)) return saved;
+    const own = this.myShelterId();
+    return ids.includes(own) ? own : ids[0];
+  }
+
+  getActiveFacility() {
+    const id = this.getActiveFacilityId();
+    return id ? (this.getShelters().find(s => s.id === id) || null) : null;
+  }
+
+  setActiveFacility(id) {
+    if (!id || !this.getMyFacilityIds().includes(id) || id === this.getActiveFacilityId()) return;
+    try { localStorage.setItem('pawtrack_active_facility', id); } catch (e) { /* private mode: not remembered */ }
+    this.notify('active_facility'); // every page redraws for the new facility
+  }
+
   // Facilities this account may edit and manage the team of (managers only)
   getManagedShelterIds() {
     return this.isFacilityManager() ? this.getMyFacilityIds() : [];
@@ -967,6 +1018,30 @@ class AdminStore {
     const { data, error } = await sb.rpc(name, args || {});
     if (error) { this.dbError(what, error); return { ok: false, data: null }; }
     return { ok: true, data };
+  }
+
+  // What deleting a facility would affect, and what blocks it. null when the database refused or could not be reached.
+  async facilityDeletePreview(id) {
+    const res = await this.rpc('Could not check this facility', 'facility_delete_preview', { p_id: id });
+    return res.ok ? res.data : null;
+  }
+
+  // Makes a facility a sub-facility of one of the account's main facilities (parentId), or a main facility (null).
+  // Resolves true on success; the database re-checks every rule and its refusal is shown as a toast.
+  async setFacilityParent(id, parentId) {
+    const res = await this.rpc('Could not change the facility type', 'set_facility_parent', { p_id: id, p_parent: parentId || null });
+    if (!res.ok) return false;
+    await this.syncFromSupabase();
+    return true;
+  }
+
+  // Deletes a facility (the database re-checks that it is allowed). Resolves the summary, or null on failure.
+  async deleteFacility(id) {
+    const res = await this.rpc('Could not delete the facility', 'delete_facility', { p_id: id });
+    if (!res.ok) return null;
+    try { if (localStorage.getItem('pawtrack_active_facility') === id) localStorage.removeItem('pawtrack_active_facility'); } catch (e) { /* ignore */ }
+    await this.syncFromSupabase();
+    return res.data || {};
   }
 
   // Register the admin's facility (they become its manager), or update it (manager only).

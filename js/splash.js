@@ -41,6 +41,26 @@
   var trail = '';
   for (var n = 0; n < 6; n++) trail += '<span class="pt-print" style="--i:' + n + '">' + PRINT + '</span>';
 
+  // Paw prints scattered over the whole screen, clear of the logo in the middle. A fixed seed keeps the pattern the same
+  // every time, and the prints are placed in pixels so a tall phone and a wide desktop both look filled but balanced.
+  var scatter = '';
+  (function () {
+    var W = window.innerWidth || 1024, H = window.innerHeight || 768;
+    var seed = 11;
+    var rnd = function () { seed = (seed * 16807) % 2147483647; return (seed - 1) / 2147483646; };
+    var want = Math.max(16, Math.min(34, Math.round((W * H) / 38000)));
+    var placed = 0, tries = 0;
+    while (placed < want && tries < 400) {
+      tries += 1;
+      var x = rnd() * W, y = rnd() * H;
+      if (Math.abs(x - W / 2) < 150 && Math.abs(y - H / 2) < 170) continue;   // keep the middle for the logo and name
+      var size = 16 + rnd() * 26;
+      scatter += '<span class="pt-spaw" style="left:' + x.toFixed(0) + 'px;top:' + y.toFixed(0) + 'px;--s:' + size.toFixed(0) + 'px;--r:' +
+        (rnd() * 360).toFixed(0) + 'deg;--d:' + (rnd() * 2400).toFixed(0) + 'ms;--t:' + (3600 + rnd() * 2600).toFixed(0) + 'ms">' + PRINT + '</span>';
+      placed += 1;
+    }
+  })();
+
   // The owner app's logo: gradient disc, golden paw, pale border (same look as the header logo, only bigger)
   var ownerMark = '<div class="pt-logo pt-flyable"><svg viewBox="0 0 24 24" fill="currentColor"><path d="' + PAW + '"/></svg></div>';
   // The admin badge: black disc, white paw, outline that draws itself
@@ -65,6 +85,7 @@
   el.setAttribute('aria-label', 'Loading PawTrack' + (label ? ' ' + label : ''));
   el.innerHTML =
     '<div class="pt-glow" aria-hidden="true"></div>' +
+    '<div class="pt-scatter" aria-hidden="true">' + scatter + '</div>' +
     '<div class="pt-splash-stack">' +
       '<div class="pt-splash-mark" aria-hidden="true">' +
         '<span class="pt-ring"></span><span class="pt-ring"></span><span class="pt-ring"></span>' +

@@ -62,6 +62,7 @@
   <link rel="stylesheet" href="css/found.css" />
   <link rel="stylesheet" href="css/penalty.css" />
   <link rel="stylesheet" href="css/facility-pets.css" />
+  <link rel="stylesheet" href="css/impound.css" />
   <link rel="stylesheet" href="css/settings.css" />
   <link rel="stylesheet" href="css/navigation.css" />
 </head>
@@ -85,6 +86,8 @@
     </div>
 
     <nav class="role-tabs sidebar-nav" aria-label="Main Navigation">
+      <div class="nav-group" role="group" aria-label="Overview">
+        <div class="nav-group-label">Overview</div>
       <a href="#pets" class="role-tab-btn active" data-view="pets" title="Pets" aria-label="Pets">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <circle cx="11" cy="4" r="2"/><circle cx="18" cy="8" r="2"/><circle cx="20" cy="16" r="2"/>
@@ -100,7 +103,9 @@
         <span>Missing Pets</span>
       </a>
       <a href="http://localhost:8080" target="_blank" class="badge" style="display: none; background:rgba(194,65,12,0.15); color:#ea580c; text-decoration:none; padding:4px 8px; border-radius:6px; font-weight:600; font-size:11px; margin-left:8px; border:1px solid rgba(194,65,12,0.3);" hidden>Admin Console ↗</a>
-
+      </div>
+      <div class="nav-group" role="group" aria-label="Community">
+        <div class="nav-group-label">Community</div>
       <a href="#sightings" class="role-tab-btn" data-view="sightings" title="Community Pet Sightings" aria-label="Community Pet Sightings">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/>
@@ -124,12 +129,27 @@
         </svg>
         <span data-i18n="nav.report">Report Pet</span>
       </a>
+      </div>
+      <div class="nav-group" role="group" aria-label="Facilities">
+        <div class="nav-group-label">Facilities</div>
+      <a href="#impound" class="role-tab-btn" data-view="impound" title="Impoundment Facilities" aria-label="Impoundment Facilities">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 21h18"/>
+          <path d="M5 21V7l7-4 7 4v14"/>
+          <path d="M9 21v-6h6v6"/>
+        </svg>
+        <span>Impoundments</span>
+      </a>
+      </div>
+      <div class="nav-group" role="group" aria-label="Account">
+        <div class="nav-group-label">Account</div>
       <a href="#settings" class="role-tab-btn" data-view="settings" title="Settings" aria-label="Settings" data-i18n-title="nav.settings" data-i18n-aria="nav.settings">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>
         </svg>
         <span data-i18n="nav.settings">Settings</span>
       </a>
+      </div>
     </nav>
 
     <!-- Account (Log In / profile menu with Log Out) -->
@@ -2646,6 +2666,7 @@
   <script src="js/views/hardware-view.js"></script>
   <script src="js/views/sightings-view.js"></script>
   <script src="js/views/found-view.js"></script>
+  <script src="js/views/impound-view.js"></script>
   <script src="js/views/settings-view.js"></script>
   <script src="js/report-manager.js"></script>
   <script src="js/penalty-prompt.js"></script>

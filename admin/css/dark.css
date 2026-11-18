@@ -1,0 +1,204 @@
+/* ==========================================================================
+   PawTrack Admin: dark theme. Loaded last. Everything keys off data-theme="dark" on <html>
+   (set before first paint by the script in index.html and by AdminApp.applyTheme).
+   The design system is built on CSS variables, so most of the console re-colours by swapping the tokens below;
+   the overrides after them cover the few components that use fixed light colours.
+   ========================================================================== */
+
+:root {
+  /* Used by the confirm dialog, the case view and a few cards; they used to fall back to fixed light values */
+  --bg-surface: #ffffff;
+  --bg-subtle: rgba(0, 0, 0, 0.04);
+  --border-subtle: rgba(0, 0, 0, 0.1);
+  --border-strong: #d6d3d1;
+  --text-dim: #78716c;
+}
+
+html[data-theme="dark"] {
+  color-scheme: dark;
+  --bg-surface: #1c1917;
+  --bg-subtle: rgba(255, 255, 255, 0.05);
+  --border-subtle: rgba(255, 255, 255, 0.1);
+  --border-strong: #4a423d;
+  --text-dim: #a39b93;
+
+
+  --bg-app: #14110f;
+  --bg-card: #1c1917;
+  --bg-card-subtle: #221e1b;
+  --bg-hover: #2b2623;
+  --bg-active: #33241b;
+  --bg-input: #1a1614;
+
+  --border-main: #3a3430;
+  --border-light: #2d2825;
+  --border-focus: #ee6a2c;
+
+  --ink-primary: #f5f1ec;
+  --ink-secondary: #d6d0c9;
+  --ink-muted: #a39b93;
+  --ink-subtle: #7d756e;
+  --ink-inverse: #ffffff;
+
+  --brand-terracotta: #e2602a;
+  --brand-terracotta-hover: #f58a55;
+  --brand-terracotta-light: rgba(238, 106, 44, 0.24);
+  --brand-terracotta-subtle: rgba(238, 106, 44, 0.12);
+  --brand-terracotta-border: rgba(251, 146, 80, 0.38);
+
+  --color-green: #4ade80;
+  --color-green-light: rgba(34, 197, 94, 0.16);
+  --color-green-border: rgba(74, 222, 128, 0.36);
+
+  --color-amber: #fbbf24;
+  --color-amber-light: rgba(245, 158, 11, 0.16);
+  --color-amber-border: rgba(251, 191, 36, 0.36);
+
+  --color-red: #fb7185;
+  --color-red-light: rgba(244, 63, 94, 0.16);
+  --color-red-border: rgba(251, 113, 133, 0.38);
+
+  --color-blue: #60a5fa;
+  --color-blue-light: rgba(59, 130, 246, 0.16);
+  --color-blue-border: rgba(96, 165, 250, 0.38);
+
+  --color-purple: #a78bfa;
+  --color-purple-light: rgba(139, 92, 246, 0.18);
+  --color-purple-border: rgba(167, 139, 250, 0.38);
+
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.35);
+  --shadow-md: 0 4px 8px -1px rgba(0, 0, 0, 0.45), 0 2px 4px -2px rgba(0, 0, 0, 0.35);
+  --shadow-lg: 0 10px 18px -3px rgba(0, 0, 0, 0.5), 0 4px 6px -4px rgba(0, 0, 0, 0.4);
+  --shadow-drawer: -4px 0 28px rgba(0, 0, 0, 0.55);
+  --shadow-modal: 0 20px 30px -5px rgba(0, 0, 0, 0.6), 0 8px 10px -6px rgba(0, 0, 0, 0.5);
+}
+
+/* ---------- Surfaces that used fixed light colours ---------- */
+html[data-theme="dark"] .form-control:focus,
+html[data-theme="dark"] .search-suggestions-dropdown,
+html[data-theme="dark"] .map-floating-badge,
+html[data-theme="dark"] .map-floating-legend,
+html[data-theme="dark"] .map-fullscreen-btn,
+html[data-theme="dark"] .btn-fly-to-map,
+html[data-theme="dark"] .hm-legend,
+html[data-theme="dark"] .trm-cover-tag { background: var(--bg-card); color: var(--ink-primary); }
+
+html[data-theme="dark"] .trend-insight-banner,
+html[data-theme="dark"] .table-district-pill,
+html[data-theme="dark"] .loc-district-tag,
+html[data-theme="dark"] .bar-track,
+html[data-theme="dark"] .sector-metric-cell:hover { background: var(--bg-hover); color: var(--ink-secondary); }
+
+html[data-theme="dark"] .pet-thumb,
+html[data-theme="dark"] .shm-frow-thumb,
+html[data-theme="dark"] .trm-photo2-prev { background: var(--bg-hover); }
+
+html[data-theme="dark"] .admin-avatar-btn { border-color: var(--bg-card); }
+
+/* Toasts were dark-on-light by using --ink-primary as their background: keep them a dark card with light text */
+html[data-theme="dark"] .toast-item { background: #2b2623; color: #f5f1ec; border: 1px solid var(--border-main); }
+
+/* ---------- Red and amber call-outs ---------- */
+html[data-theme="dark"] .trm-nfc[data-state="error"],
+html[data-theme="dark"] .live-sync-indicator[data-state="offline"],
+html[data-theme="dark"] .trm-photo2.is-invalid,
+html[data-theme="dark"] .del-box,
+html[data-theme="dark"] .risk-badge.risk-high,
+html[data-theme="dark"] .dash-count,
+html[data-theme="dark"] .dash-time.tone-late { background: rgba(244, 63, 94, 0.14); color: #fda4af; border-color: rgba(251, 113, 133, 0.4); }
+
+html[data-theme="dark"] .dash-needs .dash-attention-item.tone-warn,
+html[data-theme="dark"] .fp-nudge,
+html[data-theme="dark"] .del-box.is-blocked { background: rgba(245, 158, 11, 0.13); color: #fcd34d; border-color: rgba(251, 191, 36, 0.36); }
+
+html[data-theme="dark"] .fp-error,
+html[data-theme="dark"] .trm-photo-err { color: #fda4af; }
+
+/* ---------- Search highlight, scrollbars, selection ---------- */
+html[data-theme="dark"] .data-table mark { background: rgba(251, 191, 36, 0.3); color: inherit; }
+html[data-theme="dark"] ::selection { background: rgba(238, 106, 44, 0.4); color: #fff; }
+
+/* ---------- Maps stay as they are (Google/Leaflet tiles), but their frame matches ---------- */
+html[data-theme="dark"] .fm-map,
+html[data-theme="dark"] .shm-map,
+html[data-theme="dark"] .hm-map-card { border-color: var(--border-main); }
+
+/* ---------- Pull-to-refresh and the theme toggle ---------- */
+html[data-theme="dark"] .ptr-indicator { background: var(--bg-card); border-color: var(--border-main); }
+
+/* ---------- Settings: appearance picker + topbar toggle (both themes) ---------- */
+.theme-toggle { flex: none; width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--border-main); background: var(--bg-card-subtle); color: var(--ink-secondary); display: inline-grid; place-items: center; }
+.theme-toggle:hover { background: var(--bg-hover); color: var(--ink-primary); }
+.theme-toggle .ico-sun { display: none; }
+html[data-theme="dark"] .theme-toggle .ico-moon { display: none; }
+html[data-theme="dark"] .theme-toggle .ico-sun { display: block; color: #fbbf24; }
+
+.theme-seg { display: inline-flex; padding: 3px; gap: 2px; border: 1px solid var(--border-main); border-radius: 999px; background: var(--bg-card-subtle); }
+.theme-opt { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 0 14px; border: 0; border-radius: 999px; background: transparent; color: var(--ink-secondary); font: 600 12.5px var(--font-sans); cursor: pointer; transition: background-color 0.15s, color 0.15s, box-shadow 0.15s; }
+.theme-opt:hover { color: var(--ink-primary); }
+.theme-opt.is-on { background: var(--bg-card); color: var(--brand-terracotta); box-shadow: var(--shadow-sm), 0 0 0 1px var(--brand-terracotta-border); }
+@media (max-width: 768px) {
+  .theme-seg { width: 100%; }
+  .theme-opt { flex: 1; justify-content: center; min-height: 40px; }
+  .theme-toggle { width: 38px; height: 38px; }
+}
+
+/* ==========================================================================
+   Round 2: everything that stayed light in dark mode (dialogs, tables, cards, maps inside dialogs)
+   ========================================================================== */
+
+/* Confirm dialog and the dialog backdrops */
+html[data-theme="dark"] .cf-box { background: var(--bg-card); border: 1px solid var(--border-main); box-shadow: var(--shadow-modal); }
+html[data-theme="dark"] .cf-backdrop { background: rgba(0, 0, 0, 0.62); }
+
+/* Tables, chart tracks, tags and avatars with fixed light fills */
+html[data-theme="dark"] .nock-data-table th,
+html[data-theme="dark"] .funnel-track,
+html[data-theme="dark"] .animal-avatar-box,
+html[data-theme="dark"] .mono-tag-coords,
+html[data-theme="dark"] .heatmap-map-card { background: var(--bg-card-subtle); color: var(--ink-secondary); }
+
+/* Dashboard attention cards, status chips and the incoming-transfers card */
+html[data-theme="dark"] .dash-needs .dash-attention-item.tone-danger { background: rgba(244, 63, 94, 0.12); border-color: rgba(251, 113, 133, 0.38); }
+html[data-theme="dark"] .dash-needs .dash-attention-item.tone-info { background: rgba(59, 130, 246, 0.12); border-color: rgba(96, 165, 250, 0.38); }
+html[data-theme="dark"] .dash-time.tone-soon { background: rgba(245, 158, 11, 0.16); color: #fcd34d; }
+html[data-theme="dark"] .imp-incoming { background: rgba(244, 63, 94, 0.07); border-color: rgba(251, 113, 133, 0.32); }
+
+/* Buttons, hovers and little overlays */
+html[data-theme="dark"] .admin-dropdown-logout-btn:hover { background: rgba(244, 63, 94, 0.2); color: #fda4af; }
+html[data-theme="dark"] .pp-lightbox-close { background: var(--bg-card); color: var(--ink-primary); }
+html[data-theme="dark"] .fp[data-state="loading"] .fp-frame::after { background: rgba(20, 17, 15, 0.8); color: var(--ink-secondary); }
+html[data-theme="dark"] .shm-gpin span::after { background: #f5f1ec; }
+
+/* The facility and heatmap maps keep their tiles readable in the dark: Google maps switch to their dark scheme
+   (see colorScheme in the map code); the fallback map (OpenStreetMap tiles) is inverted */
+html[data-theme="dark"] .leaflet-container { background: #1b1816; }
+html[data-theme="dark"] .leaflet-tile-pane { filter: invert(1) hue-rotate(180deg) brightness(0.92) contrast(0.92); }
+html[data-theme="dark"] .leaflet-control-zoom a,
+html[data-theme="dark"] .leaflet-bar a { background: var(--bg-card); color: var(--ink-primary); border-color: var(--border-main); }
+html[data-theme="dark"] .leaflet-control-attribution { background: rgba(20, 17, 15, 0.75) !important; color: var(--ink-muted); }
+html[data-theme="dark"] .leaflet-control-attribution a { color: var(--ink-secondary); }
+
+/* Map pop-ups (Leaflet and Google): a dark card with light text */
+html[data-theme="dark"] .leaflet-popup-content-wrapper,
+html[data-theme="dark"] .leaflet-popup-tip,
+html[data-theme="dark"] .pawtrack-custom-infowindow-popup .leaflet-popup-content-wrapper,
+html[data-theme="dark"] .pawtrack-custom-infowindow-popup .leaflet-popup-tip { background: var(--bg-card) !important; color: var(--ink-primary); }
+html[data-theme="dark"] .leaflet-popup-content [style*="#111827"],
+html[data-theme="dark"] .gm-style-iw [style*="#111827"] { color: var(--ink-primary) !important; }
+html[data-theme="dark"] .leaflet-popup-content [style*="#6b7280"],
+html[data-theme="dark"] .gm-style-iw [style*="#6b7280"] { color: var(--ink-secondary) !important; }
+html[data-theme="dark"] .leaflet-popup-content [style*="#9ca3af"],
+html[data-theme="dark"] .gm-style-iw [style*="#9ca3af"] { color: var(--ink-muted) !important; }
+html[data-theme="dark"] .infowindow-status-banner { background: var(--bg-hover); color: var(--ink-secondary); }
+html[data-theme="dark"] .gm-style .gm-style-iw-c,
+html[data-theme="dark"] .gm-style .gm-style-iw-tc::after { background: var(--bg-card) !important; }
+html[data-theme="dark"] .gm-style .gm-style-iw-d { color: var(--ink-primary); }
+html[data-theme="dark"] .gm-style .gm-ui-hover-effect > span { background-color: var(--ink-primary) !important; }
+
+/* Native controls inside dialogs: date pickers, selects, file buttons follow the scheme */
+html[data-theme="dark"] select option { background: var(--bg-card); color: var(--ink-primary); }
+html[data-theme="dark"] input::placeholder, html[data-theme="dark"] textarea::placeholder { color: var(--ink-subtle); }
+html[data-theme="dark"] input:-webkit-autofill,
+html[data-theme="dark"] input:-webkit-autofill:focus { -webkit-box-shadow: 0 0 0 40px var(--bg-input) inset !important; -webkit-text-fill-color: var(--ink-primary) !important; caret-color: var(--ink-primary); }
+

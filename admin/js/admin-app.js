@@ -21,7 +21,12 @@ class AdminApp {
 
     // Subscribe to store updates
     window.adminStore.subscribe((store, reason) => {
-      this.renderView(this.currentRoute);
+      // Never rebuild a page under someone who is typing: wait until they leave the field (or save/discard)
+      if (this.isEditingInView()) {
+        this._renderPending = true;
+      } else {
+        this.renderView(this.currentRoute);
+      }
       this.updateSidebarBadges();
       this.updateSyncIndicator();
       this.notifyIncomingTransfers();
@@ -32,6 +37,8 @@ class AdminApp {
     this.updateSyncIndicator();
     this.initWorkspaceSelector();
     this.initSidebarToggle();
+    this.initPullToRefresh();
+    this.initTheme();
   }
 
   // Tell the main facility when pets start arriving from its sub-facilities (once per new arrival)
@@ -61,8 +68,15 @@ class AdminApp {
     if (!name || !window.adminStore) return;
     let mine = null;
     try { mine = window.adminStore.getMyShelter(); } catch (e) { /* not signed in yet */ }
-    const text = mine ? mine.name : 'No facility yet';
+    // The chip names the facility the whole console is showing
+    let viewed = null;
+    try { viewed = window.adminStore.getActiveFacility(); } catch (e) { viewed = null; }
+    if (viewed && mine && viewed.id === mine.id) viewed = null;
+    const text = viewed ? viewed.name : (mine ? mine.name : 'No facility yet');
     if (name.textContent !== text) name.textContent = text;
+    const label = name.parentElement && name.parentElement.querySelector('small');
+    const labelText = viewed ? 'Viewing facility' : 'Your facility';
+    if (label && label.textContent !== labelText) label.textContent = labelText;
     document.getElementById('facility-chip')?.classList.toggle('is-empty', !mine);
   }
 
@@ -114,7 +128,7 @@ class AdminApp {
     const wasSignedIn = !!this.currentAdmin;
     const { error } = await this.supabase.auth.signOut({ scope: 'local' });
     if (error) {
-      this.showToast(`Sign-out failed: ${this.esc(error.message)}`, 'error');
+      this.showToast(`Sign-out failed: ${error.message}`, 'error');
       return;
     }
     if (wasSignedIn) this.showToast('Signed out of the admin console.', 'info');
@@ -725,7 +739,7 @@ class AdminApp {
     this.updateFacilityLabel();
     this.startTopbarClock();
     this.refreshAccessRequestCount();
-    if (isFreshSignIn) this.showToast(`Signed in as ${this.esc(name)}`, 'success');
+    if (isFreshSignIn) this.showToast(`Signed in as ${name}`, 'success');
     // Views hold their loading skeleton until the account is known: tell them it is
     if (window.adminStore && typeof window.adminStore.notify === 'function') window.adminStore.notify('account_ready');
   }
@@ -738,7 +752,7 @@ class AdminApp {
     const initials = name.split(/\s+/).filter(Boolean).map(w => w[0]).join('').slice(0, 2).toUpperCase();
     document.querySelectorAll('.operator-name, .admin-dropdown-name').forEach(el => { el.textContent = name; });
     document.querySelectorAll('.operator-role, .admin-dropdown-role').forEach(el => { el.textContent = account.position || account.email; });
-    document.querySelectorAll('#admin-avatar-trigger, .admin-dropdown-avatar').forEach(el => { el.textContent = initials; });
+    document.querySelectorAll('#admin-avatar-trigger, .admin-dropdown-avatar, .operator-avatar').forEach(el => { el.textContent = initials; });
     const avatar = document.getElementById('admin-avatar-trigger');
     if (avatar) avatar.title = `${name} (click for menu)`;
   }
@@ -857,7 +871,7 @@ class AdminApp {
           .eq('id', btn.dataset.accessId);
         if (updateError) {
           btn.disabled = false;
-          this.showToast(`Could not update access: ${this.esc(updateError.message)}`, 'error');
+          this.showToast(`Could not update access: ${updateError.message}`, 'error');
           return;
         }
         this.showToast(`Access ${btn.dataset.accessStatus}.`, 'success');
@@ -994,12 +1008,21 @@ class AdminApp {
     }
     this._lastHash = fullHash;
 
+    this.updateFacilityChip();
+    // A page-level scroll lock (heatmap fullscreen) must never outlive its page
+    document.body.classList.remove('hm-no-scroll');
+
     // Update active nav state
     document.querySelectorAll('.nav-item').forEach(item => {
       const route = item.getAttribute('data-route');
       if (route === this.currentRoute) {
         item.classList.add('active');
         item.setAttribute('aria-current', 'page');
+        // Mobile bottom tab bar scrolls sideways: keep the current page's tab in view
+        const bar = item.closest('.nav-scrollable');
+        if (bar && bar.scrollWidth > bar.clientWidth) {
+          bar.scrollTo({ left: item.offsetLeft - (bar.clientWidth - item.offsetWidth) / 2, behavior: 'smooth' });
+        }
       } else {
         item.classList.remove('active');
         item.removeAttribute('aria-current');
@@ -1240,7 +1263,7 @@ class AdminApp {
     toast.setAttribute('role', type === 'error' ? 'alert' : 'status');
     toast.innerHTML = `
       <span class="toast-icon">${iconSvg}</span>
-      <span class="toast-msg">${message}</span>
+      <span class="toast-msg">${this.esc(message)}</span>
       <button type="button" class="toast-close" aria-label="Dismiss notification">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
       </button>
@@ -1367,11 +1390,178 @@ class AdminApp {
       e.stopPropagation();
       this.toggleSidebar();
     });
+
+    // Phones: the sidebar is a slide-in drawer opened by the hamburger
+    if (layout && !document.getElementById('m-nav-backdrop')) {
+      const backdrop = document.createElement('div');
+      backdrop.id = 'm-nav-backdrop';
+      backdrop.className = 'm-nav-backdrop';
+      layout.after(backdrop);
+      backdrop.addEventListener('click', () => this.closeMobileNav());
+      document.querySelector('.nock-sidebar')?.addEventListener('click', (e) => {
+        if (e.target.closest('.nav-item, .facility-chip, #btn-open-user-app')) this.closeMobileNav();
+      });
+      window.addEventListener('hashchange', () => this.closeMobileNav());
+      window.addEventListener('keydown', (e) => { if (e.key === 'Escape') this.closeMobileNav(); });
+      window.matchMedia('(min-width: 769px)').addEventListener?.('change', () => this.closeMobileNav());
+    }
+  }
+
+  // ----- Theme: light, dark, or follow the device. Saved in this browser; data-theme on <html> drives the colours. -----
+  getThemePreference() {
+    let pref = 'light';
+    try { pref = localStorage.getItem('pawtrack_admin_theme') || 'light'; } catch (e) { /* private mode */ }
+    return ['light', 'dark', 'system'].includes(pref) ? pref : 'light';
+  }
+
+  resolveTheme(pref) {
+    if (pref === 'system') return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    return pref === 'dark' ? 'dark' : 'light';
+  }
+
+  setThemePreference(pref) {
+    if (!['light', 'dark', 'system'].includes(pref)) return;
+    try { localStorage.setItem('pawtrack_admin_theme', pref); } catch (e) { /* not remembered */ }
+    this.applyTheme();
+  }
+
+  applyTheme() {
+    const theme = this.resolveTheme(this.getThemePreference());
+    document.documentElement.setAttribute('data-theme', theme);
+    const meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.setAttribute('content', theme === 'dark' ? '#14110f' : '#f6f4f1');
+    const btn = document.getElementById('theme-toggle-btn');
+    if (btn) {
+      const next = theme === 'dark' ? 'light' : 'dark';
+      btn.title = `Switch to ${next} mode`;
+      btn.setAttribute('aria-label', `Switch to ${next} mode`);
+    }
+    document.querySelectorAll('[data-theme-pref]').forEach((b) => {
+      const on = b.getAttribute('data-theme-pref') === this.getThemePreference();
+      b.classList.toggle('is-on', on);
+      b.setAttribute('aria-pressed', String(on));
+    });
+  }
+
+  initTheme() {
+    this.applyTheme();
+    // "System default" follows the device while the console is open
+    const media = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
+    const onSystemChange = () => { if (this.getThemePreference() === 'system') this.applyTheme(); };
+    if (media) { if (media.addEventListener) media.addEventListener('change', onSystemChange); else if (media.addListener) media.addListener(onSystemChange); }
+    // The topbar button flips between light and dark; Settings is where "System default" is chosen
+    document.getElementById('theme-toggle-btn')?.addEventListener('click', () => {
+      this.setThemePreference(document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark');
+    });
+  }
+
+  // Swipe down from the top of any page to refresh its data (touch screens)
+  initPullToRefresh() {
+    const view = document.getElementById('view-container');
+    if (!view || view._ptrReady) return;
+    view._ptrReady = true;
+
+    const THRESHOLD = 72, MAX = 110;
+    const ind = document.createElement('div');
+    ind.className = 'ptr-indicator';
+    ind.setAttribute('aria-hidden', 'true');
+    ind.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>';
+    document.querySelector('.main-stage')?.appendChild(ind);
+
+    let startY = 0, pull = 0, tracking = false, busy = false;
+    const setPull = (px, animate) => {
+      ind.style.transition = animate ? 'transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s' : 'none';
+      ind.style.transform = `translate(-50%, ${px - 44}px)`;
+      ind.style.opacity = String(Math.min(1, px / 40));
+      ind.firstElementChild.style.transform = `rotate(${Math.min(px / THRESHOLD, 1) * 270}deg)`;
+      ind.classList.toggle('is-ready', px >= THRESHOLD);
+    };
+
+    view.addEventListener('touchstart', (e) => {
+      if (busy || e.touches.length !== 1 || view.scrollTop > 0) return;
+      // Maps, sheets and the open nav drawer own their own touch gestures
+      if (e.target.closest('.leaflet-container, .gm-style, .is-fullscreen, .drawer-backdrop, .modal-backdrop, input, textarea, select')) return;
+      // A list scrolled down inside the page keeps its own scrolling
+      for (let el = e.target; el && el !== view; el = el.parentElement) {
+        if (el.scrollTop > 0) return;
+      }
+      if (document.getElementById('app-layout')?.classList.contains('m-nav-open')) return;
+      startY = e.touches[0].clientY; pull = 0; tracking = true;
+    }, { passive: true });
+
+    view.addEventListener('touchmove', (e) => {
+      if (!tracking) return;
+      const dy = e.touches[0].clientY - startY;
+      if (dy <= 0 || view.scrollTop > 0) { if (pull) setPull(0, true); pull = 0; if (dy <= 0) tracking = false; return; }
+      if (e.cancelable) e.preventDefault();
+      pull = Math.min(MAX, dy * 0.5); // resistance, like a rubber band
+      setPull(pull, false);
+    }, { passive: false });
+
+    const finish = async () => {
+      if (!tracking) return;
+      tracking = false;
+      if (pull < THRESHOLD) { setPull(0, true); pull = 0; return; }
+      busy = true;
+      ind.classList.add('is-loading');
+      setPull(56, true);
+      const started = Date.now();
+      let ok = false;
+      try { ok = await window.adminStore.syncFromSupabase(); } catch (err) { ok = false; }
+      await new Promise((r) => setTimeout(r, Math.max(0, 600 - (Date.now() - started))));
+      ind.classList.remove('is-loading');
+      setPull(0, true);
+      pull = 0; busy = false;
+      this.showToast(ok ? 'Up to date.' : 'Could not reach the database. Showing the last data.', ok ? 'success' : 'warning', 1600);
+    };
+    view.addEventListener('touchend', finish, { passive: true });
+    view.addEventListener('touchcancel', finish, { passive: true });
+  }
+
+  // True while a field inside the page is focused, or the Settings form holds unsaved edits
+  isEditingInView() {
+    const view = document.getElementById('view-container');
+    if (!view) return false;
+    const a = document.activeElement;
+    if (a && view.contains(a) && a.matches('input:not([type="checkbox"]):not([type="radio"]):not([type="button"]), textarea, select')) {
+      if (!this._editWatch) {
+        this._editWatch = true;
+        view.addEventListener('focusout', () => {
+          setTimeout(() => {
+            if (this._renderPending && !this.isEditingInView()) { this._renderPending = false; this.renderView(this.currentRoute); }
+          }, 150);
+        });
+      }
+      return true;
+    }
+    if (this.currentRoute === 'settings') {
+      return [...view.querySelectorAll('#account-form input, #account-form textarea')].some((el) => el.type !== 'hidden' && el.value !== el.defaultValue);
+    }
+    return false;
+  }
+
+  isMobileNav() {
+    return window.matchMedia('(max-width: 768px)').matches;
+  }
+
+  closeMobileNav() {
+    const layout = document.getElementById('app-layout');
+    if (!layout || !layout.classList.contains('m-nav-open')) return;
+    layout.classList.remove('m-nav-open');
+    document.getElementById('btn-sidebar-topbar-toggle')?.setAttribute('aria-expanded', 'false');
   }
 
   toggleSidebar(forceHide) {
     const layout = document.getElementById('app-layout');
     if (!layout) return;
+
+    // On phones the same button opens/closes the drawer (nothing is saved, no toast)
+    if (this.isMobileNav()) {
+      const open = forceHide === true ? false : forceHide === false ? true : !layout.classList.contains('m-nav-open');
+      layout.classList.toggle('m-nav-open', open);
+      document.getElementById('btn-sidebar-topbar-toggle')?.setAttribute('aria-expanded', open ? 'true' : 'false');
+      return;
+    }
 
     if (forceHide === true) {
       layout.classList.add('sidebar-hidden');

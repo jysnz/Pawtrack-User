@@ -14,7 +14,8 @@ window.NotifsView = {
     const esc = (v) => String(v == null ? '' : v).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
     const alerts = [];
 
-    const impounds = store.getImpoundments();
+    const activeId = typeof store.getActiveFacilityId === 'function' ? store.getActiveFacilityId() : null;
+    const impounds = store.getImpoundments().filter(i => !activeId || i.shelterId === activeId);
     impounds.forEach(i => {
       const name = esc(i.petName || 'A pet');
       const where = esc(i.shelterName || 'the facility');

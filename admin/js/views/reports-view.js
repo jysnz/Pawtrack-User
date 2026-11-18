@@ -75,7 +75,9 @@ window.ReportsView = {
         <div class="kpi-value hm-kpi-value">${value}</div>
         <div class="kpi-delta ${tone}">${sub}</div>
       </button>`;
+    const STATUS_LABEL = { lost: 'Lost (still missing)', sighting: 'Sighting', found: 'Found (reunited or located)' };
     const chips = [
+      this.status !== 'all' && ['Status', STATUS_LABEL[this.status] || this.status, 'status'],
       this.query.trim() && ['Search', `\u201c${this.query.trim()}\u201d`, 'query'],
       this.source !== 'all' && ['Source', this.source === 'owner' ? 'Owner report' : 'Community report', 'source'],
       this.animal !== 'all' && ['Animal', { dog: 'Dogs', cat: 'Cats', other: 'Other' }[this.animal], 'animal'],
@@ -113,6 +115,10 @@ window.ReportsView = {
               <div class="rp-suggest" id="rp-suggest" role="listbox" hidden></div>
             </div>
           </form>
+          <div class="hm-field"><span class="hm-label">Status</span>
+            <div class="dash-segmented rp-status-seg" role="group" aria-label="Pet status">
+              ${[['all', 'All', base.length], ['lost', 'Lost', n('lost')], ['sighting', 'Sighting', n('sighting')], ['found', 'Found', n('found')]].map(([v, l, c]) => `<button type="button" class="rp-status ${this.status === v ? 'active' : ''}" data-v="${v}" aria-pressed="${this.status === v}">${l}<span class="rp-status-n">${c}</span></button>`).join('')}
+            </div></div>
           <div class="hm-field"><span class="hm-label">Animal</span>
             <div class="dash-segmented" role="group" aria-label="Animal">
               ${[['all', 'All'], ['dog', 'Dogs'], ['cat', 'Cats'], ['other', 'Other']].map(([v, l]) => `<button type="button" class="rp-animal ${this.animal === v ? 'active' : ''}" data-v="${v}" aria-pressed="${this.animal === v}">${l}</button>`).join('')}
@@ -175,6 +181,7 @@ window.ReportsView = {
     f('#rp-period', v => { this.period = v; });
     f('#rp-sort', v => { this.sortBy = v; });
     container.querySelectorAll('.rp-kpi').forEach(b => b.addEventListener('click', () => { this.status = b.dataset.status; this.page = 1; redraw(); }));
+    container.querySelectorAll('.rp-status').forEach(b => b.addEventListener('click', () => { this.status = b.dataset.v; this.page = 1; redraw(); }));
     container.querySelectorAll('.rp-animal').forEach(b => b.addEventListener('click', () => { this.animal = b.dataset.v; this.page = 1; redraw(); }));
     container.querySelectorAll('.rp-chip').forEach(b => b.addEventListener('click', () => {
       const k = b.dataset.clear;

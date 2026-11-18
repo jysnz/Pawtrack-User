@@ -12,6 +12,7 @@ class App {
       hardware: window.hardwareView,
       sightings: window.sightingsView,
       found: window.foundView,
+      impound: window.impoundView,
       report: window.reportPageView,
       settings: window.settingsView
     };
@@ -68,7 +69,8 @@ class App {
 
   // Pages a signed-out visitor may open: the missing pets map, and Found a Pet for finders without an account
   isGuestView(view) {
-    return view === 'owner' || view === 'found';
+    // The facility list and the animals they hold are public, so signed-out visitors can open them too
+    return view === 'owner' || view === 'found' || view === 'impound';
   }
 
   setGuestMode(enabled) {
@@ -1765,6 +1767,10 @@ class App {
     // Reporting a missing pet needs an account, so Report Pet is for signed-in guardians.
     document.querySelectorAll('.role-tab-btn').forEach(btn => {
       btn.style.display = isLoggedIn || this.isGuestView(btn.dataset.view) ? '' : 'none';
+    });
+    document.querySelectorAll('.sidebar-nav .nav-group').forEach(group => {
+      const anyVisible = Array.from(group.querySelectorAll('.role-tab-btn')).some(b => b.style.display !== 'none');
+      group.style.display = anyVisible ? '' : 'none';
     });
   }
 

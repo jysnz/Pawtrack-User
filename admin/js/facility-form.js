@@ -306,6 +306,7 @@
       const map = new Map(el, {
         center: start || DEFAULT_CENTER,
         zoom: start ? 17 : 11,
+        colorScheme: (google.maps.ColorScheme ? (document.documentElement.getAttribute('data-theme') === 'dark' ? google.maps.ColorScheme.DARK : google.maps.ColorScheme.LIGHT) : undefined),
         mapId: window.PawGoogleMaps.mapId || 'DEMO_MAP_ID',
         gestureHandling: 'greedy',
         streetViewControl: false,
