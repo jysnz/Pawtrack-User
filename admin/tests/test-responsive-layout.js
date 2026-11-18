@@ -62,6 +62,30 @@ global.window.adminStore = {
   getShelters: () => [
     { id: 'sh-1', name: 'Quezon City Animal Care', address: '123 Elliptical Rd', phone: '(02) 8988-4242', capacity: 60, occupied: 12, fee: 'PHP 500 / day' }
   ],
+  // One admin account manages one facility
+  currentAdminId: () => 'admin-1',
+  currentAdmin: () => ({ id: 'admin-1', full_name: 'Test Admin', shelter_id: 'sh-1', facility_role: 'manager' }),
+  myShelterId: () => 'sh-1',
+  myFacilityRole: () => 'manager',
+  isFacilityManager: () => true,
+  hasFacility: () => true,
+  isDbId: () => true,
+  getMyShelter: () => ({ id: 'sh-1', name: 'Quezon City Animal Care', address: '123 Elliptical Rd', phone: '(02) 8988-4242', lat: 14.7, lng: 121.1 }),
+  getMyImpoundments: () => [
+    { id: 'imp-1', petId: 'pet-1', shelterId: 'sh-1', intakeDate: '2026-08-28', claimDeadline: '2026-08-31', status: 'active_impounded', feesAccumulated: 500 }
+  ],
+  getCases: () => [],
+  getSubFacilities: () => [],
+  isMainFacility: () => true,
+  getMainFacility: () => null,
+  getMyFacilityIds: () => ['sh-1'],
+  getManagedShelterIds: () => ['sh-1'],
+  getIncomingTransfers: () => [],
+  getOutgoingTransfers: () => [],
+  getTickets: () => [],
+  getTicketForImpound: () => null,
+  getTicketsToCollect: () => [],
+  penaltyReady: true,
   getRfidTags: () => [
     { code: 'RFID-1001', status: 'assigned', assignedPetId: 'pet-1', batteryLevel: 94, lastScanned: '2026-08-30' }
   ],
@@ -87,7 +111,6 @@ require('../js/views/heatmap-view.js');
 require('../js/views/impoundments-view.js');
 require('../js/views/breakdown-view.js');
 require('../js/views/shelters-view.js');
-require('../js/views/rfid-view.js');
 require('../js/views/notifs-view.js');
 require('../js/views/settings-view.js');
 
@@ -97,7 +120,6 @@ const views = [
   { name: 'ImpoundmentsView', view: window.ImpoundmentsView },
   { name: 'BreakdownView', view: window.BreakdownView },
   { name: 'SheltersView', view: window.SheltersView },
-  { name: 'RfidView', view: window.RfidView },
   { name: 'NotifsView', view: window.NotifsView },
   { name: 'SettingsView', view: window.SettingsView }
 ];

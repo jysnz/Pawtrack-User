@@ -326,7 +326,6 @@ class App {
         previewEl.textContent = (nameVal[0] || 'G').toUpperCase();
       }
       if (avatarFileInput) avatarFileInput.value = '';
-      if (window.notifManager) window.notifManager.showToast('Avatar reset to initial letter.', 'info');
     });
 
     // Guardian Profile: Save Edit Form
@@ -781,6 +780,8 @@ class App {
 
       // The guardian's pets, reports and notifications load from Supabase (the store keeps them fresh)
       window.pawStore.syncFromSupabase();
+      // A missing pet that was impounded comes with a penalty ticket: prompt the owner to pay it
+      if (window.PenaltyPrompt) window.PenaltyPrompt.check(this.supabase);
     };
 
     // First Google sign-in: ask for the name and phone shelters need

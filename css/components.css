@@ -959,6 +959,58 @@
   z-index: 1;
 }
 
+/* Full screen map */
+.public-map-card.is-fullscreen {
+  position: fixed !important;
+  inset: 0;
+  z-index: 5000;
+  width: 100vw;
+  height: 100dvh;
+  min-height: 0 !important;
+  border-radius: 0;
+  display: flex;
+  flex-direction: column;
+}
+.public-map-card.is-fullscreen #public-map-container {
+  flex: 1 1 auto;
+  height: auto;
+  min-height: 0 !important;
+  border-radius: 0;
+  border: 0;
+}
+body.map-fullscreen-open { overflow: hidden; }
+
+/* Mobile: layers + legend sit below the map instead of covering it (navigation buttons stay on the map) */
+@media (max-width: 900px) {
+  .public-map-card {
+    display: flex;
+    flex-direction: column;
+  }
+  .public-map-card .gmap-layer-dock {
+    position: static;
+    order: 2;
+    margin: 10px 12px 0;
+    border-radius: 14px;
+    flex-wrap: wrap;
+    justify-content: center;
+    box-shadow: none;
+  }
+  .public-map-card .map-layers,
+  .public-map-card .map-legend {
+    order: 3;
+    position: static;
+    width: auto;
+    max-width: none;
+    margin: 10px 12px 0;
+    box-shadow: none;
+  }
+  .public-map-card .map-legend { margin-bottom: 12px; }
+  .public-map-card .map-legend ul { flex-direction: row; flex-wrap: wrap; gap: 6px 14px; }
+  .public-map-card.is-fullscreen .gmap-layer-dock,
+  .public-map-card.is-fullscreen .map-layers,
+  .public-map-card.is-fullscreen .map-legend { flex: none; max-height: 40vh; overflow-y: auto; }
+}
+
 /* Custom High-Visibility Map Pins */
 .custom-map-icon-wrap {
   background: transparent;
@@ -4558,6 +4610,39 @@
 .gmap-layer-btn:hover {
   color: var(--text-main);
   background: rgba(234, 157, 30, 0.12);
+}
+
+/* Map type selector (owner map): segmented control with icons */
+#gmap-layer-dock {
+  gap: 2px;
+  padding: 4px;
+  border-radius: 14px;
+}
+#gmap-layer-dock .gmap-layer-btn {
+  gap: 6px;
+  padding: 7px 12px;
+  border-radius: 10px;
+  font-size: 0.78rem;
+}
+#gmap-layer-dock .gmap-layer-btn svg {
+  width: 15px;
+  height: 15px;
+  flex: none;
+}
+@media (max-width: 900px) {
+  #gmap-layer-dock {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(76px, 1fr));
+    gap: 4px;
+    width: auto;
+  }
+  #gmap-layer-dock .gmap-layer-btn {
+    flex-direction: column;
+    gap: 3px;
+    padding: 8px 4px;
+    font-size: 0.72rem;
+    justify-content: center;
+  }
 }
 
 .gmap-layer-btn.active {

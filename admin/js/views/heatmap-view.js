@@ -11,7 +11,7 @@ window.HeatmapView = {
   tileLayerInstance: null,
 
   // State filters
-  selectedDateRange: 'all', // 'all' | 'today' | '7d' | '30d' | 'custom'
+  selectedDateRange: '30d', // 'all' | 'today' | '7d' | '30d' | 'custom'. Opens on the last 30 days: old cases are history, not today's hotspots
   selectedLayer: 'roadmap', // 'roadmap' | 'satellite' | 'terrain'
   selectedAnimal: 'all', // 'all' | 'dog' | 'cat' | 'other'
   selectedStatus: 'all', // 'all' | 'lost' | 'sighting' | 'found' | 'impounded'
@@ -228,6 +228,7 @@ window.HeatmapView = {
         name: `${s.species || 'Animal'} sighting`,
         species: s.species, breed: s.breed,
         status: 'sighting',
+        linkedToCase: !!s.missing_report_id,
         location: s.location || '',
         photoUrl: s.photoUrl || '',
         contact: s.reporterName || 'Community report',
@@ -344,7 +345,7 @@ window.HeatmapView = {
   },
 
   filtersActive() {
-    return this.selectedDateRange !== 'all' || this.selectedAnimal !== 'all' || this.selectedStatus !== 'all'
+    return this.selectedDateRange !== '30d' || this.selectedAnimal !== 'all' || this.selectedStatus !== 'all'
       || this.selectedDistrict !== 'all' || !!(this.searchQuery && this.searchQuery.trim());
   },
 
@@ -360,6 +361,18 @@ window.HeatmapView = {
       this.bindEvents(root);
     }
     this.refresh();
+    // Arrived from the Reports page: fly to that report once the map is ready
+    const want = this._pendingFly;
+    if (want) {
+      this._pendingFly = null;
+      let tries = 0;
+      const go = () => {
+        if (!document.getElementById('hm-root')) return;
+        if (this.gmap || this.mapInstance) return this.flyToIncident(want.lat, want.lng, want.id);
+        if (++tries < 40) setTimeout(go, 250);
+      };
+      go();
+    }
   },
 
   shellHtml() {
@@ -464,8 +477,6 @@ window.HeatmapView = {
             <div class="hm-hotspot-list" id="hm-hotspots-list"></div>
           </aside>
         </div>
-
-        <section class="nock-card hm-table-card" id="hm-table-card"></section>
       </div>`;
   },
 
@@ -524,63 +535,7 @@ window.HeatmapView = {
       </button>`).join('')
       : `<div class="hm-empty"><b>No hotspots yet</b>Areas with reports will be ranked here.</div>`;
 
-    // Table
-    const totalPages = Math.max(Math.ceil(total / this.pageSize), 1);
-    if (this.currentPage > totalPages) this.currentPage = totalPages;
-    if (this.currentPage < 1) this.currentPage = 1;
-    const start = (this.currentPage - 1) * this.pageSize;
-    const end = Math.min(start + this.pageSize, total);
-    const rows = filtered.slice(start, end);
-    const pill = (s) => s === 'lost' ? 'status-lost' : s === 'found' ? 'status-safe' : 'status-pending';
-    root.querySelector('#hm-table-card').innerHTML = `
-      <div class="nock-card-head">
-        <span class="nock-card-title">Reports <span class="hm-count">${total}</span></span>
-        <label class="hm-sort">Sort by
-          <select id="select-sort" class="hm-select hm-select-sm">
-            ${[['date', 'Newest'], ['name', 'Name'], ['location', 'Location'], ['status', 'Status']].map(([v, l]) => `<option value="${v}" ${this.sortBy === v ? 'selected' : ''}>${l}</option>`).join('')}
-          </select>
-        </label>
-      </div>
-      ${rows.length === 0 ? `
-        <div class="hm-empty hm-empty-lg">
-          <b>${this.incidentsData.length ? 'No reports match these filters' : 'No reports with a map location yet'}</b>
-          ${this.incidentsData.length ? 'Try a wider period, or reset the filters.' : 'Missing-pet reports and sightings appear here as soon as they are filed.'}
-        </div>` : `
-      <div class="data-table-wrapper">
-        <table class="nock-data-table hm-table">
-          <thead><tr><th>Animal</th><th>Status</th><th>Location</th><th>Reported</th><th>Source</th><th></th></tr></thead>
-          <tbody>
-            ${rows.map(inc => `
-              <tr class="incident-table-row" data-fly data-lat="${inc.lat}" data-lng="${inc.lng}" data-id="${this.esc(inc.id)}">
-                <td>
-                  <div class="animal-cell">
-                    ${this.photoHtml(inc)}
-                    <div class="animal-info"><span class="animal-name">${this.esc(inc.name)}</span><span class="animal-breed">${this.esc(inc.speciesTag)}</span></div>
-                  </div>
-                </td>
-                <td><span class="status-pill ${pill(inc.status)}">${this.esc(inc.status.toUpperCase())}</span></td>
-                <td>
-                  <div class="location-cell">
-                    <span class="loc-main">${this.esc(inc.barangay)}</span>
-                    <span class="loc-sub">${this.esc(inc.district)}${inc.location && inc.location !== inc.barangay ? ' · ' + this.esc(inc.location) : ''}</span>
-                  </div>
-                </td>
-                <td><div class="date-time-cell"><span class="date-main">${this.esc(inc.date)}</span><span class="time-sub">${this.esc(inc.time)}</span></div></td>
-                <td><span class="contact-name">${this.esc(inc.contact)}</span></td>
-                <td style="text-align:right"><button class="btn btn-xs btn-secondary" data-fly data-lat="${inc.lat}" data-lng="${inc.lng}" title="${inc.lat.toFixed(5)}, ${inc.lng.toFixed(5)}">Locate</button></td>
-              </tr>`).join('')}
-          </tbody>
-        </table>
-      </div>
-      <div class="table-pagination-footer">
-        <div class="pagination-info">Showing <strong>${start + 1}</strong>–<strong>${end}</strong> of <strong>${total}</strong></div>
-        ${totalPages > 1 ? `
-          <div class="pagination-controls">
-            <button class="page-btn page-nav-btn" data-page="${this.currentPage - 1}" ${this.currentPage === 1 ? 'disabled' : ''}>‹ Prev</button>
-            <div class="page-numbers">${Array.from({ length: totalPages }, (_, i) => i + 1).map(p => `<button class="page-btn page-num-btn ${this.currentPage === p ? 'active' : ''}" data-page="${p}">${p}</button>`).join('')}</div>
-            <button class="page-btn page-nav-btn" data-page="${this.currentPage + 1}" ${this.currentPage === totalPages ? 'disabled' : ''}>Next ›</button>
-          </div>` : ''}
-      </div>`}`;
+
 
     this.initLeafletMap(filtered);
   },
@@ -602,7 +557,7 @@ window.HeatmapView = {
         return;
       }
       if (t.closest('#btn-reset-heatmap-filters')) {
-        Object.assign(this, { selectedDateRange: 'all', selectedAnimal: 'all', selectedStatus: 'all', selectedDistrict: 'all', searchQuery: '', currentPage: 1 });
+        Object.assign(this, { selectedDateRange: '30d', selectedAnimal: 'all', selectedStatus: 'all', selectedDistrict: 'all', searchQuery: '', currentPage: 1 });
         if (this.searchLocationMarker && this.mapInstance) { try { this.mapInstance.removeLayer(this.searchLocationMarker); } catch (err) {} this.searchLocationMarker = null; }
         this.refresh();
         return;
@@ -777,13 +732,15 @@ window.HeatmapView = {
 
     // Heat layer (drawn on a canvas; Google's own HeatmapLayer has been retired).
     // Lost pets weigh most, and older reports fade so the map shows what is happening now.
+    // Found pets are resolved and do not heat the map; a sighting of an already reported pet is the same case, so it counts little.
     const weight = (i) => {
-      const base = i.status === 'lost' ? 0.6 : i.status === 'sighting' ? 0.45 : 0.3;
+      const base = i.status === 'lost' ? 0.6 : i.status === 'sighting' ? (i.linkedToCase ? 0.15 : 0.45) : 0;
       const ageDays = i.ts ? (Date.now() - i.ts) / 86400000 : 30;
       return base * Math.max(0.55, 1 - (ageDays / 90) * 0.45);
     };
     if (!this.heatOverlay) this.heatOverlay = this.createHeatOverlay(this.gmap);
-    this.heatOverlay.setPoints(incidents.map(i => ({ lat: i.lat, lng: i.lng, w: weight(i) })));
+    // Heat points snap to a ~110 m grid: hotspots read the same, but the layer does not reveal an exact home-adjacent spot
+    this.heatOverlay.setPoints(incidents.map(i => ({ lat: Math.round(i.lat * 1000) / 1000, lng: Math.round(i.lng * 1000) / 1000, w: weight(i) })).filter(p => p.w > 0));
     this.heatOverlay.setVisible(this.showHeat);
 
     this.fitToIncidents(incidents);
@@ -973,7 +930,8 @@ window.HeatmapView = {
     }).addTo(this.mapInstance);
 
     // Heatmap density cluster points
-    const heatPoints = incidents.map(inc => [inc.lat, inc.lng, inc.status === 'lost' ? 0.95 : 0.7]);
+    const heatPoints = incidents.filter(inc => inc.status !== 'found')
+      .map(inc => [Math.round(inc.lat * 1000) / 1000, Math.round(inc.lng * 1000) / 1000, inc.status === 'lost' ? 0.95 : (inc.linkedToCase ? 0.25 : 0.7)]);
 
     if (typeof L.heatLayer === 'function') {
       this.heatLayer = L.heatLayer(heatPoints, {

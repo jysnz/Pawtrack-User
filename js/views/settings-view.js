@@ -267,7 +267,6 @@ class SettingsView {
     user.avatarInitial = (name[0] || 'G').toUpperCase();
     window.pawStore.setGoogleUser(user);
     window.pawApp.updateGoogleAuthUI();
-    notify(this.t('settings.nameSaved', 'Your name was updated.'), 'success');
   }
 
   // ─────────────────────────────────────────────────
@@ -495,7 +494,6 @@ class SettingsView {
     }
     window.pawApp.updateGoogleAuthUI();
     window.notifManager.closeModal('change-email-modal');
-    window.notifManager.showToast(this.t('settings.emailChanged', 'Your email was changed.'), 'success');
     const value = document.getElementById('settings-email-value');
     if (value) value.textContent = email;
   }

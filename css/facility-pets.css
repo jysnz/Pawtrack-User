@@ -1,0 +1,32 @@
+/* Owner app: pets held at an impound facility (map popup list and the "all pets" dialog) */
+.pt-fp { margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(0, 0, 0, 0.08); }
+.pt-fp-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; font-size: 12px; color: #44403c; }
+.pt-fp-head span { min-width: 22px; padding: 1px 7px; border-radius: 99px; background: #ecfeff; color: #0e7490; font-weight: 700; font-size: 11px; text-align: center; }
+.pt-fp-empty { margin: 0; font-size: 12px; color: #78716c; line-height: 1.5; }
+.pt-fp-list, .pt-fp-full { list-style: none; margin: 0; padding: 0; }
+.pt-fp-list li { display: flex; align-items: center; gap: 9px; padding: 5px 0; }
+.pt-fp-list img, .pt-fp-ph { flex: none; width: 34px; height: 34px; border-radius: 9px; object-fit: cover; background: #f5f5f4; display: grid; place-items: center; font-size: 15px; }
+.pt-fp-text { display: flex; flex-direction: column; min-width: 0; }
+.pt-fp-text b { font-size: 12.5px; color: #1c1917; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pt-fp-text small { font-size: 11px; color: #78716c; }
+.pt-fp-all { width: 100%; margin-top: 6px; padding: 8px; border: 1px solid #cffafe; border-radius: 9px; background: #ecfeff; color: #0e7490; font: 700 12px inherit; cursor: pointer; }
+.pt-fp-all:hover { background: #cffafe; }
+
+.pt-fp-modal { position: fixed; inset: 0; z-index: 10000; display: grid; place-items: center; padding: 16px; background: rgba(20, 18, 16, 0.55); backdrop-filter: blur(4px); animation: pt-fp-fade 160ms ease-out both; }
+.pt-fp-box { position: relative; width: min(480px, 100%); max-height: 90vh; overflow-y: auto; padding: 22px; background: #fff; color: #1c1917; border-radius: 18px; box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35); font-family: 'Plus Jakarta Sans', system-ui, sans-serif; animation: pt-fp-pop 240ms cubic-bezier(0.23, 1, 0.32, 1) both; }
+.pt-fp-box h2 { margin: 0 30px 2px 0; font-size: 19px; letter-spacing: -0.02em; }
+.pt-fp-addr { margin: 0 0 12px; font-size: 12.5px; color: #78716c; line-height: 1.45; }
+.pt-fp-count { margin: 0 0 10px; font-size: 13px; font-weight: 700; color: #0e7490; }
+.pt-fp-close { position: absolute; top: 12px; right: 12px; width: 30px; height: 30px; border: 0; border-radius: 50%; background: #f5f5f4; color: #44403c; font-size: 20px; line-height: 1; cursor: pointer; }
+.pt-fp-full li { display: flex; gap: 12px; padding: 12px 0; border-top: 1px solid #f0efed; }
+.pt-fp-full img, .pt-fp-full .pt-fp-ph { width: 64px; height: 64px; border-radius: 12px; font-size: 24px; }
+.pt-fp-full div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.pt-fp-full b { font-size: 14px; }
+.pt-fp-full small { font-size: 12px; color: #78716c; }
+.pt-fp-full em { font-style: normal; font-size: 11.5px; font-weight: 700; color: #b45309; }
+.pt-fp-note { margin: 12px 0; padding: 10px 12px; border-radius: 10px; background: #fafaf9; font-size: 12px; line-height: 1.5; color: #57534e; }
+.pt-fp-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+
+@keyframes pt-fp-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes pt-fp-pop { from { opacity: 0; transform: translateY(10px) scale(0.97); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .pt-fp-modal, .pt-fp-box { animation: none; } }

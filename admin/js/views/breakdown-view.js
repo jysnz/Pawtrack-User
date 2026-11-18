@@ -1,6 +1,8 @@
 /**
- * PawTrack Admin — Missing Pet Breakdown & Segmentation
- * Who goes missing (species, breed, age), how impound cases end, and where reports come from.
+ * PawTrack Admin — Facility Breakdown
+ * Which animals the signed-in account's own impound facility (and its sub-facilities) takes in: species, breed, age,
+ * how cases end, and which facility received them. Only that facility's impoundments are counted; registry-wide pets,
+ * missing reports and community sightings are not shown here.
  * Charts are plain SVG / CSS (no libraries) so they follow the admin theme.
  */
 
@@ -20,12 +22,6 @@ window.BreakdownView = {
     { key: 'adult', label: '4–7 yrs', long: 'Adult (4–7 yrs)', color: 'var(--color-blue)' },
     { key: 'senior', label: '8+ yrs', long: 'Senior (8+ yrs)', color: 'var(--color-purple)' },
     { key: 'unknown', label: 'Not recorded', long: 'Age not recorded', color: 'var(--ink-subtle)' }
-  ],
-
-  sourceMeta: [
-    { key: 'community', label: 'Community sighting', hint: 'Found / stray reports from citizens', color: 'var(--color-blue)' },
-    { key: 'self', label: 'Self-report', hint: 'Owner reported their own pet missing', color: 'var(--brand-terracotta)' },
-    { key: 'facility', label: 'Facility intake', hint: 'Logged directly at a shelter or pound', color: 'var(--color-amber)' }
   ],
 
   normalizeSpecies(value) {
@@ -68,36 +64,35 @@ window.BreakdownView = {
     return Number.isFinite(t) ? t : null;
   },
 
-  // One record per missing / found case, tagged with how it reached us.
+  // The account's facilities: its own, plus its sub-facilities for a main facility
+  tree(store) {
+    const ids = typeof store.getMyFacilityIds === 'function' ? store.getMyFacilityIds() : [];
+    const all = typeof store.getShelters === 'function' ? store.getShelters() : [];
+    const list = all.filter(s => ids.includes(s.id));
+    const me = typeof store.getMyShelter === 'function' ? store.getMyShelter() : null;
+    return list.length ? list : (me ? [me] : []);
+  },
+
+  // One record per animal this facility (or a sub-facility) took in. A linked pet record only fills in missing details.
   collectCases(store) {
-    const pets = store.getPets();
-    const petById = Object.fromEntries(pets.map(p => [p.id, p]));
-    const missingByPet = {};
-    (store.getCases ? store.getCases() : []).forEach(c => { if (c.petId) missingByPet[c.petId] = c; });
-    const cases = [];
-
-    pets.filter(p => p.status === 'lost' || p.status === 'reunited').forEach(p => {
-      const mc = missingByPet[p.id];
-      cases.push({ source: 'self', species: p.species, breed: p.breed, age: p.age, identified: !!(p.microchipNo || p.rfidTag), date: this.toTime(mc && mc.createdAt) });
-    });
-
-    store.getSightings().forEach(s => {
-      cases.push({ source: 'community', species: s.species, breed: s.breed, age: s.age, identified: !!(s.microchipNo || s.rfidTag), date: this.toTime(s.createdAt || s.timestamp) });
-    });
-
-    store.getImpoundments().forEach(i => {
+    const mine = typeof store.getMyImpoundments === 'function' ? (store.getMyImpoundments() || []) : [];
+    const linked = mine.filter(i => i.petId);
+    const petById = linked.length && typeof store.getPets === 'function'
+      ? Object.fromEntries((store.getPets() || []).filter(p => linked.some(i => i.petId === p.id)).map(p => [p.id, p]))
+      : {};
+    return mine.map(i => {
       const pet = petById[i.petId] || {};
-      cases.push({
-        source: 'facility',
+      return {
+        shelterId: i.shelterId,
+        registered: !!i.petId,
         species: i.species || pet.species,
         breed: i.breed || pet.breed,
         age: i.age || pet.age,
         identified: !!(i.rfidTag || pet.microchipNo || pet.rfidTag),
-        date: this.toTime(i.intakeDate)
-      });
+        date: this.toTime(i.intakeDate),
+        impound: i
+      };
     });
-
-    return cases;
   },
 
   // ---------- Chart helpers ----------
@@ -196,9 +191,26 @@ window.BreakdownView = {
 
   // ---------- Render ----------
 
+  renderNoFacility(container) {
+    container.innerHTML = `
+      <div class="bd-page dash-pro">
+        <div class="view-header"><div class="view-header-titles"><div class="dash-eyebrow bd-eyebrow">Insights</div><h1>Breakdown</h1>
+          <div class="subtitle"><span>Which animals your facility takes in, and how their cases end</span></div></div></div>
+        <div class="nock-card tm-empty">
+          <h2>Set up your impound facility</h2>
+          <p>The breakdown describes the animals your own facility takes in. Register a facility, or join one with an invite code, to see it.</p>
+          <div class="tm-empty-actions"><a href="#shelters" class="btn btn-primary">Go to Facilities</a></div>
+        </div>
+      </div>`;
+  },
+
   render(container) {
     this._container = container;
     const store = window.adminStore;
+    const mineShelter = typeof store.getMyShelter === 'function' ? store.getMyShelter() : null;
+    if (!mineShelter) return this.renderNoFacility(container);
+    const tree = this.tree(store);
+    const hasSubs = tree.length > 1;
     const allCases = this.collectCases(store);
     const f = this.filter;
     const inFilter = (species) => f === 'all' || this.normalizeSpecies(species) === f;
@@ -237,7 +249,7 @@ window.BreakdownView = {
     const ageRows = this.ageBrackets.map(b => ({ label: b.label, color: b.color, count: ageCounts[b.key] }));
 
     // --- Outcome (impound cases) ---
-    const impoundments = store.getImpoundments().filter(i => inFilter(i.species));
+    const impoundments = cases.map(c => c.impound);
     const outcomes = window.IMPOUND_OUTCOMES || {};
     const closed = impoundments.filter(i => outcomes[i.status]);
     const stillHolding = impoundments.filter(i => i.status === 'active_impounded');
@@ -249,9 +261,14 @@ window.BreakdownView = {
     const reunitedPct = closed.length ? Math.round((reunitedCount / closed.length) * 100) : null;
 
     // --- Reporting source ---
-    const sourceRows = this.sourceMeta.map(s => ({
-      label: s.label, hint: s.hint, color: s.color, count: cases.filter(c => c.source === s.key).length
-    }));
+    // With sub-facilities: which facility received each animal. Otherwise: pets with a PawTrack record vs unregistered animals.
+    const FAC_COLORS = ['var(--brand-terracotta)', 'var(--color-blue)', 'var(--color-amber)', 'var(--color-purple)', 'var(--color-green)'];
+    const sourceRows = hasSubs
+      ? tree.map((sh, idx) => ({ label: sh.name, hint: sh.parentId ? 'Sub-facility' : 'Main facility', color: FAC_COLORS[idx % FAC_COLORS.length], count: cases.filter(c => c.shelterId === sh.id).length }))
+      : [
+          { label: 'Registered pets', hint: 'Has a PawTrack pet record, so the guardian can be alerted', color: 'var(--brand-terracotta)', count: cases.filter(c => c.registered).length },
+          { label: 'Unregistered animals', hint: 'Strays or animals without a PawTrack record', color: 'var(--color-amber)', count: cases.filter(c => !c.registered).length }
+        ];
 
     const chip = (key, label) => `<button class="${f === key ? 'active' : ''}" data-bd-filter="${key}" role="tab" aria-selected="${f === key}">${label}</button>`;
     const filterLabel = f === 'all' ? 'all animals' : this.speciesMeta[f].short.toLowerCase();
@@ -260,9 +277,9 @@ window.BreakdownView = {
       <div class="bd-page dash-pro">
         <div class="view-header">
           <div class="view-header-titles">
-            <div class="dash-eyebrow bd-eyebrow">Insights</div>
+            <div class="dash-eyebrow bd-eyebrow">${this.esc(mineShelter.name)}${hasSubs ? ` + ${tree.filter(s => !s.parentId).length - 1 ? `${tree.filter(s => !s.parentId).length - 1} more main and ` : ''}${tree.filter(s => s.parentId).length} sub-${tree.filter(s => s.parentId).length === 1 ? 'facility' : 'facilities'}` : ''}</div>
             <h1>Breakdown</h1>
-            <div class="subtitle"><span>Which pets go missing, how impound cases end, and where reports come from</span></div>
+            <div class="subtitle"><span>Which animals your facility takes in, and how their cases end</span></div>
           </div>
           <div class="view-header-actions">
             <div class="dash-segmented" role="tablist" aria-label="Filter by species">
@@ -272,20 +289,20 @@ window.BreakdownView = {
         </div>
 
         <div class="kpi-grid bd-kpis">
-          ${this.kpi('Cases counted', total, total ? `Showing ${filterLabel}` : 'No cases yet', 'neutral')}
+          ${this.kpi('Animals taken in', total, total ? `Showing ${filterLabel}` : 'No intakes yet', 'neutral')}
           ${this.kpi('Most affected', topSpecies && topSpecies[1] ? this.speciesMeta[topSpecies[0]].short : '—',
-            topSpecies && topSpecies[1] ? `${Math.round((topSpecies[1] / total) * 100)}% of cases` : 'No data', 'neutral')}
+            topSpecies && topSpecies[1] ? `${Math.round((topSpecies[1] / total) * 100)}% of intakes` : 'No data', 'neutral')}
           ${this.kpi('Without chip or tag', total ? `${unidentifiedPct}%` : '—',
             total ? `${unidentified} of ${total} could not be identified` : 'No data', unidentifiedPct >= 50 ? 'down' : 'up')}
         </div>
 
-        <div class="bd-section-label">Who goes missing</div>
+        <div class="bd-section-label">Who your facility takes in</div>
         <div class="bd-grid">
           ${this.card('Species', '',
-            total === 0 ? this.emptyState('No cases recorded yet.') : this.donut(speciesRows, 'cases'),
+            total === 0 ? this.emptyState('No intakes recorded yet.') : this.donut(speciesRows, 'animals'),
             { cls: 'bd-span-6' })}
           ${this.card('Age', ageCounts.unknown ? `${total - ageCounts.unknown} of ${total} have an age` : '',
-            total === 0 ? this.emptyState('No cases recorded yet.') : this.columns(ageRows.filter(r => r.label !== 'Not recorded')),
+            total === 0 ? this.emptyState('No intakes recorded yet.') : this.columns(ageRows.filter(r => r.label !== 'Not recorded')),
             { cls: 'bd-span-6' })}
         </div>
 
@@ -295,18 +312,18 @@ window.BreakdownView = {
             closed.length === 0 ? this.emptyState('No impound cases have been closed yet.') : this.donut(outcomeRows, 'closed')
               + (stillHolding.length > 0 ? `<div class="breakdown-note">${stillHolding.length} still in holding${pastWindow > 0 ? `, ${pastWindow} past the 72-hour window` : ''}.</div>` : ''),
             { cls: 'bd-span-6' })}
-          ${this.card('Where reports come from', '',
-            total === 0 ? this.emptyState('No reports received yet.') : this.hbars(sourceRows, total),
+          ${this.card(hasSubs ? 'Intakes by facility' : 'Registered or not', '',
+            total === 0 ? this.emptyState('No intakes recorded yet.') : this.hbars(sourceRows, total),
             { cls: 'bd-span-6' })}
         </div>
 
         <div class="bd-section-label">Where to focus</div>
         <div class="bd-grid">
-          ${this.card('Breeds that go missing most', topBreeds.length ? `Top ${topBreeds.length}` : '',
-            topBreeds.length === 0 ? this.emptyState('No breeds recorded on these cases.') : `
+          ${this.card('Breeds your facility takes in most', topBreeds.length ? `Top ${topBreeds.length}` : '',
+            topBreeds.length === 0 ? this.emptyState('No breeds recorded on these intakes.') : `
               <table class="breakdown-table bd-table">
                 <thead>
-                  <tr><th>Breed</th><th class="bd-share-col"></th><th style="text-align:right">Cases</th><th style="text-align:right">No chip / tag</th></tr>
+                  <tr><th>Breed</th><th class="bd-share-col"></th><th style="text-align:right">Animals</th><th style="text-align:right">No chip / tag</th></tr>
                 </thead>
                 <tbody>
                   ${topBreeds.map(b => `

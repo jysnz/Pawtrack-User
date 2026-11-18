@@ -1,9 +1,9 @@
 /**
  * PawTrack Admin — Dashboard
- * Every figure here is computed from the database through adminStore
- * (registered_pets, missing_pets, community_sightings, impounded_pets, nfc_tags).
- * Guardian contact details are deliberately NOT listed here: they stay on the individual
- * pet / case records that staff open when they have a reason to.
+ * Facility-scoped: every figure here describes the signed-in staff member's own impound facility (and, for a main
+ * facility, its sub-facilities). It is computed from the facility's impoundments, transfers and penalty tickets
+ * through adminStore. Registry-wide pet, missing-report and community-sighting figures are deliberately not shown.
+ * Guardian contact details are not listed here either: they stay on the individual records.
  */
 
 window.ActivationView = {
@@ -89,60 +89,17 @@ window.ActivationView = {
     return buckets;
   },
 
-  render(container) {
-    const store = window.adminStore;
-    const pets = store.getPets ? (store.getPets() || []) : [];
-    const cases = store.getCases ? (store.getCases() || []) : [];
-    const impoundments = store.getImpoundments ? (store.getImpoundments() || []) : [];
-    const sightings = store.getSightings ? (store.getSightings() || []) : [];
-    const now = Date.now();
+  TIMEFRAMES: ['weekly', 'monthly', 'yearly'],
 
-    // ---- Pets ----
-    const totalPets = pets.length;
-    const countStatus = (s) => pets.filter((p) => p.status === s).length;
-    const safePets = countStatus('safe');
-    const reunitedPets = countStatus('reunited');
-    const protectedPct = totalPets ? Math.round(((safePets + reunitedPets) / totalPets) * 100) : 0;
-    const microchipped = pets.filter((p) => p.microchipNo || p.rfidTag).length;
-    const chippedPct = totalPets ? Math.round((microchipped / totalPets) * 100) : 0;
-
-    // ---- Cases (missing reports) ----
-    const reunitedCases = cases.filter((c) => c.status === 'reunited');
-    const openCases = cases.filter((c) => c.status !== 'reunited');
-    const sightedCases = cases.filter((c) => (c.timeline || []).some((t) => t.type === 'sighting') || c.status === 'sighted' || c.status === 'reunited');
-    const recoveryTimes = reunitedCases
-      .map((c) => (this.toTime(c.lastUpdated) ?? 0) - (this.toTime(c.createdAt) ?? 0))
-      .filter((ms) => ms >= 0);
-    const medianRecovery = this.median(recoveryTimes);
-    const resolutionRate = cases.length ? Math.round((reunitedCases.length / cases.length) * 100) : null;
-
-    // ---- Impoundments & sightings ----
-    const active = impoundments.filter((i) => i.status === 'active_impounded');
-    const claimed = impoundments.filter((i) => i.status === 'claimed');
-    const overdue = active.filter((i) => { const d = this.toTime(i.claimDeadline); return d != null && d < now; });
-    const dueSoon = active.filter((i) => { const d = this.toTime(i.claimDeadline); return d != null && d >= now && d - now < 24 * 3600 * 1000; });
-    const awaitingReview = sightings.filter((s) => s.status === 'under_review' || s.status === 'possible_sighting');
-    const staleCases = openCases.filter((c) => {
-      const t = this.toTime(c.lastUpdated);
-      return t != null && now - t > 72 * 3600 * 1000;
-    });
-
-    // ---- KPI sparklines (last 7 days) ----
-    const regSeries = this.dailySeries(pets.map((p) => this.toTime(p.registeredDate)));
-    const regThisWeek = regSeries.reduce((a, b) => a + b, 0);
-    const regToday = regSeries[regSeries.length - 1];
-    const intakeSeries = this.dailySeries(impoundments.map((i) => this.toTime(i.intakeDate)));
-    const caseSeries = this.dailySeries(cases.map((c) => this.toTime(c.createdAt)));
-    const casesThisWeek = caseSeries.reduce((a, b) => a + b, 0);
-
-    // ---- Incident chart: stacked per period, missing reports + shelter intakes ----
-    const caseTimes = cases.map((c) => this.toTime(c.createdAt)).filter((t) => t != null);
-    const intakeTimes = impoundments.map((i) => this.toTime(i.intakeDate)).filter((t) => t != null);
+  // Everything the intake chart shows for one time range (this facility's intakes only)
+  chartModel(timeframe, impoundments) {
+    const regTimes = impoundments.filter((i) => i.petId).map((i) => this.toTime(i.intakeDate)).filter((t) => t != null);
+    const otherTimes = impoundments.filter((i) => !i.petId).map((i) => this.toTime(i.intakeDate)).filter((t) => t != null);
     const inRange = (list, b) => list.filter((t) => t >= b.from && t < b.to).length;
-    const chartData = this.buildBuckets(this.timeframe).map((b) => {
-      const missing = inRange(caseTimes, b);
-      const intake = inRange(intakeTimes, b);
-      return { ...b, missing, intake, val: missing + intake };
+    const chartData = this.buildBuckets(timeframe).map((b) => {
+      const reg = inRange(regTimes, b);
+      const other = inRange(otherTimes, b);
+      return { ...b, reg, other, val: reg + other };
     });
     const maxVal = Math.max(...chartData.map((d) => d.val), 0);
     const axisMax = Math.max(Math.ceil(maxVal / 3) * 3, 3); // multiple of 3 so the gridlines land on whole numbers
@@ -152,141 +109,29 @@ window.ActivationView = {
     const current = chartData[chartData.length - 1];
     const previous = chartData[chartData.length - 2];
     const diff = current.val - previous.val;
-    const unit = { weekly: 'week', monthly: 'month', yearly: 'year' }[this.timeframe];
-    const periodNoun = { weekly: 'Last 6 weeks', monthly: 'Last 12 months', yearly: 'Last 4 years' }[this.timeframe];
+    const unit = { weekly: 'week', monthly: 'month', yearly: 'year' }[timeframe];
+    const periodNoun = { weekly: 'Last 6 weeks', monthly: 'Last 12 months', yearly: 'Last 4 years' }[timeframe];
+    return { chartData, axisMax, periodTotal, peak, average, current, previous, diff, unit, periodNoun };
+  },
 
-    // ---- Recovery funnel (missing reports only, so every step is a share of the same group) ----
-    const funnelBase = cases.length;
-    const funnelSteps = [
-      { name: 'Missing reported', count: funnelBase, color: '#c2410c' },
-      { name: 'Sighted by the community', count: sightedCases.length, color: '#c2410c' },
-      { name: 'Marked found / reunited', count: reunitedCases.length, color: '#15803d' }
-    ].map((s) => ({ ...s, percent: funnelBase ? Math.round((s.count / funnelBase) * 100) : 0 }));
-    let chokePoint = null;
-    for (let i = 0; i < funnelSteps.length - 1; i++) {
-      const drop = funnelSteps[i].percent - funnelSteps[i + 1].percent;
-      if (funnelBase && drop > 0 && (!chokePoint || drop > chokePoint.drop)) {
-        chokePoint = { drop, text: `${funnelSteps[i].name} → ${funnelSteps[i + 1].name}` };
-      }
-    }
-
-    // ---- Needs attention (each links to where staff can act) ----
-    const attention = [
-      { n: overdue.length, label: 'impounded pets past their claim deadline', route: 'impoundments', tone: 'danger' },
-      { n: dueSoon.length, label: 'claim deadlines within 24 hours', route: 'impoundments', tone: 'warn' },
-      { n: awaitingReview.length, label: 'sighting reports waiting for review', route: 'heatmap', tone: 'info' },
-      { n: staleCases.length, label: 'open missing cases with no update in 72h', route: 'heatmap', tone: 'warn' }
-    ].filter((a) => a.n > 0);
-
-    const stalls = [
-      ['Shelter intake', 'Animals currently in holding', active.length ? `${active.length} ${active.length === 1 ? 'pet' : 'pets'}` : 'Clear'],
-      ['Claim processing', 'Past the claim deadline', overdue.length ? `${overdue.length} overdue` : 'Clear'],
-      ['Field review', 'Sighting reports not yet reviewed', awaitingReview.length ? `${awaitingReview.length} waiting` : 'Clear']
-    ];
-
-    const makeSparkline = (vals, color = '#c2410c') => {
-      const sw = 84, sh = 28;
-      const min = Math.min(...vals);
-      const max = Math.max(...vals);
-      const span = max - min || 1;
-      const d = vals.map((v, i) => `${i ? 'L' : 'M'} ${((i / (vals.length - 1)) * sw).toFixed(1)},${(sh - 3 - ((v - min) / span) * (sh - 6)).toFixed(1)}`).join(' ');
-      return `<svg width="${sw}" height="${sh}" viewBox="0 0 ${sw} ${sh}" aria-hidden="true"><path d="${d}" fill="none" stroke="${color}" stroke-width="1.8" stroke-linecap="round" /></svg>`;
-    };
-
-    const info = (key) => `<button type="button" class="dash-info" data-info="${key}" aria-label="What does this show?" title="What does this show?">i</button>`;
-
-    const kpi = (key, label, value, delta, deltaClass, spark, color) => `
-      <div class="kpi-card">
-        <div class="kpi-label"><span>${label}</span>${info(key)}</div>
-        <div class="kpi-body">
-          <div>
-            <div class="kpi-value">${value}</div>
-            <div class="kpi-delta ${deltaClass}">${delta}</div>
-          </div>
-          <div class="kpi-spark">${makeSparkline(spark, color)}</div>
-        </div>
-      </div>`;
-
-    const todayLabel = new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
-    container.innerHTML = `
-     <div class="dash-pro">
-      <div class="view-header">
-        <div class="view-header-titles">
-          <div class="dash-eyebrow">Operations overview</div>
-          <h1>Dashboard</h1>
-          <div class="subtitle"><span>${todayLabel} · Pets, reports and shelter activity, live from the database</span></div>
-        </div>
-        <div class="view-header-actions">
-          <button class="chip chip-subtle-terracotta" id="btn-quick-intake" title="Record a stray or lost pet that was brought to the shelter">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg>
-            Log impounded pet
-          </button>
-          <button class="chip" id="btn-export-brief">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
-            Download summary
-          </button>
-        </div>
-      </div>
-
-      <!-- Needs attention -->
-      <div class="dash-attention ${attention.length ? '' : 'is-clear'}">
-        ${attention.length ? `
-          <div class="dash-attention-title">Needs attention</div>
-          <div class="dash-attention-list">
-            ${attention.map((a) => `
-              <button class="dash-attention-item tone-${a.tone}" data-go="${a.route}">
-                <b>${a.n}</b><span>${a.label}</span><i aria-hidden="true">→</i>
-              </button>`).join('')}
-          </div>
-        ` : `
-          <div class="dash-attention-title">All clear</div>
-          <div class="dash-attention-ok">No overdue claims, unreviewed sightings or stale cases right now.</div>
-        `}
-      </div>
-
-      <div class="kpi-grid" style="margin-bottom: 16px;">
-        ${kpi('safe', 'Pets safe at home', totalPets ? `${protectedPct}%` : '—',
-          totalPets ? `${safePets + reunitedPets} of ${totalPets} registered` : 'No pets registered yet',
-          totalPets ? 'up' : 'neutral', this.dailySeries(pets.map((p) => this.toTime(p.registeredDate))), '#15803d')}
-        ${kpi('recovery', 'Median recovery time', this.formatDuration(medianRecovery),
-          reunitedCases.length ? `across ${reunitedCases.length} reunited ${reunitedCases.length === 1 ? 'case' : 'cases'}` : 'No reunited cases yet',
-          'neutral', caseSeries, '#1c1917')}
-        ${kpi('registrations', 'New registrations', `${regThisWeek} <span class="kpi-unit">this week</span>`,
-          regToday ? `${regToday} today` : `${chippedPct}% of pets have a tag or chip`,
-          regThisWeek ? 'up' : 'neutral', regSeries, '#c2410c')}
-        ${kpi('shelters', 'Animals in shelters', `${active.length} <span class="kpi-unit">in holding</span>`,
-          overdue.length ? `${overdue.length} past deadline` : (claimed.length ? `${claimed.length} claimed so far` : 'Nobody in holding'),
-          overdue.length ? 'down' : 'up', intakeSeries, '#b45309')}
-      </div>
-
-      <div class="analytics-card-grid">
-        <!-- Incident chart -->
-        <div class="analytics-card">
-          <div class="analytics-card-header">
-            <div class="analytics-card-title">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" style="color: var(--brand-terracotta);"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>
-              <span>Incidents over time</span>
-              ${info('incidents')}
-            </div>
-            <div class="dash-segmented" role="tablist" aria-label="Time range">
-              ${['weekly', 'monthly', 'yearly'].map((tf) => `<button class="${this.timeframe === tf ? 'active' : ''} btn-timeframe" data-timeframe="${tf}" role="tab" aria-selected="${this.timeframe === tf}">${tf[0].toUpperCase() + tf.slice(1)}</button>`).join('')}
-            </div>
-          </div>
-
-          <div class="analytics-kpi-row">
+  // The part of the intake card that changes with the time range (the header and its selector stay put)
+  chartBodyHtml(m, ctx) {
+    const { chartData, axisMax, periodTotal, peak, average, current, previous, diff, unit, periodNoun } = m;
+    const { overdue, intakesThisWeek, active, releaseRate } = ctx;
+    return `          <div class="analytics-kpi-row">
             <div class="analytics-kpi-block">
-              <div class="analytics-kpi-main-val">${periodTotal} ${periodTotal === 1 ? 'report' : 'reports'}</div>
+              <div class="analytics-kpi-main-val">${periodTotal} ${periodTotal === 1 ? 'intake' : 'intakes'}</div>
               <div class="analytics-kpi-sub"><span>${periodNoun} · avg ${average.toFixed(1)} per ${unit}</span></div>
             </div>
             <div class="analytics-kpi-block">
-              <div class="analytics-kpi-main-val" style="color: ${diff > 0 ? '#b91c1c' : diff < 0 ? '#15803d' : 'var(--ink-primary)'};">${diff > 0 ? '▲' : diff < 0 ? '▼' : '■'} ${Math.abs(diff)}</div>
+              <div class="analytics-kpi-main-val" style="color: ${diff > 0 ? '#b45309' : 'var(--ink-primary)'};">${diff > 0 ? '▲' : diff < 0 ? '▼' : '■'} ${Math.abs(diff)}</div>
               <div class="analytics-kpi-sub"><span>${current.val} this ${unit} vs ${previous.val} last ${unit}${periodTotal ? ` · busiest: ${peak.label}` : ''}</span></div>
             </div>
           </div>
 
           <div class="dash-legend" aria-label="Chart legend">
-            <span><i class="dot dot-missing"></i>Missing reports</span>
-            <span><i class="dot dot-intake"></i>Shelter intakes</span>
+            <span><i class="dot dot-missing"></i>Registered pets</span>
+            <span><i class="dot dot-intake"></i>Unregistered animals</span>
             <span><i class="dot dot-avg"></i>Average</span>
           </div>
 
@@ -305,17 +150,17 @@ window.ActivationView = {
                   <div class="analytics-grid-line" style="bottom: 33.33%;"></div>
                   ${periodTotal ? `<div class="dash-avg-line" style="bottom: ${(average / axisMax) * 100}%;"></div>` : ''}
                   <div class="analytics-bars-track">
-                    ${chartData.map((item) => `
-                      <div class="analytics-bar-slot ${item.active ? 'is-current' : ''}" tabindex="0" aria-label="${item.label}${item.sub ? ' ' + item.sub : ''}: ${item.missing} missing reports, ${item.intake} shelter intakes">
+                    ${chartData.map((item, idx) => `
+                      <div class="analytics-bar-slot ${item.active ? 'is-current' : ''}" style="--i:${idx};" tabindex="0" aria-label="${item.label}${item.sub ? ' ' + item.sub : ''}: ${item.reg} registered pets, ${item.other} unregistered animals">
                         <div class="dash-tip" role="tooltip">
                           <b>${item.label}${item.sub ? ' · ' + item.sub : ''}</b>
-                          <span><i class="dot dot-missing"></i>${item.missing} missing ${item.missing === 1 ? 'report' : 'reports'}</span>
-                          <span><i class="dot dot-intake"></i>${item.intake} shelter ${item.intake === 1 ? 'intake' : 'intakes'}</span>
+                          <span><i class="dot dot-missing"></i>${item.reg} registered ${item.reg === 1 ? 'pet' : 'pets'}</span>
+                          <span><i class="dot dot-intake"></i>${item.other} unregistered</span>
                         </div>
                         ${item.val ? `<span class="dash-bar-value">${item.val}</span>` : ''}
                         <div class="analytics-bar dash-stack" style="height: ${item.val ? Math.max((item.val / axisMax) * 100, 5) : 1.5}%;">
-                          ${item.intake ? `<div class="seg seg-intake" style="flex: ${item.intake};"></div>` : ''}
-                          ${item.missing ? `<div class="seg seg-missing" style="flex: ${item.missing};"></div>` : ''}
+                          ${item.other ? `<div class="seg seg-intake" style="flex: ${item.other};"></div>` : ''}
+                          ${item.reg ? `<div class="seg seg-missing" style="flex: ${item.reg};"></div>` : ''}
                         </div>
                       </div>`).join('')}
                   </div>
@@ -329,30 +174,350 @@ window.ActivationView = {
                 </div>
               </div>
             </div>
-            ${periodTotal === 0 ? '<div class="dash-chart-empty">No reports or intakes in this range yet</div>' : ''}
+            ${periodTotal === 0 ? '<div class="dash-chart-empty">No intakes in this range yet</div>' : ''}
           </div>
 
           <div class="analytics-footer-summary">
             <div style="display: flex; flex-direction: column; gap: 2px;">
-              <span style="color: #2563eb; font-weight: 600;">${awaitingReview.length} sighting ${awaitingReview.length === 1 ? 'report' : 'reports'} awaiting review</span>
-              <span style="color: var(--ink-muted); font-size: 11px;">${casesThisWeek} new missing ${casesThisWeek === 1 ? 'report' : 'reports'} in the last 7 days · ${openCases.length} still open</span>
+              <span style="color: ${overdue ? '#b91c1c' : '#15803d'}; font-weight: 600;">${overdue ? `${overdue} past the claim deadline` : 'No claims past their deadline'}</span>
+              <span style="color: var(--ink-muted); font-size: 11px;">${intakesThisWeek} ${intakesThisWeek === 1 ? 'intake' : 'intakes'} in the last 7 days · ${active} still in holding</span>
             </div>
             <div style="font-weight: 700; color: var(--ink-primary); font-family: var(--font-mono); font-size: 13px;">
-              ${resolutionRate == null ? 'No cases yet' : `${resolutionRate}% resolved`}
+              ${releaseRate == null ? 'No closed cases yet' : `${releaseRate}% released to owners`}
             </div>
           </div>
 
           <div class="analytics-actions-row">
-            <button class="btn btn-secondary btn-sm" id="btn-chart-view-registry">View on heatmap</button>
-          </div>
-        </div>
+            <button class="btn btn-secondary btn-sm" id="btn-chart-view-registry">View impoundments</button>
+          </div>`;
+  },
 
-        <!-- Recovery funnel -->
+  // Shown on the very first load, before the database has answered, so the page never claims "no pets yet"
+  renderSkeleton(container) {
+    const bar = (w, h = 12) => `<span class="dash-skel" style="width: ${w}; height: ${h}px;"></span>`;
+    container.innerHTML = `
+     <div class="dash-pro is-skeleton" role="status" aria-busy="true" aria-label="Loading the dashboard">
+      <div class="view-header">
+        <div class="view-header-titles">
+          <div class="dash-eyebrow">Operations overview</div>
+          <h1>Dashboard</h1>
+          <div class="subtitle">${bar('280px', 12)}</div>
+        </div>
+      </div>
+      <div class="kpi-grid" style="margin-bottom: 16px;">
+        ${[0, 1, 2, 3].map(() => `
+          <div class="kpi-card">
+            <div class="kpi-label">${bar('96px', 10)}</div>
+            <div class="kpi-body">
+              <div>${bar('74px', 24)}<div style="margin-top: 8px;">${bar('130px', 10)}</div></div>
+              ${bar('84px', 28)}
+            </div>
+          </div>`).join('')}
+      </div>
+      <div class="analytics-card-grid">
+        <div class="analytics-card">${bar('160px', 14)}<div style="display: flex; gap: 24px;">${bar('120px', 30)}${bar('120px', 30)}</div>${bar('100%', 140)}</div>
+        <div class="analytics-card">${bar('140px', 14)}${bar('100%', 9)}${bar('100%', 9)}${bar('100%', 9)}</div>
+      </div>
+     </div>`;
+  },
+
+  // Switching the time range redraws only the chart, so the selector can slide and the bars can grow
+  updateChart(container) {
+    const body = container.querySelector && container.querySelector('#dash-chart-body');
+    const ctx = this._ctx;
+    if (!body || !ctx) { this._animateNext = true; this.render(container); return; }
+    const m = this.chartModel(this.timeframe, ctx.impoundments);
+    body.classList.add('is-animated');
+    body.innerHTML = this.chartBodyHtml(m, ctx);
+    this.bindChartBody(body);
+
+    const seg = container.querySelector('.dash-segmented');
+    if (seg) {
+      seg.style.setProperty('--seg', String(this.TIMEFRAMES.indexOf(this.timeframe)));
+      seg.querySelectorAll('.btn-timeframe').forEach((b) => {
+        const on = b.getAttribute('data-timeframe') === this.timeframe;
+        b.classList.toggle('active', on);
+        b.setAttribute('aria-selected', String(on));
+      });
+    }
+    // the downloadable summary follows what is on screen
+    if (this._report) Object.assign(this._report, { periodNoun: m.periodNoun, unit: m.unit, chart: m.chartData, periodTotal: m.periodTotal, average: m.average, current: m.current, previous: m.previous, diff: m.diff, peak: m.peak });
+    if (this._live) this._live.unit = m.unit;
+  },
+
+  bindChartBody(root) {
+    root.querySelector('#btn-chart-view-registry')?.addEventListener('click', () => { window.location.hash = '#impoundments'; });
+  },
+
+  render(container) {
+    const store = window.adminStore;
+    const fn = (name, fallback) => (typeof store[name] === 'function' ? store[name]() : fallback);
+    const hasFacility = typeof store.hasFacility === 'function' ? store.hasFacility() : true;
+    const mine = fn('getMyShelter', null);
+    const impoundments = fn('getMyImpoundments', []) || [];   // this facility (and its sub-facilities) only
+    const facilityIds = fn('getMyFacilityIds', []) || [];
+    const allShelters = fn('getShelters', []) || [];
+    const treeShelters = allShelters.filter((s) => facilityIds.includes(s.id));
+    const subs = fn('getSubFacilities', []) || [];
+    const mainFacility = fn('getMainFacility', null);
+    const tickets = (fn('getTickets', []) || []).filter((t) => impoundments.some((i) => i.id === t.impoundId) || facilityIds.includes(t.payeeShelterId));
+    const now = Date.now();
+
+    // First load: nothing cached yet and the database has not answered. Show a skeleton, not misleading zeros.
+    // Also while the facility itself has not arrived: capacity would read "—" for a moment, then jump to "0%".
+    const account = typeof store.currentAdmin === 'function' ? store.currentAdmin() : null;
+    const waitingOnFacility = !!(account && account.shelter_id) && !treeShelters.length && !store.hasSynced;
+    const accountPending = typeof store.currentAdmin === 'function' && !account;
+    const loading = (store.syncStatus === 'connecting' && !impoundments.length) || accountPending || waitingOnFacility || (!store.hasSynced && !impoundments.length && !allShelters.length);
+    if (loading) {
+      this._wasLoading = true;
+      return this.renderSkeleton(container);
+    }
+    // Entry animations play when the page is opened, when the data first arrives, and after the person's own action.
+    // A background re-render (every realtime sync) stays perfectly still.
+    const entering = !!(window.AdminMotion && window.AdminMotion.routeEntering);
+    const fromSkeleton = !!this._wasLoading && !entering;
+    this._wasLoading = false;
+    const animate = entering || fromSkeleton || !!this._animateNext;
+    this._animateNext = false;
+    const syncedAt = store.lastSyncedAt ? new Date(store.lastSyncedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : '';
+    const escHtml = (v) => String(v == null ? '' : v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const DAY = 24 * 3600 * 1000;
+
+    // ---- This facility's impoundments ----
+    const active = impoundments.filter((i) => i.status === 'active_impounded');
+    const claimed = impoundments.filter((i) => i.status === 'claimed');
+    const closed = impoundments.filter((i) => i.status !== 'active_impounded');
+    const otherOutcomes = closed.filter((i) => i.status !== 'claimed');
+    const deadlineOf = (i) => this.toTime(i.claimDeadline);
+    const overdue = active.filter((i) => { const d = deadlineOf(i); return d != null && d < now; });
+    const dueSoon = active.filter((i) => { const d = deadlineOf(i); return d != null && d >= now && d - now < DAY; });
+    const stayTimes = claimed
+      .map((i) => (this.toTime(i.closedAt) ?? NaN) - (this.toTime(i.intakeDate) ?? NaN))
+      .filter((ms) => Number.isFinite(ms) && ms >= 0);
+    const medianStay = this.median(stayTimes);
+    const releaseRate = closed.length ? Math.round((claimed.length / closed.length) * 100) : null;
+    // A facility saved without a capacity (the owner site once wrote the shared list without it) counts as the default 50
+    const capacity = treeShelters.reduce((a, s) => a + (s.capacity == null ? 50 : Number(s.capacity) || 0), 0);
+    const capacityPct = capacity ? Math.min(Math.round((active.length / capacity) * 100), 100) : null;
+
+    // ---- Transfers between this facility's sub-facilities and its main facility ----
+    const incoming = fn('getIncomingTransfers', []) || [];
+    const outgoing = (fn('getOutgoingTransfers', []) || []).filter((i) => i.status === 'active_impounded');
+    const notArrived = active.filter((i) => i.transferStatus === 'not_arrived');
+
+    // ---- Penalty tickets (missing pets impounded at this facility or its sub-facilities) ----
+    const unpaid = tickets.filter((t) => t.status === 'unpaid');
+    const paidT = tickets.filter((t) => t.status === 'paid');
+    const waivedT = tickets.filter((t) => t.status === 'waived');
+    const sumPhp = (list) => list.reduce((a, t) => a + (Number(t.amount) || 0), 0);
+    const toCollect = fn('getTicketsToCollect', []) || [];
+    const showPenalties = !!store.penaltyReady && tickets.length > 0;
+
+    // ---- Sparklines (last 7 days) ----
+    const intakeSeries = this.dailySeries(impoundments.map((i) => this.toTime(i.intakeDate)));
+    const releaseSeries = this.dailySeries(claimed.map((i) => this.toTime(i.closedAt)));
+    const intakesThisWeek = intakeSeries.reduce((a, b) => a + b, 0);
+    const intakesToday = intakeSeries[intakeSeries.length - 1];
+    const releasedThisWeek = releaseSeries.reduce((a, b) => a + b, 0);
+    const holdingSeries = intakeSeries; // arrivals feed the holding count
+
+    // ---- Intake chart ----
+    const chartModel = this.chartModel(this.timeframe, impoundments);
+    const { chartData, periodTotal, average, current, previous, diff, peak, unit, periodNoun } = chartModel;
+    const ctx = { impoundments, overdue: overdue.length, intakesThisWeek, active: active.length, releaseRate };
+
+    // ---- How cases ended (every step is a share of all intakes at this facility) ----
+    const outcomeBase = impoundments.length;
+    const outcomeSteps = [
+      { name: 'Taken in', count: outcomeBase, color: '#78716c' },
+      { name: 'Released to owners', count: claimed.length, color: '#15803d' },
+      { name: 'Transferred, forfeited or deceased', count: otherOutcomes.length, color: '#b45309' },
+      { name: 'Still in holding', count: active.length, color: '#c2410c' }
+    ].map((s) => ({ ...s, percent: outcomeBase ? Math.round((s.count / outcomeBase) * 100) : 0 }));
+
+    // ---- Needs attention (each links to where staff can act) ----
+    const attention = [
+      { n: overdue.length, label: 'impounded pets past their claim deadline', route: 'impoundments', tone: 'danger' },
+      { n: incoming.length, label: 'pets arriving from sub-facilities, waiting for you to confirm', route: 'impoundments', tone: 'danger' },
+      { n: notArrived.length, label: 'transfers reported as not arrived', route: 'impoundments', tone: 'danger' },
+      { n: dueSoon.length, label: 'claim deadlines within 24 hours', route: 'impoundments', tone: 'warn' },
+      { n: toCollect.length, label: 'penalty tickets waiting for payment', route: 'impoundments', tone: 'warn' },
+      { n: outgoing.length, label: `pets being moved to ${mainFacility ? mainFacility.name : 'the main facility'}`, route: 'impoundments', tone: 'info' }
+    ].filter((a) => a.n > 0);
+
+    const stalls = [
+      ['Intake', 'Animals currently in holding', active.length ? `${active.length} ${active.length === 1 ? 'pet' : 'pets'}` : 'Clear'],
+      ['Claim processing', 'Past the claim deadline', overdue.length ? `${overdue.length} overdue` : 'Clear'],
+      ['Transfers', 'Arrivals waiting for confirmation', incoming.length ? `${incoming.length} waiting` : 'Clear'],
+      ['Penalties', 'Tickets waiting for payment', toCollect.length ? `${toCollect.length} unpaid` : 'Clear']
+    ];
+
+    const makeSparkline = (vals, color = '#c2410c') => {
+      const sw = 84, sh = 28;
+      const min = Math.min(...vals);
+      const max = Math.max(...vals);
+      const span = max - min || 1;
+      const pts = vals.map((v, i) => [(i / (vals.length - 1)) * sw, sh - 3 - ((v - min) / span) * (sh - 6)]);
+      const d = pts.map((p, i) => `${i ? 'L' : 'M'} ${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(' ');
+      const last = pts[pts.length - 1];
+      return `<svg width="${sw}" height="${sh}" viewBox="0 0 ${sw} ${sh}" aria-hidden="true">` +
+        `<path class="spark-area" d="${d} L ${sw},${sh} L 0,${sh} Z" fill="${color}" />` +
+        `<path class="spark-line" pathLength="1" d="${d}" fill="none" stroke="${color}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />` +
+        `<circle class="spark-dot" cx="${last[0].toFixed(1)}" cy="${last[1].toFixed(1)}" r="2.4" fill="${color}" /></svg>`;
+    };
+
+    const info = (key) => `<button type="button" class="dash-info" data-info="${key}" aria-label="What does this show?" title="What does this show?">i</button>`;
+
+    let kpiIndex = 0;
+    const KPI_ICON = { capacity: 'shield', holding: 'home', intakes: 'plus', released: 'clock' };
+    const kpi = (key, label, value, delta, deltaClass, spark, color) => `
+      <div class="kpi-card kpi-rich" style="--k:${kpiIndex++}; --c:${color}">
+        <div class="kpi-label"><span class="kpi-ic"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${this.INFO_ICONS[KPI_ICON[key]] || ''}</svg></span><span class="kpi-name">${label}</span>${info(key)}</div>
+        <div class="kpi-body">
+          <div>
+            <div class="kpi-value">${value}</div>
+            <div class="kpi-delta ${deltaClass}">${delta}</div>
+          </div>
+          <div class="kpi-spark">${makeSparkline(spark, color)}</div>
+        </div>
+      </div>`;
+
+    // ---- Holding by species (donut) ----
+    const SPECIES_COLORS = { Dog: '#b45309', Cat: '#2563eb', Other: '#a8a29e' };
+    const speciesCounts = {};
+    active.forEach((i) => { const k = i.species || 'Other'; speciesCounts[k] = (speciesCounts[k] || 0) + 1; });
+    const speciesSlices = Object.entries(speciesCounts).sort((a, b) => b[1] - a[1]).map(([label, n]) => [label, n, SPECIES_COLORS[label] || '#78716c']);
+    let donutAt = 0;
+    const donutSegs = speciesSlices.map(([label, n, color], i) => {
+      const len = active.length ? (n / active.length) * 100 : 0;
+      const seg = len > 0
+        ? `<circle class="donut-seg" style="--i:${i}" cx="21" cy="21" r="15.9155" pathLength="100" fill="none" stroke="${color}" stroke-width="5" stroke-dasharray="${Math.max(len - 0.8, 0.1).toFixed(2)} 100" stroke-dashoffset="${(-donutAt).toFixed(2)}" />`
+        : '';
+      donutAt += len;
+      return seg;
+    }).join('');
+
+    // ---- Holding now: who is closest to their claim deadline ----
+    const holdingRows = active.slice()
+      .sort((x, y) => (deadlineOf(x) ?? Infinity) - (deadlineOf(y) ?? Infinity))
+      .slice(0, 5)
+      .map((i) => {
+        const d = deadlineOf(i);
+        const left = d == null ? null : d - now;
+        const tone = left == null ? 'ok' : left < 0 ? 'late' : left < DAY ? 'soon' : 'ok';
+        const label = left == null ? 'No deadline' : left < 0 ? `${this.formatDuration(-left)} overdue` : `${this.formatDuration(left)} left`;
+        const where = subs.length && i.shelterName ? i.shelterName : '';
+        return { name: i.petName || 'Unidentified animal', sub: [i.species, i.cageNumber, where].filter(Boolean).join(' · ') || 'No cage yet', photo: i.photoUrl || '', tone, label };
+      });
+
+    // ---- By facility (main facility with sub-facilities) ----
+    const facilityRows = treeShelters.map((s) => {
+      const here = active.filter((i) => i.shelterId === s.id);
+      const late = here.filter((i) => { const d = deadlineOf(i); return d != null && d < now; }).length;
+      const cap = s.capacity == null ? 50 : Number(s.capacity) || 0;
+      return { name: s.name, main: !s.parentId, n: here.length, late, cap, pct: cap ? Math.min(Math.round((here.length / cap) * 100), 100) : 0 };
+    }).sort((a, b) => Number(b.main) - Number(a.main) || b.n - a.n);
+
+    const scopeName = mine ? mine.name : 'Your impound facility';
+    const scopeNote = mainFacility ? `Sub-facility of ${mainFacility.name}` : (() => {
+      const mainsMore = Math.max((fn('getMainFacilities', []) || []).length - 1, 0);
+      const bits = [];
+      if (mainsMore) bits.push(`${mainsMore} more main ${mainsMore === 1 ? 'facility' : 'facilities'}`);
+      if (subs.length) bits.push(`${subs.length} sub-${subs.length === 1 ? 'facility' : 'facilities'}`);
+      return bits.length ? `${scopeName} and ${bits.join(' and ')}` : scopeName;
+    })();
+    const todayLabel = new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+    container.innerHTML = `
+     <div class="dash-pro${animate ? ' is-animated' : ''}${fromSkeleton ? ' from-skeleton' : ''}">
+      <div class="view-header">
+        <div class="view-header-titles">
+          <div class="dash-eyebrow">${escHtml(scopeNote)}</div>
+          <h1>Dashboard</h1>
+          <div class="subtitle"><span>${todayLabel} · Your facility's impoundments, transfers and penalties, live from the database</span></div>
+        </div>
+        <div class="view-header-actions">
+          <button class="chip chip-subtle-terracotta" id="btn-quick-intake" title="Tap an NFC tag, or log a pet that has no tag">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg>
+            Scan &amp; intake
+          </button>
+          <button class="chip dash-refresh" id="btn-refresh" title="Refresh the data${syncedAt ? ` (last updated ${syncedAt})` : ''}" aria-label="Refresh the data">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
+            <span>${syncedAt ? `Updated ${syncedAt}` : 'Refresh'}</span>
+          </button>
+          <button class="chip" id="btn-export-brief">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+            Download summary
+          </button>
+        </div>
+      </div>
+
+      ${hasFacility ? '' : `
+        <div class="dash-onboard">
+          <div class="dash-onboard-text"><b>You are not part of an impound facility yet.</b><span>Register yours, or join your colleagues with the invite code your manager shares. This dashboard then shows your facility's animals, transfers and penalties.</span></div>
+          <button class="btn btn-primary btn-sm" data-go="shelters">Set up your facility</button>
+        </div>`}
+
+      <div class="kpi-grid" style="margin-bottom: 16px;">
+        ${kpi('capacity', 'Capacity in use', capacityPct == null ? '—' : `${capacityPct}%`,
+          capacity ? `${active.length} of ${capacity} places taken` : 'Set a capacity on the Facilities page',
+          capacityPct != null && capacityPct >= 90 ? 'down' : 'up', holdingSeries, '#15803d')}
+        ${kpi('holding', 'In holding now', `${active.length} <span class="kpi-unit">${active.length === 1 ? 'animal' : 'animals'}</span>`,
+          overdue.length ? `${overdue.length} past deadline` : (dueSoon.length ? `${dueSoon.length} due within 24h` : 'None past deadline'),
+          overdue.length ? 'down' : 'up', holdingSeries, '#b45309')}
+        ${kpi('intakes', 'Intakes this week', `${intakesThisWeek} <span class="kpi-unit">${intakesThisWeek === 1 ? 'animal' : 'animals'}</span>`,
+          intakesToday ? `${intakesToday} today` : `${impoundments.length} in total`,
+          intakesThisWeek ? 'up' : 'neutral', intakeSeries, '#c2410c')}
+        ${kpi('released', 'Released to owners', `${claimed.length} <span class="kpi-unit">in total</span>`,
+          medianStay != null ? `Median stay ${this.formatDuration(medianStay)}` : (releasedThisWeek ? `${releasedThisWeek} this week` : 'None released yet'),
+          'neutral', releaseSeries, '#1c1917')}
+      </div>
+
+      <div class="dash-row dash-row-main">
+        <!-- Intake chart -->
+        <div class="analytics-card">
+          <div class="analytics-card-header">
+            <div class="analytics-card-title">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" style="color: var(--brand-terracotta);"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>
+              <span>Intakes over time</span>
+              ${info('incidents')}
+            </div>
+            <div class="dash-segmented is-sliding" role="tablist" aria-label="Time range" style="--seg: ${this.TIMEFRAMES.indexOf(this.timeframe)};">
+              ${['weekly', 'monthly', 'yearly'].map((tf) => `<button class="${this.timeframe === tf ? 'active' : ''} btn-timeframe" data-timeframe="${tf}" role="tab" aria-selected="${this.timeframe === tf}">${tf[0].toUpperCase() + tf.slice(1)}</button>`).join('')}
+            </div>
+          </div>
+
+          <div class="dash-chart-body" id="dash-chart-body">${this.chartBodyHtml(chartModel, ctx)}</div>
+        </div>
+        <aside class="analytics-card dash-needs" aria-label="Needs attention">
+          <div class="analytics-card-header">
+            <div class="analytics-card-title">
+              <span>${attention.length ? 'Needs attention' : 'All clear'}</span>
+              ${attention.length ? `<span class="dash-count">${attention.reduce((a, x) => a + x.n, 0)}</span>` : ''}
+            </div>
+          </div>
+          ${attention.length ? `
+            <div class="dash-attention-list">
+              ${attention.map((a, idx) => `
+                <button class="dash-attention-item tone-${a.tone}" data-go="${a.route}" style="--i:${idx}">
+                  ${a.tone === 'danger' ? '<span class="dash-pulse" aria-hidden="true"></span>' : ''}<b>${a.n}</b><span>${escHtml(a.label)}</span><i aria-hidden="true">→</i>
+                </button>`).join('')}
+            </div>` : `
+            <div class="dash-clear">
+              <svg class="dash-check" width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7"/></svg>
+              <b>Nothing needs attention</b>
+              <span>No overdue claims, incoming transfers or unpaid penalties right now.</span>
+            </div>`}
+        </aside>
+      </div>
+
+      <div class="dash-row dash-row-3">
+        <!-- How cases ended -->
         <div class="analytics-card funnel-card">
           <div class="analytics-card-header">
             <div class="analytics-card-title">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" style="color: #16a34a;"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
-              <span>Recovery funnel</span>
+              <span>How cases ended</span>
               ${info('funnel')}
             </div>
             <button class="btn btn-sm btn-secondary" id="btn-toggle-recovery-funnel" title="Switch between percentages and counts" style="padding: 2px 7px; font-size: 10px;">
@@ -360,88 +525,143 @@ window.ActivationView = {
             </button>
           </div>
 
-          ${funnelBase === 0 ? `
+          ${outcomeBase === 0 ? `
             <div class="dash-empty">
-              <div class="dash-empty-title">No missing reports yet</div>
-              <div>When a guardian reports a pet missing, its journey to being found shows up here.</div>
+              <div class="dash-empty-title">No intakes yet</div>
+              <div>Animals your facility takes in, and how each case ends, show up here.</div>
             </div>
           ` : `
             <div class="funnel-list" style="margin: 8px 0;">
-              ${funnelSteps.map((step, idx) => `
-                <div class="funnel-step">
+              ${outcomeSteps.map((step, idx) => `
+                <div class="funnel-step" style="--i:${idx}">
                   <div>
                     <div class="funnel-step-head">
                       <span style="font-weight: 650; color: var(--ink-primary);">${step.name}</span>
                       <span class="funnel-step-count">${step.count}</span>
                     </div>
                     <div class="funnel-track">
-                      <div class="funnel-fill" style="width: ${Math.max((step.count / funnelBase) * 100, step.count ? 4 : 0)}%; background: ${step.color};"></div>
+                      <div class="funnel-fill" style="width: ${Math.max((step.count / outcomeBase) * 100, step.count ? 4 : 0)}%; background: ${step.color};"></div>
                     </div>
                   </div>
-                  <span class="funnel-keep" style="color: ${step.color};">${this.funnelMode === 'percent' ? step.percent + '%' : step.count}</span>
+                  <span class="funnel-keep" data-percent="${step.percent}%" data-count="${step.count}" style="color: ${step.color};">${this.funnelMode === 'percent' ? step.percent + '%' : step.count}</span>
                 </div>`).join('')}
             </div>
-            ${chokePoint ? `
-              <div class="chokepoint-banner">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" style="flex-shrink: 0;"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-                <div style="display: flex; flex-direction: column; gap: 1px;">
-                  <span style="font-weight: 750;">Biggest drop: ${chokePoint.text} (−${chokePoint.drop}%)</span>
-                  <span style="font-size: 10.5px; opacity: 0.9;">${openCases.length} ${openCases.length === 1 ? 'case is' : 'cases are'} still open.</span>
-                </div>
-              </div>` : ''}
           `}
 
           <div class="analytics-footer-summary" style="margin-top: 4px;">
-            <span style="color: var(--ink-secondary); font-size: 11.5px;">In holding: <b style="color: var(--ink-primary);">${active.length}</b> · Claimed: <b style="color: var(--ink-primary);">${claimed.length}</b></span>
-            <span style="color: #16a34a; font-weight: 700; font-size: 11.5px;">Reunited: ${reunitedCases.length}</span>
+            <span style="color: var(--ink-secondary); font-size: 11.5px;">In holding: <b style="color: var(--ink-primary);">${active.length}</b> · Closed: <b style="color: var(--ink-primary);">${closed.length}</b></span>
+            <span style="color: #16a34a; font-weight: 700; font-size: 11.5px;">${releaseRate == null ? '' : `Released: ${releaseRate}%`}</span>
           </div>
+        </div>
+        <div class="analytics-card dash-status">
+          <div class="analytics-card-header">
+            <div class="analytics-card-title">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" style="color: #2563eb;"><path d="M21.21 15.89A10 10 0 1 1 8 2.83"/><path d="M22 12A10 10 0 0 0 12 2v10z"/></svg>
+              <span>Holding by species</span>
+            </div>
+          </div>
+          ${active.length ? `
+            <div class="dash-donut-row">
+              <div class="dash-donut" role="img" aria-label="${speciesSlices.map((x) => x[0] + ' ' + x[1]).join(', ')}">
+                <svg viewBox="0 0 42 42" width="132" height="132"><circle cx="21" cy="21" r="15.9155" fill="none" stroke="var(--bg-hover)" stroke-width="5"/><g transform="rotate(-90 21 21)">${donutSegs}</g></svg>
+                <div class="dash-donut-center"><b>${active.length}</b><span>in holding</span></div>
+              </div>
+              <ul class="dash-legend-list">
+                ${speciesSlices.map(([label, n, color]) => `<li><i style="background: ${color}"></i><span>${escHtml(label)}</span><b>${n}</b></li>`).join('')}
+              </ul>
+            </div>` : `
+            <div class="dash-empty"><div class="dash-empty-title">Nobody in holding</div>The species of the animals you are holding appear here.</div>`}
+        </div>
+        <div class="analytics-card dash-holding">
+          <div class="analytics-card-header">
+            <div class="analytics-card-title">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" style="color: #b45309;"><path d="m3 11 9-8 9 8"/><path d="M5 10v10h14V10"/></svg>
+              <span>Holding now</span>
+              ${active.length ? `<span class="dash-count dash-count-muted">${active.length}</span>` : ''}
+            </div>
+            <button class="btn btn-sm btn-secondary" data-go="impoundments" style="padding: 2px 8px; font-size: 10px;">View all</button>
+          </div>
+          ${holdingRows.length ? `
+            <ul class="dash-hold-list">
+              ${holdingRows.map((h, idx) => `
+                <li style="--i:${idx}">
+                  <button type="button" class="dash-hold-row" data-go="impoundments">
+                    ${h.photo ? `<img class="dash-hold-img" src="${escHtml(h.photo)}" alt="" loading="lazy" />` : '<span class="dash-hold-img dash-hold-ph" aria-hidden="true">🐾</span>'}
+                    <span class="dash-hold-text"><b>${escHtml(h.name)}</b><small>${escHtml(h.sub)}</small></span>
+                    <span class="dash-time tone-${h.tone}">${escHtml(h.label)}</span>
+                  </button>
+                </li>`).join('')}
+            </ul>` : `
+            <div class="dash-empty"><div class="dash-empty-title">Nobody in holding</div>Animals brought to your facility appear here with their claim countdown.</div>`}
         </div>
       </div>
 
-      <div class="nock-card" style="margin-top: 14px;">
-        <div class="nock-card-head">
-          <span class="nock-card-title">Where cases stall ${info('stalls')}</span>
-          <span class="nock-card-right">Current workload</span>
-        </div>
-        <div class="stall-table">
-          ${stalls.map((s) => `
-            <div class="stall-row">
-              <span class="stall-stage">${s[0]}</span>
-              <span class="stall-reason">${s[1]}</span>
-              <span class="stall-count ${s[2] === 'Clear' ? 'is-clear' : ''}">${s[2]}</span>
-            </div>`).join('')}
-        </div>
-      </div>
+      ${(subs.length || showPenalties) ? `
+      <div class="dash-row dash-row-pair">
+        ${subs.length ? `
+        <div class="analytics-card dash-facilities">
+          <div class="analytics-card-header">
+            <div class="analytics-card-title">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" style="color: #78716c;"><path d="M3 21h18M5 21V7l7-4 7 4v14M9 21v-6h6v6"/></svg>
+              <span>By facility</span>
+            </div>
+            <button class="btn btn-sm btn-secondary" data-go="shelters" style="padding: 2px 8px; font-size: 10px;">Manage</button>
+          </div>
+          <ul class="dash-fac-list">
+            ${facilityRows.map((f) => `
+              <li>
+                <div class="dash-fac-top"><b>${escHtml(f.name)}</b>${f.main ? '<em>Main</em>' : '<em class="is-sub">Sub</em>'}<span>${f.n}${f.cap ? ' / ' + f.cap : ''} in holding${f.late ? ` · <i class="is-late">${f.late} overdue</i>` : ''}</span></div>
+                ${f.cap ? `<div class="funnel-track"><div class="funnel-fill" style="width: ${Math.max(f.pct, f.n ? 4 : 0)}%; background: ${f.pct >= 90 ? '#b91c1c' : '#b45309'};"></div></div>` : ''}
+              </li>`).join('')}
+          </ul>
+        </div>` : ''}
+        ${showPenalties ? `
+        <div class="analytics-card dash-penalties">
+          <div class="analytics-card-header">
+            <div class="analytics-card-title">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" style="color: #b91c1c;"><path d="M3 7h18v10H3zM3 11h18"/><path d="M7 15h2"/></svg>
+              <span>Penalty tickets</span>
+              ${unpaid.length ? `<span class="dash-count">${unpaid.length}</span>` : ''}
+            </div>
+            <button class="btn btn-sm btn-secondary" data-go="impoundments" style="padding: 2px 8px; font-size: 10px;">View</button>
+          </div>
+          <ul class="dash-legend-list dash-pen-list">
+            <li><i style="background: #b91c1c"></i><span>Unpaid</span><b>${unpaid.length} · PHP ${sumPhp(unpaid).toLocaleString('en-US')}</b></li>
+            <li><i style="background: #15803d"></i><span>Paid</span><b>${paidT.length} · PHP ${sumPhp(paidT).toLocaleString('en-US')}</b></li>
+            <li><i style="background: #a8a29e"></i><span>Waived</span><b>${waivedT.length}</b></li>
+          </ul>
+          <div class="dash-pen-note">Charged when a missing pet is impounded at this facility${subs.length ? ' or a sub-facility' : ''}. Payments go to the main facility.</div>
+        </div>` : ''}
+      </div>` : ''}
      </div>
     `;
 
-    this._live = { medianRecovery, reunitedCount: reunitedCases.length, unit, totalPets, protectedPct };
-    const bySpecies = {};
-    pets.forEach((pt) => { const k = pt.species || 'Other'; bySpecies[k] = (bySpecies[k] || 0) + 1; });
-    const missingPets = countStatus('missing');
+    this._live = { medianStay, claimedCount: claimed.length, unit, capacity, capacityPct, active: active.length, intakesThisWeek };
+    this._ctx = ctx;
     this._report = {
       generatedAt: new Date(),
+      facility: scopeNote,
       periodNoun, unit,
       metrics: [
-        ['Registered pets', totalPets],
-        ['Pets safe at home', totalPets ? `${protectedPct}%` : 'n/a'],
-        ['Tag / chip coverage', totalPets ? `${chippedPct}%` : 'n/a'],
-        ['New registrations (7d)', regThisWeek],
-        ['Open missing cases', openCases.length],
-        ['Reunited cases', reunitedCases.length],
-        ['Resolution rate', resolutionRate == null ? 'n/a' : `${resolutionRate}%`],
-        ['Median recovery time', this.formatDuration(medianRecovery)]
+        ['Capacity in use', capacityPct == null ? 'n/a' : `${capacityPct}%`],
+        ['In holding now', active.length],
+        ['Past claim deadline', overdue.length],
+        ['Due within 24h', dueSoon.length],
+        ['Intakes (7 days)', intakesThisWeek],
+        ['Released to owners', claimed.length],
+        ['Median stay', this.formatDuration(medianStay)],
+        ['Unpaid penalties', showPenalties ? `PHP ${sumPhp(unpaid).toLocaleString('en-US')}` : 'n/a']
       ],
       attention: attention.map((a) => `${a.n} ${a.label}`),
       chart: chartData, periodTotal, average, current, previous, diff, peak,
-      funnel: funnelSteps, chokePoint, funnelBase,
+      outcomes: outcomeSteps, outcomeBase,
       stalls,
-      petStatus: [['Safe', safePets], ['Reunited', reunitedPets], ['Missing', missingPets], ['Other', Math.max(totalPets - safePets - reunitedPets - missingPets, 0)]],
-      species: Object.entries(bySpecies).sort((x, y) => y[1] - x[1]),
-      impounded: { active: active.length, claimed: claimed.length, overdue: overdue.length, dueSoon: dueSoon.length },
-      holding: active.slice().sort((x, y) => (this.toTime(x.claimDeadline) ?? Infinity) - (this.toTime(y.claimDeadline) ?? Infinity)),
-      openCases: openCases.slice().sort((x, y) => (this.toTime(x.createdAt) ?? 0) - (this.toTime(y.createdAt) ?? 0)),
-      awaitingReview, now, casesThisWeek
+      species: speciesSlices.map(([l, n]) => [l, n]),
+      facilities: facilityRows,
+      impounded: { active: active.length, claimed: claimed.length, overdue: overdue.length, dueSoon: dueSoon.length, closed: closed.length },
+      holding: active.slice().sort((x, y) => (deadlineOf(x) ?? Infinity) - (deadlineOf(y) ?? Infinity)),
+      penalties: showPenalties ? { unpaid: unpaid.length, unpaidPhp: sumPhp(unpaid), paid: paidT.length, paidPhp: sumPhp(paidT), waived: waivedT.length } : null,
+      releaseRate, intakesThisWeek, now
     };
     this.attachEvents(container);
   },
@@ -521,11 +741,11 @@ window.ActivationView = {
     doc.setFillColor(...INK); doc.rect(0, 0, W, 108, 'F');
     doc.setFillColor(...TERRA); doc.rect(0, 108, W, 4, 'F');
     doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(251, 146, 60);
-    doc.text('PAWTRACK  |  OPERATIONS REPORT', M, 38);
+    doc.text('PAWTRACK  |  FACILITY REPORT', M, 38);
     doc.setFontSize(24); doc.setTextColor(255);
     doc.text('Dashboard Summary', M, 68);
     doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5); doc.setTextColor(214, 211, 209);
-    doc.text('Pets, missing reports, sightings and shelter activity', M, 86);
+    doc.text(clean(r.facility), M, 86);
     doc.setFontSize(9); doc.text(r.generatedAt.toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }), W - M, 68, { align: 'right' });
     doc.text(r.generatedAt.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }), W - M, 82, { align: 'right' });
     y = 112;
@@ -533,11 +753,11 @@ window.ActivationView = {
     // ---- Executive summary ----
     const m = Object.fromEntries(r.metrics);
     const bits = [
-      `The registry holds ${m['Registered pets']} pet(s), ${m['Pets safe at home']} of them safe at home.`,
-      `${m['Open missing cases']} missing case(s) are open and ${m['Reunited cases']} have ended in a reunion (resolution rate ${m['Resolution rate']}).`,
-      `${r.impounded.active} animal(s) are in shelter holding${r.impounded.overdue ? `, ${r.impounded.overdue} past their claim deadline` : ''}, and ${r.awaitingReview.length} sighting report(s) await review.`,
+      `${r.facility}: ${r.impounded.active} animal(s) in holding${m['Capacity in use'] !== 'n/a' ? ` (${m['Capacity in use']} of capacity)` : ''}${r.impounded.overdue ? `, ${r.impounded.overdue} past their claim deadline` : ''}, ${r.impounded.dueSoon} due within 24 hours.`,
+      `${r.intakesThisWeek} intake(s) in the last 7 days; ${r.impounded.claimed} animal(s) released to their owners so far${r.releaseRate == null ? '' : ` (${r.releaseRate}% of closed cases)`}.`,
+      r.penalties ? `${r.penalties.unpaid} penalty ticket(s) are unpaid (PHP ${r.penalties.unpaidPhp.toLocaleString('en-US')}).` : '',
       r.attention.length ? `Priority: ${r.attention[0]}.` : 'Nothing currently needs urgent attention.'
-    ];
+    ].filter(Boolean);
     y += 18;
     doc.setFillColor(...TINT); doc.setDrawColor(...LINE); doc.setLineWidth(0.6);
     const sumLines = doc.splitTextToSize(clean(bits.join(' ')), CW - 32);
@@ -549,7 +769,7 @@ window.ActivationView = {
     y += sumH;
 
     // ---- Key metrics ----
-    section('Key metrics', 'Overall position of the registry and missing-pet cases at the time this report was generated.');
+    section('Key metrics', 'The position of your facility at the time this report was generated.');
     const cardW = (CW - 18) / 4, cardH = 56;
     r.metrics.forEach((mt, i) => {
       if (i % 4 === 0 && i > 0) y += cardH + 6;
@@ -559,56 +779,54 @@ window.ActivationView = {
       doc.setFont('helvetica', 'bold'); doc.setFontSize(7); doc.setTextColor(...MUTED);
       doc.text(cut(mt[0].toUpperCase(), cardW - 22), x + 12, y + 17);
       doc.setFontSize(18); doc.setTextColor(...INK);
-      doc.text(clean(mt[1]), x + 12, y + 42);
+      doc.text(cut(mt[1], cardW - 22), x + 12, y + 42);
     });
     y += cardH + 8;
 
     // ---- Needs attention ----
     section('Needs attention');
     if (r.attention.length) r.attention.forEach((t) => { ensure(18); doc.setFillColor(...RED); doc.circle(M + 4, y + 7, 2.5, 'F'); doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(...INK); doc.text(clean(t), M + 14, y + 11); y += 17; });
-    else para('All clear: no overdue claims, unreviewed sightings or stale cases right now.', GREEN);
+    else para('All clear: no overdue claims, incoming transfers or unpaid penalties right now.', GREEN);
 
-    // ---- Incident activity ----
-    section(`Incidents over time (${r.periodNoun})`, `Missing-pet reports plus shelter intakes. ${r.periodTotal} total, averaging ${r.average.toFixed(1)} per ${r.unit}. This ${r.unit}: ${r.current.val}; last ${r.unit}: ${r.previous.val} (${r.diff > 0 ? 'up ' + r.diff : r.diff < 0 ? 'down ' + Math.abs(r.diff) : 'no change'}).${r.periodTotal ? ' Busiest period: ' + r.peak.label + (r.peak.sub ? ' ' + r.peak.sub : '') + '.' : ''}`);
+    // ---- Intake activity ----
+    section(`Intakes over time (${r.periodNoun})`, `Animals taken in by your facility. ${r.periodTotal} total, averaging ${r.average.toFixed(1)} per ${r.unit}. This ${r.unit}: ${r.current.val}; last ${r.unit}: ${r.previous.val} (${r.diff > 0 ? 'up ' + r.diff : r.diff < 0 ? 'down ' + Math.abs(r.diff) : 'no change'}).${r.periodTotal ? ' Busiest period: ' + r.peak.label + (r.peak.sub ? ' ' + r.peak.sub : '') + '.' : ''}`);
     const maxBar = Math.max(...r.chart.map((d) => d.val), 1);
-    r.chart.forEach((d) => bar(d.label + (d.sub ? ' ' + d.sub : ''), d.val, maxBar, d.active ? TERRA : AMBER, `${d.val}  (${d.missing} missing / ${d.intake} intake)`));
+    r.chart.forEach((d) => bar(d.label + (d.sub ? ' ' + d.sub : ''), d.val, maxBar, d.active ? TERRA : AMBER, `${d.val}  (${d.reg} registered / ${d.other} unregistered)`));
 
-    // ---- Recovery funnel ----
-    section('Recovery funnel', 'How missing reports progress from being reported to being found. Each step is a share of all missing reports.');
-    if (!r.funnelBase) para('No missing reports yet.', MUTED);
-    else {
-      r.funnel.forEach((st) => bar(st.name, st.count, r.funnelBase, st.color === '#15803d' ? GREEN : TERRA, `${st.count}  (${st.percent}%)`));
-      if (r.chokePoint) para(`Biggest drop: ${r.chokePoint.text} (-${r.chokePoint.drop}%). ${r.metrics[4][1]} case(s) are still open.`, AMBER);
-    }
+    // ---- How cases ended ----
+    section('How cases ended', 'Every intake at your facility, and how its case ended. Each step is a share of all intakes.');
+    if (!r.outcomeBase) para('No intakes yet.', MUTED);
+    else r.outcomes.forEach((st) => bar(st.name, st.count, r.outcomeBase, st.color === '#15803d' ? GREEN : st.color === '#78716c' ? SLATE : TERRA, `${st.count}  (${st.percent}%)`));
 
     // ---- Workload ----
-    section('Where cases stall', 'Current workload by stage.');
+    section('Where work is waiting', 'Current workload by stage.');
     table([{ label: 'Stage', w: 0.28 }, { label: 'What it measures', w: 0.47 }, { label: 'Status', w: 0.25, align: 'right' }],
       r.stalls.map((s) => [{ t: s[0], bold: true }, s[1], { t: s[2], bold: true, color: s[2] === 'Clear' ? GREEN : AMBER }]));
 
-    // ---- Registry ----
-    section('Registry breakdown', 'Registered pets by current status, then by species.');
-    const petMax = Math.max(...r.petStatus.map((x) => x[1]), 1);
-    r.petStatus.forEach(([l, n]) => bar(`${l} pets`, n, petMax, l === 'Missing' ? RED : l === 'Other' ? AMBER : GREEN));
-    if (r.species.length) { y += 4; const spMax = Math.max(...r.species.map((x) => x[1]), 1); r.species.forEach(([l, n]) => bar(l, n, spMax, TERRA)); }
+    // ---- Holding breakdown ----
+    section('Holding breakdown', 'Animals in holding by species, then by facility.');
+    if (r.species.length) { const spMax = Math.max(...r.species.map((x) => x[1]), 1); r.species.forEach(([l, n]) => bar(l, n, spMax, TERRA)); }
+    else para('Nobody is in holding.', MUTED);
+    if (r.facilities.length > 1) {
+      y += 4;
+      table([{ label: 'Facility', w: 0.46 }, { label: 'Type', w: 0.14 }, { label: 'In holding', w: 0.2, align: 'right' }, { label: 'Overdue', w: 0.2, align: 'right' }],
+        r.facilities.map((f) => [{ t: f.name, bold: true }, f.main ? 'Main' : 'Sub', f.cap ? `${f.n} / ${f.cap}` : String(f.n), { t: String(f.late), color: f.late ? RED : INK, bold: !!f.late }]));
+    }
 
     // ---- Shelter detail ----
-    section('Shelter holding', `${r.impounded.active} in holding, ${r.impounded.overdue} past their claim deadline, ${r.impounded.dueSoon} due within 24 hours, ${r.impounded.claimed} claimed so far. Sorted by nearest deadline.`);
-    table([{ label: 'Pet', w: 0.2 }, { label: 'Species', w: 0.1 }, { label: 'Shelter', w: 0.24 }, { label: 'Intake', w: 0.2 }, { label: 'Claim deadline', w: 0.26 }],
+    section('Shelter holding', `${r.impounded.active} in holding, ${r.impounded.overdue} past their claim deadline, ${r.impounded.dueSoon} due within 24 hours, ${r.impounded.claimed} released so far. Sorted by nearest deadline.`);
+    table([{ label: 'Pet', w: 0.2 }, { label: 'Species', w: 0.1 }, { label: 'Facility', w: 0.24 }, { label: 'Intake', w: 0.2 }, { label: 'Claim deadline', w: 0.26 }],
       r.holding.map((i) => { const d = this.toTime(i.claimDeadline); const late = d != null && d < r.now; return [{ t: i.petName || 'Unknown', bold: true }, i.species, i.shelterName, fmtDate(i.intakeDate), { t: fmtDateTime(i.claimDeadline) + (late ? ' (overdue)' : ''), color: late ? RED : INK, bold: late }]; }),
       'No animals are currently in holding.');
 
-    // ---- Open cases ----
-    section('Open missing cases', `${r.openCases.length} open, ${r.casesThisWeek} new in the last 7 days. Oldest first.`);
-    table([{ label: 'Pet', w: 0.18 }, { label: 'Species', w: 0.1 }, { label: 'Status', w: 0.12 }, { label: 'Last seen at', w: 0.3 }, { label: 'Reported', w: 0.15 }, { label: 'Updated', w: 0.15 }],
-      r.openCases.map((c) => [{ t: c.petName || 'Unknown', bold: true }, c.species, c.status, c.location || '-', fmtDate(c.createdAt), fmtDate(c.lastUpdated)]),
-      'No open missing cases.');
-
-    // ---- Sightings ----
-    section('Sightings awaiting review', `${r.awaitingReview.length} community sighting report(s) not yet reviewed.`);
-    table([{ label: 'Species', w: 0.12 }, { label: 'Location', w: 0.38 }, { label: 'Seen', w: 0.22 }, { label: 'Confidence', w: 0.13, align: 'right' }, { label: 'Reporter', w: 0.15 }],
-      r.awaitingReview.map((s) => [s.species, s.location || '-', fmtDateTime(s.dateTimeSeen || s.createdAt), s.confidenceScore != null ? `${Math.round(s.confidenceScore * (s.confidenceScore <= 1 ? 100 : 1))}%` : '-', s.reporterName || 'Anonymous']),
-      'No sightings are waiting for review.');
+    // ---- Penalties ----
+    if (r.penalties) {
+      section('Penalty tickets', 'Charged when a missing pet is impounded at your facility or a sub-facility. Payments go to the main facility.');
+      table([{ label: 'Status', w: 0.4 }, { label: 'Tickets', w: 0.25, align: 'right' }, { label: 'Amount (PHP)', w: 0.35, align: 'right' }],
+        [[{ t: 'Unpaid', bold: true, color: r.penalties.unpaid ? RED : INK }, String(r.penalties.unpaid), r.penalties.unpaidPhp.toLocaleString('en-US')],
+         [{ t: 'Paid', bold: true, color: GREEN }, String(r.penalties.paid), r.penalties.paidPhp.toLocaleString('en-US')],
+         [{ t: 'Waived', bold: true }, String(r.penalties.waived), '-']]);
+    }
 
     // ---- Footer on every page ----
     const pages = doc.getNumberOfPages();
@@ -620,57 +838,51 @@ window.ActivationView = {
       doc.text(`Page ${i} of ${pages}`, W - M, H - 22, { align: 'right' });
     }
 
-    doc.setProperties({ title: 'PawTrack Dashboard Summary', subject: 'Operations report', author: 'PawTrack Admin', creator: 'PawTrack' });
+    doc.setProperties({ title: 'PawTrack Dashboard Summary', subject: 'Facility report', author: 'PawTrack Admin', creator: 'PawTrack' });
     doc.save(`pawtrack-summary-${r.generatedAt.toISOString().slice(0, 10)}.pdf`);
     window.adminApp?.showToast('Dashboard summary downloaded.', 'success');
   },
 
   // Each entry: icon, what (one-line summary), how (steps), example, live (optional "right now" line), tip
   INFO: {
-    safe: {
-      icon: 'shield', title: 'Pets safe at home',
-      what: 'The share of registered pets that are not currently missing or in a shelter.',
-      how: ['Counts pets whose status is <b>Safe</b> or <b>Reunited</b>.', 'Divides that by all registered pets.'],
-      tip: 'Pets marked Missing or Impounded are the ones left out of the percentage.',
-      live: () => { const l = window.ActivationView._live || {}; return l.totalPets ? `<b>${l.protectedPct}%</b> of ${l.totalPets} registered pets` : 'No pets registered yet'; }
+    capacity: {
+      icon: 'shield', title: 'Capacity in use',
+      what: 'How full your facility is.',
+      how: ['Counts the animals currently in holding.', 'Divides that by the number of places your facility (and its sub-facilities) has.'],
+      tip: 'Set the capacity on the Facilities page. Above 90% the figure turns red so you can plan transfers or releases.',
+      live: () => { const l = window.ActivationView._live || {}; return l.capacity ? `<b>${l.active}</b> of ${l.capacity} places taken` : 'No capacity set yet'; }
     },
-    recovery: {
-      icon: 'clock', title: 'Median recovery time',
-      what: 'How long a typical missing pet takes to be found.',
-      how: ['Takes every reunited case and measures the time from when the missing report was <b>filed</b> to when it was <b>marked found</b>.', 'Sorts those times and picks the <b>middle</b> one.'],
-      example: 'Recovery times of 2h, 5h and 90h give a median of <b>5h</b>, while the average would be about 32h. The median ignores a few unusually long cases, so it shows what a normal case looks like.',
-      tip: 'Lower is better. The end time is the report’s last update, because a separate “found at” time is not stored.',
-      live: () => { const l = window.ActivationView._live || {}; return l.reunitedCount ? `<b>${window.ActivationView.formatDuration(l.medianRecovery)}</b> across ${l.reunitedCount} reunited ${l.reunitedCount === 1 ? 'case' : 'cases'}` : 'No reunited cases yet, so nothing to measure'; }
-    },
-    registrations: {
-      icon: 'plus', title: 'New registrations',
-      what: 'How many pets were registered in the last 7 days.',
-      how: ['The big number is the 7-day total.', 'The line beside it shows the count for each of those days.'],
-      tip: 'If nothing was registered today, the card shows the share of pets that have an NFC tag or microchip instead.'
-    },
-    shelters: {
-      icon: 'home', title: 'Animals in shelters',
-      what: 'Animals currently held in a shelter and not yet claimed.',
-      how: ['Counts impounds that are still in holding.', 'The line shows shelter intakes over the last 7 days.'],
+    holding: {
+      icon: 'home', title: 'In holding now',
+      what: 'Animals currently held at your facility and not yet claimed.',
+      how: ['Counts impounds that are still in holding, including those at your sub-facilities.', 'The line shows how many animals arrived on each of the last 7 days.'],
       tip: '“Past deadline” means the claim deadline has passed and the animal is still in holding. Those also appear under Needs attention.'
     },
+    intakes: {
+      icon: 'plus', title: 'Intakes this week',
+      what: 'How many animals your facility took in during the last 7 days.',
+      how: ['The big number is the 7-day total.', 'The line beside it shows the count for each of those days.'],
+      tip: 'If nothing came in today, the card shows your total number of intakes instead.'
+    },
+    released: {
+      icon: 'clock', title: 'Released to owners',
+      what: 'Animals your facility has handed back to their owners.',
+      how: ['Counts impounds that ended as claimed.', 'The median stay is the middle length of time between intake and release.'],
+      example: 'Stays of 1 day, 2 days and 9 days give a median of <b>2 days</b>, while the average would be 4. The median ignores a few unusually long cases.',
+      tip: 'The line shows releases per day over the last 7 days.',
+      live: () => { const l = window.ActivationView._live || {}; return l.claimedCount ? `<b>${l.claimedCount}</b> released, median stay <b>${window.ActivationView.formatDuration(l.medianStay)}</b>` : 'Nothing released yet'; }
+    },
     incidents: {
-      icon: 'chart', title: 'Incidents over time',
-      what: 'How many incidents were logged in each period.',
-      how: ['Each bar adds <b>missing reports</b> filed by guardians and <b>shelter intakes</b>, shown in two colors.', 'Weekly, Monthly and Yearly change the length of each bar.', 'The dashed blue line is the average per period.', 'The ▲ / ▼ figure compares the current period with the previous one. Up (red) means more incidents.'],
+      icon: 'chart', title: 'Intakes over time',
+      what: 'How many animals your facility took in during each period.',
+      how: ['Each bar adds <b>registered pets</b> (animals that have a PawTrack record) and <b>unregistered animals</b>, shown in two colors.', 'Weekly, Monthly and Yearly change the length of each bar.', 'The dashed line is the average per period.', 'The ▲ / ▼ figure compares the current period with the previous one.'],
       tip: 'The current period is still in progress, so it is usually lower than a finished one. Hover or focus a bar for exact counts.'
     },
     funnel: {
-      icon: 'funnel', title: 'Recovery funnel',
-      what: 'Follows every missing report through to being found.',
-      how: ['Three steps: <b>reported</b>, <b>sighted by the community</b>, <b>marked found</b>.', 'Each bar is a share of all missing reports.', '“Did not reach this step” shows how many cases dropped off, and the orange banner points to the biggest drop.'],
+      icon: 'funnel', title: 'How cases ended',
+      what: 'Where every animal your facility took in ended up.',
+      how: ['<b>Taken in</b> is every intake.', '<b>Released to owners</b>, <b>transferred / forfeited / deceased</b> and <b>still in holding</b> add up to it.', 'Each bar is a share of all intakes.'],
       tip: 'Use “Show counts” to switch between percentages and whole numbers.'
-    },
-    stalls: {
-      icon: 'alert', title: 'Where cases stall',
-      what: 'A snapshot of work waiting on staff.',
-      how: ['Animals in holding.', 'Claims past their deadline.', 'Sighting reports not yet reviewed.'],
-      tip: '“Clear” means nothing is waiting in that area.'
     }
   },
 
@@ -726,30 +938,51 @@ window.ActivationView = {
     container.querySelectorAll('.btn-timeframe').forEach((btn) => {
       btn.addEventListener('click', (e) => {
         const tf = e.currentTarget.getAttribute('data-timeframe');
-        if (tf) { this.timeframe = tf; this.render(container); }
+        if (!tf || tf === this.timeframe) return;
+        this.timeframe = tf;
+        this.updateChart(container);
       });
     });
 
-    container.querySelector('#btn-toggle-recovery-funnel')?.addEventListener('click', () => {
+    // Percent <-> count only changes the labels, so swap them in place instead of redrawing the page
+    container.querySelector('#btn-toggle-recovery-funnel')?.addEventListener('click', (e) => {
       this.funnelMode = this.funnelMode === 'percent' ? 'number' : 'percent';
-      this.render(container);
+      e.currentTarget.textContent = this.funnelMode === 'percent' ? 'Show counts' : 'Show %';
+      container.querySelectorAll('.funnel-keep').forEach((el) => {
+        el.textContent = this.funnelMode === 'percent' ? el.getAttribute('data-percent') : el.getAttribute('data-count');
+        el.classList.remove('is-swapped');
+        void el.offsetWidth; // restart the little swap animation
+        el.classList.add('is-swapped');
+      });
+    });
+
+    container.querySelector('#btn-refresh')?.addEventListener('click', async (e) => {
+      const btn = e.currentTarget;
+      if (btn.classList.contains('is-spinning')) return;
+      btn.classList.add('is-spinning');
+      btn.setAttribute('aria-busy', 'true');
+      const started = Date.now();
+      let ok = false;
+      try { ok = await window.adminStore.syncFromSupabase(); } catch (err) { ok = false; }
+      // keep the spin on screen long enough to read as feedback
+      await new Promise((r) => setTimeout(r, Math.max(0, 600 - (Date.now() - started))));
+      btn.classList.remove('is-spinning');
+      btn.removeAttribute('aria-busy');
+      window.adminApp?.showToast(ok ? 'The dashboard is up to date.' : 'Could not reach the database. Showing the last data.', ok ? 'success' : 'warning', 1800);
     });
 
     container.querySelectorAll('[data-go]').forEach((el) => {
       el.addEventListener('click', () => { window.location.hash = '#' + el.getAttribute('data-go'); });
     });
 
-    container.querySelector('#btn-chart-view-registry')?.addEventListener('click', () => {
-      window.location.hash = '#heatmap';
-    });
+    this.bindChartBody(container);
 
     container.querySelector('#btn-quick-intake')?.addEventListener('click', () => {
-      window.location.hash = '#impoundments';
-      if (window.ImpoundmentsView && typeof window.ImpoundmentsView.openIntakeModal === 'function') {
-        setTimeout(() => window.ImpoundmentsView.openIntakeModal(), 100);
-      }
+      if (window.ImpoundmentsView) window.ImpoundmentsView.requestIntake();
+      else window.location.hash = '#impoundments';
     });
 
     container.querySelector('#btn-export-brief')?.addEventListener('click', () => this.downloadSummaryPdf());
   }
 };
+

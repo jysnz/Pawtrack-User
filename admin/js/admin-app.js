@@ -6,6 +6,7 @@
 class AdminApp {
   constructor() {
     this.currentRoute = 'activation';
+    this.FIXED_FRAME_ROUTES = [];
     this.init();
   }
 
@@ -23,9 +24,8 @@ class AdminApp {
       this.renderView(this.currentRoute);
       this.updateSidebarBadges();
       this.updateSyncIndicator();
-      if (reason === 'cross_tab_sync' || reason === 'broadcast_sync') {
-        this.showToast('Data synchronized live with PawTrack Hub', 'info', 1800);
-      }
+      this.notifyIncomingTransfers();
+      this.updateFacilityLabel();
     });
 
     this.updateSidebarBadges();
@@ -34,113 +34,36 @@ class AdminApp {
     this.initSidebarToggle();
   }
 
+  // Tell the main facility when pets start arriving from its sub-facilities (once per new arrival)
+  notifyIncomingTransfers() {
+    const store = window.adminStore;
+    if (!store || typeof store.getIncomingTransfers !== 'function') return;
+    const ids = store.getIncomingTransfers().map(t => t.id);
+    const seen = this._seenIncoming || (this._seenIncoming = new Set(JSON.parse(sessionStorage.getItem('pawtrack_seen_incoming') || '[]')));
+    const fresh = ids.filter(id => !seen.has(id));
+    if (!fresh.length) return;
+    fresh.forEach(id => seen.add(id));
+    try { sessionStorage.setItem('pawtrack_seen_incoming', JSON.stringify([...seen])); } catch (e) { /* ignore */ }
+    this.showToast(`${fresh.length} ${fresh.length === 1 ? 'pet is' : 'pets are'} arriving from a sub-facility. Open Impoundments to confirm.`, 'warning', 6000);
+  }
+
+  // The sidebar chip shows the facility this account works at, and keeps up as the data syncs
   initWorkspaceSelector() {
-    const wsTrigger = document.getElementById('workspace-selector');
-    const wsDropdown = document.getElementById('workspace-dropdown');
-    const wsLabel = document.getElementById('workspace-selector-label');
-    const jurisdictionLabel = document.querySelector('.admin-dropdown-jurisdiction');
-    const addJurisdictionBtn = document.getElementById('btn-add-jurisdiction');
-
-    if (!wsTrigger || !wsDropdown) return;
-
-    // Load persisted workspace or default
-    const savedWs = localStorage.getItem('pawtrack_active_jurisdiction') || 'pawtrack-metro-manila';
-    this.selectedJurisdiction = savedWs;
-
-    // Apply active state on initial load
-    const activeBtn = wsDropdown.querySelector(`.workspace-option-btn[data-workspace="${savedWs}"]`);
-    if (activeBtn) {
-      wsDropdown.querySelectorAll('.workspace-option-btn').forEach(b => b.classList.remove('active'));
-      activeBtn.classList.add('active');
-      if (wsLabel) wsLabel.textContent = activeBtn.getAttribute('data-name') || savedWs;
-      if (jurisdictionLabel) {
-        jurisdictionLabel.textContent = activeBtn.getAttribute('data-name') || 'Metro Manila (NCR)';
-      }
+    this.updateFacilityChip();
+    if (window.adminStore && typeof window.adminStore.onStatus === 'function') window.adminStore.onStatus(() => this.updateSyncIndicator());
+    if (window.adminStore && typeof window.adminStore.subscribe === 'function') {
+      window.adminStore.subscribe(() => this.updateFacilityChip());
     }
+  }
 
-    // Toggle dropdown
-    wsTrigger.addEventListener('click', (e) => {
-      e.stopPropagation();
-      document.getElementById('admin-user-dropdown')?.classList.remove('open');
-      const isOpen = wsDropdown.classList.toggle('open');
-      wsTrigger.classList.toggle('active', isOpen);
-      wsTrigger.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
-    });
-
-    // Keyboard support (Enter/Space on chip)
-    wsTrigger.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' || e.key === ' ') {
-        e.preventDefault();
-        wsTrigger.click();
-      } else if (e.key === 'Escape') {
-        wsDropdown.classList.remove('open');
-        wsTrigger.classList.remove('active');
-        wsTrigger.setAttribute('aria-expanded', 'false');
-      }
-    });
-
-    // Close on outside click
-    document.addEventListener('click', (e) => {
-      if (!wsDropdown.contains(e.target) && !wsTrigger.contains(e.target)) {
-        wsDropdown.classList.remove('open');
-        wsTrigger.classList.remove('active');
-        wsTrigger.setAttribute('aria-expanded', 'false');
-      }
-    });
-
-    // Close on Escape anywhere
-    document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape' && wsDropdown.classList.contains('open')) {
-        wsDropdown.classList.remove('open');
-        wsTrigger.classList.remove('active');
-        wsTrigger.setAttribute('aria-expanded', 'false');
-        wsTrigger.focus();
-      }
-    });
-
-    // Option clicks
-    wsDropdown.querySelectorAll('.workspace-option-btn').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        const wsId = btn.getAttribute('data-workspace');
-        const wsName = btn.getAttribute('data-name') || wsId;
-        const wsFull = btn.getAttribute('data-full') || wsName;
-
-        wsDropdown.querySelectorAll('.workspace-option-btn').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-
-        this.selectedJurisdiction = wsId;
-        localStorage.setItem('pawtrack_active_jurisdiction', wsId);
-
-        if (wsLabel) wsLabel.textContent = wsName;
-        if (jurisdictionLabel) jurisdictionLabel.textContent = wsName;
-
-        wsDropdown.classList.remove('open');
-        wsTrigger.classList.remove('active');
-        wsTrigger.setAttribute('aria-expanded', 'false');
-
-        this.showToast(`Switched to ${wsFull}`, 'success', 2400);
-
-        // Re-render current route to reflect active jurisdiction
-        if (this.currentRoute) {
-          this.renderView(this.currentRoute);
-        }
-      });
-    });
-
-    // Connect LGU Cluster button
-    addJurisdictionBtn?.addEventListener('click', (e) => {
-      e.stopPropagation();
-      wsDropdown.classList.remove('open');
-      wsTrigger.classList.remove('active');
-      wsTrigger.setAttribute('aria-expanded', 'false');
-
-      const clusterName = prompt('Enter New LGU Municipal Cluster Name (e.g., Mandaluyong City Vet Services):');
-      if (clusterName && clusterName.trim()) {
-        const slug = 'pawtrack-' + clusterName.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
-        this.showToast(`Cluster node "${slug}" registered. Authenticating LGU API bridge...`, 'info', 3000);
-      }
-    });
+  updateFacilityChip() {
+    const name = document.getElementById('facility-chip-name');
+    if (!name || !window.adminStore) return;
+    let mine = null;
+    try { mine = window.adminStore.getMyShelter(); } catch (e) { /* not signed in yet */ }
+    const text = mine ? mine.name : 'No facility yet';
+    if (name.textContent !== text) name.textContent = text;
+    document.getElementById('facility-chip')?.classList.toggle('is-empty', !mine);
   }
 
   initUserMenu() {
@@ -155,8 +78,6 @@ class AdminApp {
 
     avatarTrigger.addEventListener('click', (e) => {
       e.stopPropagation();
-      document.getElementById('workspace-dropdown')?.classList.remove('open');
-      document.getElementById('workspace-selector')?.classList.remove('active');
       dropdown.classList.toggle('open');
     });
 
@@ -199,22 +120,27 @@ class AdminApp {
     if (wasSignedIn) this.showToast('Signed out of the admin console.', 'info');
   }
 
+  // Says what the data connection really is:
+  //   Live          the database pushes changes to this page as they happen
+  //   Updated 2:14  no push connection; the page reloads itself every few seconds
+  //   Offline       the last reload failed; what you see may be out of date and new changes are not saved
   updateSyncIndicator() {
+    const box = document.getElementById('live-sync-indicator');
     const el = document.getElementById('live-sync-indicator-text');
-    const dot = document.getElementById('live-sync-indicator-dot');
     if (!el) return;
-
-    const status = window.adminStore?.syncStatus || 'connected';
-    if (status === 'live_sse' || status === 'connected' || status === 'broadcast_sync' || status === 'synced' || status === 'offline_local') {
-      el.textContent = 'Live';
-      if (dot) { dot.className = 'pulse-emerald'; dot.style.background = '#10b981'; }
-    } else if (status === 'reconnecting') {
-      el.textContent = 'Reconnecting…';
-      if (dot) { dot.className = ''; dot.style.background = '#f59e0b'; }
-    } else {
-      el.textContent = 'Live';
-      if (dot) { dot.className = 'pulse-emerald'; dot.style.background = '#10b981'; }
-    }
+    const store = window.adminStore || {};
+    const status = store.syncStatus;
+    const at = store.lastSyncedAt ? new Date(store.lastSyncedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : '';
+    const state = status === 'live' ? 'live' : status === 'offline' ? 'offline' : status === 'connecting' || !status ? 'connecting' : 'polling';
+    const text = { live: 'Live', polling: at ? `Updated ${at}` : 'Updating', offline: 'Offline, retrying', connecting: 'Connecting…' }[state];
+    const hint = {
+      live: 'Changes appear as they happen.',
+      polling: 'Reloads itself every few seconds' + (at ? `. Last update ${at}.` : '.'),
+      offline: 'Cannot reach the database. What you see may be out of date, and new changes may not be saved.',
+      connecting: 'Connecting to the database.'
+    }[state];
+    if (el.textContent !== text) el.textContent = text;
+    if (box) { box.setAttribute('data-state', state); box.title = hint; }
   }
 
   openOwnerApp() {
@@ -793,18 +719,55 @@ class AdminApp {
     document.body.classList.remove('auth-locked');
     document.documentElement.classList.remove('auth-resuming');
 
+    this.updateAccountLabels();
+    const name = account.full_name || account.email;
+
+    this.updateFacilityLabel();
+    this.startTopbarClock();
+    this.refreshAccessRequestCount();
+    if (isFreshSignIn) this.showToast(`Signed in as ${this.esc(name)}`, 'success');
+    // Views hold their loading skeleton until the account is known: tell them it is
+    if (window.adminStore && typeof window.adminStore.notify === 'function') window.adminStore.notify('account_ready');
+  }
+
+  // The sidebar and account menu show who is signed in; call again after the account is edited
+  updateAccountLabels() {
+    const account = this.currentAdmin;
+    if (!account) return;
     const name = account.full_name || account.email;
     const initials = name.split(/\s+/).filter(Boolean).map(w => w[0]).join('').slice(0, 2).toUpperCase();
     document.querySelectorAll('.operator-name, .admin-dropdown-name').forEach(el => { el.textContent = name; });
     document.querySelectorAll('.operator-role, .admin-dropdown-role').forEach(el => { el.textContent = account.position || account.email; });
-    document.querySelectorAll('.admin-dropdown-jurisdiction').forEach(el => { el.textContent = account.office || 'Office not assigned yet'; });
     document.querySelectorAll('#admin-avatar-trigger, .admin-dropdown-avatar').forEach(el => { el.textContent = initials; });
     const avatar = document.getElementById('admin-avatar-trigger');
     if (avatar) avatar.title = `${name} (click for menu)`;
+  }
 
-    this.startTopbarClock();
-    this.refreshAccessRequestCount();
-    if (isFreshSignIn) this.showToast(`Signed in as ${this.esc(name)}`, 'success');
+  // Re-reads this admin's own account row: their facility or role may have changed (they registered or joined one,
+  // or a manager moved them). Only a real change re-renders the console.
+  async refreshAccount() {
+    if (!this.supabase || !this.currentAdmin) return;
+    const { data, error } = await this.supabase.from('admin_accounts').select('*').eq('id', this.currentAdmin.id).maybeSingle();
+    if (error || !data) return;
+    const before = this.currentAdmin;
+    this.currentAdmin = data;
+    if (data.shelter_id !== before.shelter_id || data.facility_role !== before.facility_role) {
+      this.updateFacilityLabel();
+      if (window.adminStore) window.adminStore.notify('account_updated');
+    }
+  }
+
+  // The account menu shows which facility this admin works for, and as what
+  updateFacilityLabel() {
+    const store = window.adminStore;
+    const account = this.currentAdmin;
+    if (!store || !account) return;
+    const facility = store.getMyShelter();
+    const role = store.myFacilityRole();
+    const text = facility
+      ? `${facility.name} · ${role === 'manager' ? 'Manager' : 'Staff'}`
+      : (account.shelter_id ? 'Loading your facility…' : 'No facility yet');
+    document.querySelectorAll('.admin-dropdown-jurisdiction').forEach(el => { el.textContent = text; });
   }
 
   // Topbar greeting by time of day, plus a live date and time. Only text changes, so nothing re-renders.
@@ -908,12 +871,29 @@ class AdminApp {
     // Hash routing
     window.addEventListener('hashchange', () => this.handleRoute());
 
-    // Navigation item clicks
+    // Navigation item clicks (items are divs, so make them keyboard-reachable like links)
     document.querySelectorAll('.nav-item').forEach(item => {
-      item.addEventListener('click', (e) => {
-        const route = e.currentTarget.getAttribute('data-route');
-        if (route) {
-          window.location.hash = '#' + route;
+      item.setAttribute('role', 'link');
+      item.setAttribute('tabindex', '0');
+      const go = () => {
+        const route = item.getAttribute('data-route');
+        if (route) window.location.hash = '#' + route;
+      };
+      item.addEventListener('click', go);
+      item.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          go();
+        }
+      });
+    });
+
+    // Divs acting as buttons activate with Enter / Space
+    ['global-search-trigger', 'admin-avatar-trigger'].forEach(id => {
+      document.getElementById(id)?.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          e.currentTarget.click();
         }
       });
     });
@@ -961,6 +941,8 @@ class AdminApp {
     }
 
     if (!saved) {
+      // Nothing cached yet (first visit): the baseline is taken once the first answer arrives, so existing alerts do not all show as new
+      this._rebaseOnSync = !store.hasSynced && !notifs.length && !impoundments.length;
       this.seenCounts = {
         pets: pets.length,
         sightings: sightings.length,
@@ -995,19 +977,38 @@ class AdminApp {
   }
 
   handleRoute() {
-    const rawHash = (window.location.hash || '#activation').replace('#', '');
-    const validRoutes = ['activation', 'breakdown', 'heatmap', 'impoundments', 'terminal', 'shelters', 'rfid', 'notifs', 'settings'];
+    // #page or #page/detail (old #terminal links land on Impoundments), so the
+    // browser's Back button steps through pages and opened details like any other website
+    const fullHash = window.location.hash || '#activation';
+    const [rawHash, ...detail] = fullHash.replace('#', '').split('/');
+    const validRoutes = ['activation', 'breakdown', 'heatmap', 'reports', 'impoundments', 'shelters', 'notifs', 'settings'];
+    // The Shelter Terminal was merged into Impoundments: keep old bookmarks working
+    if (rawHash === 'terminal') { window.location.replace('#impoundments'); return; }
     this.currentRoute = validRoutes.includes(rawHash) ? rawHash : 'activation';
+    this.routeParam = validRoutes.includes(rawHash) ? detail.join('/') : '';
+
+    // Dialogs and drawers are not pages: they never get a history entry, and they close when the page changes
+    if (this._lastHash !== undefined && this._lastHash !== fullHash) {
+      this.closeModal();
+      this.closeDrawer();
+    }
+    this._lastHash = fullHash;
 
     // Update active nav state
     document.querySelectorAll('.nav-item').forEach(item => {
       const route = item.getAttribute('data-route');
       if (route === this.currentRoute) {
         item.classList.add('active');
+        item.setAttribute('aria-current', 'page');
       } else {
         item.classList.remove('active');
+        item.removeAttribute('aria-current');
       }
     });
+
+    // Animate only when the page actually changes (store-driven re-renders must stay still)
+    this._enterRoute = this.currentRoute !== this._lastEnteredRoute;
+    this._lastEnteredRoute = this.currentRoute;
 
     this.markRouteSeen(this.currentRoute);
     this.renderView(this.currentRoute);
@@ -1016,6 +1017,14 @@ class AdminApp {
   renderView(route) {
     const container = document.getElementById('view-container');
     if (!container) return;
+
+    // Views read this to decide whether to play their entry animations (a page entry, not a background re-render)
+    const entering = this._enterRoute;
+    this._enterRoute = false;
+    if (window.AdminMotion) window.AdminMotion.routeEntering = !!entering;
+
+    // Pages that must fit one screen (the Shelters map) don't scroll; every other page keeps normal scrolling
+    container.classList.toggle('is-fixed-view', this.FIXED_FRAME_ROUTES.includes(route));
 
     try {
       switch (route) {
@@ -1028,17 +1037,14 @@ class AdminApp {
         case 'heatmap':
           if (window.HeatmapView) window.HeatmapView.render(container);
           break;
+        case 'reports':
+          if (window.ReportsView) window.ReportsView.render(container);
+          break;
         case 'impoundments':
           if (window.ImpoundmentsView) window.ImpoundmentsView.render(container);
           break;
-        case 'terminal':
-          if (window.TerminalView) window.TerminalView.render(container);
-          break;
         case 'shelters':
           if (window.SheltersView) window.SheltersView.render(container);
-          break;
-        case 'rfid':
-          if (window.RfidView) window.RfidView.render(container);
           break;
         case 'notifs':
           if (window.NotifsView) window.NotifsView.render(container);
@@ -1059,6 +1065,12 @@ class AdminApp {
         </div>
       `;
     }
+
+    if (window.AdminMotion) {
+      window.AdminMotion.routeEntering = false;
+      if (entering) window.AdminMotion.enterView(container);
+      window.AdminMotion.countKpis(container, route);
+    }
   }
 
   updateSidebarBadges() {
@@ -1071,6 +1083,12 @@ class AdminApp {
 
     const activeImpounds = impoundments.filter(i => i.status === 'active_impounded').length;
     const unreadNotifs = notifs.filter(n => !n.read).length;
+
+    if (this._rebaseOnSync && store.hasSynced) {
+      this._rebaseOnSync = false;
+      this.seenCounts = { pets: pets.length, sightings: sightings.length, impoundments: activeImpounds, notifs: unreadNotifs };
+      try { sessionStorage.setItem('pawtrack_seen_counts', JSON.stringify(this.seenCounts)); } catch (e) {}
+    }
 
     // Only count items added above the last seen count
     const newImpounds = Math.max(0, activeImpounds - (this.seenCounts.impoundments || 0));
@@ -1102,13 +1120,39 @@ class AdminApp {
   }
 
   // --- Drawer API ---
+  // Focus handling shared by overlays: remember who opened it, move focus inside, give it back on close
+  _overlayOpened(key, backdrop, panel) {
+    const wasOpen = backdrop.classList.contains('open');
+    if (!wasOpen) {
+      this._focusReturn = this._focusReturn || {};
+      this._focusReturn[key] = document.activeElement;
+    }
+    panel.setAttribute('role', 'dialog');
+    panel.setAttribute('aria-modal', 'true');
+    if (!panel.hasAttribute('tabindex')) panel.setAttribute('tabindex', '-1');
+    // Wait a frame so content that focuses itself (autofocus inputs) wins
+    requestAnimationFrame(() => {
+      if (!backdrop.classList.contains('open') || panel.contains(document.activeElement)) return;
+      (panel.querySelector('[autofocus], input:not([type="hidden"]):not([disabled]), textarea, select') || panel).focus({ preventScroll: true });
+    });
+  }
+
+  _overlayClosed(key) {
+    const el = this._focusReturn && this._focusReturn[key];
+    if (this._focusReturn) this._focusReturn[key] = null;
+    if (el && el.isConnected && typeof el.focus === 'function') el.focus({ preventScroll: true });
+  }
+
+  // --- Drawer API ---
   openDrawer(htmlContent) {
     const backdrop = document.getElementById('app-drawer-backdrop');
     const panel = document.getElementById('app-drawer-panel');
     if (backdrop && panel) {
+      const wasOpen = backdrop.classList.contains('open');
       panel.innerHTML = htmlContent;
       backdrop.classList.add('open');
       document.body.classList.add('drawer-open');
+      if (!wasOpen) this._overlayOpened('drawer', backdrop, panel);
     }
     return panel;
   }
@@ -1116,8 +1160,10 @@ class AdminApp {
   closeDrawer() {
     const backdrop = document.getElementById('app-drawer-backdrop');
     if (backdrop) {
+      const wasOpen = backdrop.classList.contains('open');
       backdrop.classList.remove('open');
       document.body.classList.remove('drawer-open');
+      if (wasOpen) this._overlayClosed('drawer');
     }
   }
 
@@ -1126,18 +1172,55 @@ class AdminApp {
     const backdrop = document.getElementById('app-modal-backdrop');
     const box = document.getElementById('app-modal-box');
     if (backdrop && box) {
+      const wasOpen = backdrop.classList.contains('open');
       box.innerHTML = htmlContent;
       backdrop.classList.add('open');
       document.body.classList.add('modal-open');
+      if (!wasOpen) this._overlayOpened('modal', backdrop, box);
     }
     return box;
+  }
+
+  // Asks before something that cannot be undone. Resolves true on confirm, false on cancel or Escape.
+  // It sits above any open dialog (such as Team & invite code) without replacing it.
+  confirmDialog({ title, message, confirmLabel = 'Confirm', cancelLabel = 'Cancel', danger = false } = {}) {
+    return new Promise((resolve) => {
+      const esc = (v) => String(v == null ? '' : v).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+      const wrap = document.createElement('div');
+      wrap.className = 'cf-backdrop';
+      wrap.innerHTML = `
+        <div class="cf-box" role="alertdialog" aria-modal="true" aria-labelledby="cf-title" aria-describedby="cf-msg">
+          <h2 id="cf-title">${esc(title)}</h2>
+          <p id="cf-msg">${esc(message)}</p>
+          <div class="cf-actions">
+            <button type="button" class="btn btn-secondary" data-cf="no">${esc(cancelLabel)}</button>
+            <button type="button" class="btn ${danger ? 'btn-danger' : 'btn-primary'}" data-cf="yes">${esc(confirmLabel)}</button>
+          </div>
+        </div>`;
+      const done = (answer) => {
+        document.removeEventListener('keydown', onKey, true);
+        wrap.remove();
+        resolve(answer);
+      };
+      const onKey = (e) => { if (e.key === 'Escape') { e.stopPropagation(); done(false); } };
+      document.addEventListener('keydown', onKey, true);
+      wrap.addEventListener('click', (e) => {
+        const btn = e.target.closest('[data-cf]');
+        if (btn) done(btn.getAttribute('data-cf') === 'yes');
+        else if (e.target === wrap) done(false);
+      });
+      document.body.appendChild(wrap);
+      wrap.querySelector('[data-cf="no"]').focus();
+    });
   }
 
   closeModal() {
     const backdrop = document.getElementById('app-modal-backdrop');
     if (backdrop) {
+      const wasOpen = backdrop.classList.contains('open');
       backdrop.classList.remove('open');
       document.body.classList.remove('modal-open');
+      if (wasOpen) this._overlayClosed('modal');
     }
   }
 
@@ -1154,19 +1237,63 @@ class AdminApp {
     if (type === 'error') iconSvg = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
     if (type === 'warning') iconSvg = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>';
 
+    toast.setAttribute('role', type === 'error' ? 'alert' : 'status');
     toast.innerHTML = `
-      <span style="display: inline-flex; align-items: center; flex-shrink: 0;">${iconSvg}</span>
-      <span style="flex: 1; line-height: 1.35; font-size: 12px;">${message}</span>
+      <span class="toast-icon">${iconSvg}</span>
+      <span class="toast-msg">${message}</span>
+      <button type="button" class="toast-close" aria-label="Dismiss notification">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+      </button>
     `;
 
-    container.appendChild(toast);
+    // The same message repeating (e.g. live-sync pings) refreshes the existing toast instead of stacking
+    const dupKey = `${type}|${message}`;
+    const existing = Array.from(container.children).find(el => el._toastKey === dupKey && !el.classList.contains('is-leaving'));
+    if (existing) {
+      existing._restart();
+      return;
+    }
+    toast._toastKey = dupKey;
 
-    setTimeout(() => {
-      toast.style.opacity = '0';
-      toast.style.transform = 'translateY(10px)';
-      toast.style.transition = 'all 0.2s ease';
-      setTimeout(() => toast.remove(), 200);
-    }, duration);
+    // Keep the stack short: drop the oldest when a fifth arrives
+    const live = Array.from(container.children).filter(el => !el.classList.contains('is-leaving'));
+    if (live.length >= 4) live[0]._dismiss();
+
+    let timer = null;
+    let remaining = duration;
+    let startedAt = 0;
+
+    const dismiss = () => {
+      if (toast.classList.contains('is-leaving')) return;
+      clearTimeout(timer);
+      toast.classList.add('is-leaving');
+      toast.addEventListener('animationend', () => toast.remove(), { once: true });
+      setTimeout(() => toast.remove(), 400); // fallback if animations are disabled
+    };
+    const arm = (ms) => {
+      clearTimeout(timer);
+      remaining = ms;
+      startedAt = Date.now();
+      timer = setTimeout(dismiss, ms);
+    };
+
+    toast._dismiss = dismiss;
+    toast._restart = () => arm(duration);
+
+    // Hovering or focusing pauses the countdown so a toast can be read
+    const pause = () => {
+      clearTimeout(timer);
+      remaining = Math.max(800, remaining - (Date.now() - startedAt));
+    };
+    const resume = () => arm(remaining);
+    toast.addEventListener('mouseenter', pause);
+    toast.addEventListener('mouseleave', resume);
+    toast.addEventListener('focusin', pause);
+    toast.addEventListener('focusout', resume);
+    toast.querySelector('.toast-close').addEventListener('click', dismiss);
+
+    container.appendChild(toast);
+    arm(duration);
   }
 
   // --- Command Palette (Ctrl+K) ---
@@ -1183,6 +1310,39 @@ class AdminApp {
 
     input.addEventListener('input', (e) => {
       this.filterCommandPalette(e.target.value);
+    });
+
+    // Keyboard: arrows move the highlight, Enter runs it (Escape is handled globally)
+    input.addEventListener('keydown', (e) => {
+      const items = Array.from(list.querySelectorAll('.command-item'));
+      if (!items.length) return;
+      const current = items.findIndex(el => el.classList.contains('selected'));
+      let next = -1;
+      if (e.key === 'ArrowDown') next = (current + 1) % items.length;
+      else if (e.key === 'ArrowUp') next = (current - 1 + items.length) % items.length;
+      else if (e.key === 'Home') next = 0;
+      else if (e.key === 'End') next = items.length - 1;
+      else if (e.key === 'Enter') {
+        e.preventDefault();
+        (items[current] || items[0]).click();
+        return;
+      }
+      if (next < 0) return;
+      e.preventDefault();
+      this.selectCommandItem(items, next);
+    });
+  }
+
+  selectCommandItem(items, index) {
+    const input = document.getElementById('command-palette-input');
+    items.forEach((el, i) => {
+      const on = i === index;
+      el.classList.toggle('selected', on);
+      el.setAttribute('aria-selected', on ? 'true' : 'false');
+      if (on) {
+        input?.setAttribute('aria-activedescendant', el.id);
+        el.scrollIntoView({ block: 'nearest' });
+      }
     });
   }
 
@@ -1263,6 +1423,7 @@ class AdminApp {
     const backdrop = document.getElementById('command-palette-backdrop');
     const input = document.getElementById('command-palette-input');
     if (backdrop && input) {
+      if (!backdrop.classList.contains('open')) this._paletteReturn = document.activeElement;
       backdrop.classList.add('open');
       input.value = '';
       input.focus();
@@ -1272,7 +1433,14 @@ class AdminApp {
 
   closeCommandPalette() {
     const backdrop = document.getElementById('command-palette-backdrop');
-    if (backdrop) backdrop.classList.remove('open');
+    if (!backdrop) return;
+    const wasOpen = backdrop.classList.contains('open');
+    backdrop.classList.remove('open');
+    if (wasOpen) {
+      const el = this._paletteReturn;
+      this._paletteReturn = null;
+      if (el && el.isConnected && typeof el.focus === 'function') el.focus({ preventScroll: true });
+    }
   }
 
   filterCommandPalette(query) {
@@ -1288,53 +1456,62 @@ class AdminApp {
       { label: 'Go to System Activation Dashboard', route: 'activation', cat: 'Navigation' },
       { label: 'Breakdown: Species, Breed, Age, Outcome & Source', route: 'breakdown', cat: 'Navigation' },
       { label: 'View Heatmap Analysis & Lost Pet Hotspots', route: 'heatmap', cat: 'Navigation' },
-      { label: 'View Impoundment Queue & 72h SLA', route: 'impoundments', cat: 'Navigation' },
-      { label: 'Shelter Terminal: Scan Tag & Log Intake', route: 'terminal', cat: 'Navigation' },
-      { label: 'Inspect Shelter Facilities', route: 'shelters', cat: 'Navigation' },
-      { label: 'RFID Tag Provisioning & Hardware', route: 'rfid', cat: 'Navigation' },
+      { label: 'View Reports: missing pets and sightings', route: 'reports', cat: 'Navigation' },
+      { label: 'Impoundments: pets in holding and claim deadlines', route: 'impoundments', cat: 'Navigation' },
+      { label: 'Scan Tag & Log Intake (Impoundments)', route: 'impoundments', cat: 'Navigation' },
+      { label: 'Facilities: Add and Manage', route: 'shelters', cat: 'Navigation' },
       { label: 'Dispatch Emergency Broadcast', route: 'notifs', cat: 'Navigation' },
       { label: 'Municipal Settings & JSON Backup', route: 'settings', cat: 'Navigation' },
-      { label: 'Log Animal Control Intake', action: 'intake', cat: 'Actions' },
-      { label: 'Launch RFID Scanner Simulator', action: 'scanner', cat: 'Actions' },
+      { label: 'Scan & intake a pet', action: 'intake', cat: 'Actions' },
     ];
 
-    // Append shelters
+    // Append facilities: picking one opens the Facilities page
     shelters.forEach(s => {
       commands.push({
-        label: `Facility: ${s.name} (${s.fee})`,
+        label: `Facility: ${s.name}`,
         shelterId: s.id,
-        cat: 'Municipal Shelters'
+        cat: 'Facilities'
       });
     });
 
     const filtered = q ? commands.filter(c => c.label.toLowerCase().includes(q)) : commands;
 
-    list.innerHTML = filtered.slice(0, 12).map(item => `
-      <div class="command-item" data-route="${item.route || ''}" data-filter="${item.filter || ''}" data-action="${item.action || ''}" data-pet-id="${item.petId || ''}" data-report-id="${item.reportId || ''}">
-        <span>${item.label}</span>
-        <span class="mono-tag" style="font-size: 9px;">${item.cat}</span>
+    const shown = filtered.slice(0, 12);
+    if (!shown.length) {
+      list.innerHTML = '<div class="command-empty" role="status">No matching commands</div>';
+      return;
+    }
+
+    list.innerHTML = shown.map((item, i) => `
+      <div class="command-item${i === 0 ? ' selected' : ''}" id="cmd-opt-${i}" role="option" aria-selected="${i === 0}" data-route="${item.route || ''}" data-filter="${item.filter || ''}" data-action="${item.action || ''}" data-pet-id="${item.petId || ''}" data-report-id="${item.reportId || ''}" data-shelter-id="${this.esc(item.shelterId || '')}">
+        <span>${this.esc(item.label)}</span>
+        <span class="mono-tag" style="font-size: 9px;">${this.esc(item.cat)}</span>
       </div>
     `).join('');
 
     // Attach click events to command items
-    list.querySelectorAll('.command-item').forEach(el => {
+    const optionEls = Array.from(list.querySelectorAll('.command-item'));
+    document.getElementById('command-palette-input')?.setAttribute('aria-activedescendant', optionEls[0]?.id || '');
+    optionEls.forEach((el, idx) => {
+      el.addEventListener('mousemove', () => {
+        if (!el.classList.contains('selected')) this.selectCommandItem(optionEls, idx);
+      });
       el.addEventListener('click', () => {
         const route = el.getAttribute('data-route');
         const filter = el.getAttribute('data-filter');
         const action = el.getAttribute('data-action');
         const petId = el.getAttribute('data-pet-id');
         const reportId = el.getAttribute('data-report-id');
+        const shelterId = el.getAttribute('data-shelter-id');
 
         this.closeCommandPalette();
 
-        if (route) {
+        if (shelterId) {
+          window.location.hash = '#shelters';
+        } else if (route) {
           window.location.hash = '#' + route;
         } else if (action === 'intake') {
-          window.location.hash = '#impoundments';
-          setTimeout(() => window.ImpoundmentsView?.openIntakeModal(), 100);
-        } else if (action === 'scanner') {
-          window.location.hash = '#rfid';
-          setTimeout(() => window.RfidView?.openScannerSimulatorModal(), 100);
+          window.ImpoundmentsView?.requestIntake();
         }
       });
     });

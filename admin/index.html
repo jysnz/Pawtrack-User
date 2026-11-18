@@ -4,6 +4,8 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>PawTrack · Admin Console</title>
+  <link rel="stylesheet" href="../css/splash.css" />
+  <script src="../js/splash.js" data-label="Admin Console" data-target=".brand-badge"></script>
   <meta name="description" content="Municipal Pet Recovery & Impoundment Administration Gateway — Connected to PawTrack" />
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA2NCIgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0Ij4KICA8Y2lyY2xlIGN4PSIzMiIgY3k9IjMyIiByPSIzMCIgZmlsbD0iIzAwMDAwMCIgc3Ryb2tlPSIjZmZmZmZmIiBzdHJva2Utd2lkdGg9IjIiLz4KICA8Y2lyY2xlIGN4PSIzMiIgY3k9IjMyIiByPSIyNi41IiBmaWxsPSJub25lIiBzdHJva2U9InJnYmEoMjU1LDI1NSwyNTUsMC4yNSkiIHN0cm9rZS13aWR0aD0iMSIgc3Ryb2tlLWRhc2hhcnJheT0iMywyIi8+CiAgPGcgZmlsbD0iI2ZmZmZmZiI+CiAgICA8ZWxsaXBzZSBjeD0iMzIiIGN5PSIxOCIgcng9IjQuMiIgcnk9IjUuOCIvPgogICAgPGVsbGlwc2UgY3g9IjIwLjUiIGN5PSIyMy41IiByeD0iNCIgcnk9IjUuMiIgdHJhbnNmb3JtPSJyb3RhdGUoLTIwIDIwLjUgMjMuNSkiLz4KICAgIDxlbGxpcHNlIGN4PSI0My41IiBjeT0iMjMuNSIgcng9IjQiIHJ5PSI1LjIiIHRyYW5zZm9ybT0icm90YXRlKDIwIDQzLjUgMjMuNSkiLz4KICAgIDxwYXRoIGQ9Ik0zMiAzMCBDMjQuNSAzMCAxOC41IDM1IDE4LjUgNDEuNSBDMTguNSA0Ni44IDIyLjggNTAuNSAyNy41IDUwLjUgQzMwLjIgNTAuNSAzMS40IDQ4LjQgMzIgNDguNCBDMzIuNiA0OC40IDMzLjggNTAuNSAzNi41IDUwLjUgQzQxLjIgNTAuNSA0NS41IDQ2LjggNDUuNSA0MS41IEM0NS41IDM1IDM5LjUgMzAgMzIgMzAgWiIvPgogIDwvZz4KPC9zdmc+" />
   <link rel="icon" type="image/svg+xml" href="favicon.svg?v=2" />
@@ -14,6 +16,7 @@
   <link rel="stylesheet" href="css/admin.css" />
   <link rel="stylesheet" href="css/components.css" />
   <link rel="stylesheet" href="css/auth-landing.css" />
+  <link rel="stylesheet" href="css/polish.css" />
   <script>
     /* A saved Supabase session means the page is about to resume signed in, so keep both the login form
        and the half-loaded console hidden until the access check finishes (no login flash on reload). */
@@ -57,108 +60,11 @@
         </div>
       </div>
 
-      <!-- Municipal Jurisdiction / Workspace Selector -->
-      <div class="workspace-selector-wrapper" id="workspace-selector-wrapper" style="position: relative; margin: 0 2px 14px;">
-        <div class="workspace-chip" id="workspace-selector" title="Active Municipal Jurisdiction (Click to Switch)" tabindex="0" role="button" aria-haspopup="true" aria-expanded="false" style="margin: 0;">
-          <div style="display: flex; align-items: center; min-width: 0;">
-            <span class="workspace-dot" id="workspace-selector-dot"></span>
-            <span id="workspace-selector-label" style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Metro Manila (NCR)</span>
-          </div>
-          <span style="font-size: 9px; color: var(--ink-muted); margin-left: 4px;">▾</span>
-        </div>
-
-        <div class="workspace-dropdown" id="workspace-dropdown">
-          <div class="workspace-dropdown-header">
-            <span>Municipal Jurisdiction</span>
-            <span class="status-pill status-safe" style="font-size: 8.5px; padding: 1px 5px;">NCR Cluster</span>
-          </div>
-
-          <div class="workspace-dropdown-list">
-            <button class="workspace-option-btn active" data-workspace="pawtrack-metro-manila" data-name="Metro Manila (NCR)" data-full="Metro Manila All Sectors — Central Hub">
-              <div class="ws-opt-left">
-                <span class="ws-opt-dot live"></span>
-                <div class="ws-opt-info">
-                  <span class="ws-opt-id">pawtrack-metro-manila</span>
-                  <span class="ws-opt-name">Metro Manila (All NCR Sectors)</span>
-                </div>
-              </div>
-              <span class="ws-opt-badge">Primary Hub</span>
-            </button>
-
-            <button class="workspace-option-btn" data-workspace="pawtrack-quezon-city" data-name="Quezon City (NCR)" data-full="Quezon City Animal Care & Control">
-              <div class="ws-opt-left">
-                <span class="ws-opt-dot live"></span>
-                <div class="ws-opt-info">
-                  <span class="ws-opt-id">pawtrack-quezon-city</span>
-                  <span class="ws-opt-name">Quezon City Veterinary Dept</span>
-                </div>
-              </div>
-              <span class="ws-opt-badge">Active</span>
-            </button>
-
-            <button class="workspace-option-btn" data-workspace="pawtrack-manila-city" data-name="City of Manila (NCR)" data-full="City of Manila Veterinary Inspection Div">
-              <div class="ws-opt-left">
-                <span class="ws-opt-dot live"></span>
-                <div class="ws-opt-info">
-                  <span class="ws-opt-id">pawtrack-manila-city</span>
-                  <span class="ws-opt-name">City of Manila Animal Pound</span>
-                </div>
-              </div>
-              <span class="ws-opt-badge">Active</span>
-            </button>
-
-            <button class="workspace-option-btn" data-workspace="pawtrack-makati" data-name="Makati City (NCR)" data-full="Makati City Veterinary Services">
-              <div class="ws-opt-left">
-                <span class="ws-opt-dot live"></span>
-                <div class="ws-opt-info">
-                  <span class="ws-opt-id">pawtrack-makati</span>
-                  <span class="ws-opt-name">Makati Veterinary Services</span>
-                </div>
-              </div>
-              <span class="ws-opt-badge">Active</span>
-            </button>
-
-            <button class="workspace-option-btn" data-workspace="pawtrack-taguig" data-name="Taguig City (NCR)" data-full="Taguig City Animal Welfare Unit">
-              <div class="ws-opt-left">
-                <span class="ws-opt-dot live"></span>
-                <div class="ws-opt-info">
-                  <span class="ws-opt-id">pawtrack-taguig</span>
-                  <span class="ws-opt-name">Taguig Animal Welfare Unit</span>
-                </div>
-              </div>
-              <span class="ws-opt-badge">Active</span>
-            </button>
-
-            <button class="workspace-option-btn" data-workspace="pawtrack-pasig" data-name="Pasig City (NCR)" data-full="Pasig City Veterinary Office">
-              <div class="ws-opt-left">
-                <span class="ws-opt-dot live"></span>
-                <div class="ws-opt-info">
-                  <span class="ws-opt-id">pawtrack-pasig</span>
-                  <span class="ws-opt-name">Pasig City Animal Pound</span>
-                </div>
-              </div>
-              <span class="ws-opt-badge">Active</span>
-            </button>
-
-            <button class="workspace-option-btn" data-workspace="pawtrack-paranaque" data-name="Parañaque City (NCR)" data-full="Parañaque Veterinary Services">
-              <div class="ws-opt-left">
-                <span class="ws-opt-dot live"></span>
-                <div class="ws-opt-info">
-                  <span class="ws-opt-id">pawtrack-paranaque</span>
-                  <span class="ws-opt-name">Parañaque Vet Services</span>
-                </div>
-              </div>
-              <span class="ws-opt-badge">Active</span>
-            </button>
-          </div>
-
-          <div class="workspace-dropdown-footer">
-            <button class="btn btn-xs btn-secondary" id="btn-add-jurisdiction" style="width: 100%; justify-content: center; font-size: 11px; padding: 5px 8px; border-radius: var(--radius-sm);">
-              + Connect LGU Cluster
-            </button>
-          </div>
-        </div>
-      </div>
+      <!-- The facility this account works at (opens the Facilities page) -->
+      <a class="facility-chip" id="facility-chip" href="#shelters" title="Your facility. Open Facilities.">
+        <span class="facility-chip-dot" aria-hidden="true"></span>
+        <span class="facility-chip-text"><small>Your facility</small><b id="facility-chip-name">No facility yet</b></span>
+      </a>
 
       <div class="nav-scrollable">
         <!-- Group 1: Overview -->
@@ -173,14 +79,14 @@
           <div class="nav-item" data-route="heatmap">
             <span class="nav-item-text">Heatmap</span>
           </div>
+          <div class="nav-item" data-route="reports">
+            <span class="nav-item-text">Reports</span>
+          </div>
         </div>
 
         <!-- Group 2: Operations -->
         <div class="nav-group">
           <div class="nav-group-label">Operations</div>
-          <div class="nav-item" data-route="terminal">
-            <span class="nav-item-text">Shelter Terminal</span>
-          </div>
 
           <div class="nav-item" data-route="impoundments">
             <span class="nav-item-text">Impoundments</span>
@@ -197,11 +103,7 @@
         <div class="nav-group">
           <div class="nav-group-label">Facilities</div>
           <div class="nav-item" data-route="shelters">
-            <span class="nav-item-text">Shelters</span>
-          </div>
-
-          <div class="nav-item" data-route="rfid">
-            <span class="nav-item-text">RFID Tags</span>
+            <span class="nav-item-text">Facilities</span>
           </div>
         </div>
 
@@ -241,7 +143,7 @@
           <div class="topbar-greeting-meta"><span id="topbar-clock-date"></span><span class="topbar-greeting-dot" aria-hidden="true">·</span><span id="topbar-clock-time"></span></div>
         </div>
 
-        <div class="global-search-trigger" id="global-search-trigger">
+        <div class="global-search-trigger" id="global-search-trigger" role="button" tabindex="0" aria-label="Open search and commands (Ctrl+K)">
           <div class="search-placeholder">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
             <span>Search pets, tags, or actions…</span>
@@ -250,9 +152,14 @@
         </div>
 
         <div class="topbar-right">
+          <!-- Data connection: Live (pushed updates), Updating (timer only) or Offline -->
+          <div class="live-sync-indicator" id="live-sync-indicator" role="status" aria-live="polite" title="">
+            <span id="live-sync-indicator-dot" class="sync-dot" aria-hidden="true"></span>
+            <span id="live-sync-indicator-text">Connecting…</span>
+          </div>
           <!-- Super Admin Avatar Dropdown -->
           <div class="admin-user-menu-wrapper" id="admin-user-menu-wrapper">
-            <div class="admin-avatar-btn" id="admin-avatar-trigger" title="Super Admin Account (Click for Menu)">
+            <div class="admin-avatar-btn" id="admin-avatar-trigger" title="Super Admin Account (Click for Menu)" role="button" tabindex="0" aria-haspopup="true" aria-label="Account menu">
               SA
             </div>
 
@@ -323,10 +230,10 @@
     <div class="command-palette-box">
       <div class="command-input-row">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--ink-muted);"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-        <input type="text" id="command-palette-input" placeholder="Type a command, pet name, or jump to section..." />
+        <input type="text" id="command-palette-input" placeholder="Type a command, pet name, or jump to section..." role="combobox" aria-expanded="true" aria-controls="command-palette-list" aria-autocomplete="list" autocomplete="off" spellcheck="false" />
         <span class="kbd-shortcut">ESC</span>
       </div>
-      <div class="command-list" id="command-palette-list">
+      <div class="command-list" id="command-palette-list" role="listbox" aria-label="Commands">
         <!-- Commands & Pets rendered dynamically -->
       </div>
     </div>
@@ -580,15 +487,20 @@
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
   <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
   <script src="js/admin-store.js"></script>
+  <script src="js/facility-form.js"></script>
+  <script src="js/facility-photo.js"></script>
+  <script src="js/pet-picker.js"></script>
+  <script src="js/search-box.js"></script>
   <script src="js/views/activation-view.js"></script>
   <script src="js/views/heatmap-view.js"></script>
+  <script src="js/views/reports-view.js"></script>
+  <script src="js/views/intake-modal.js"></script>
   <script src="js/views/impoundments-view.js"></script>
   <script src="js/views/breakdown-view.js"></script>
   <script src="js/views/shelters-view.js"></script>
-  <script src="js/views/rfid-view.js"></script>
-  <script src="js/views/terminal-view.js"></script>
   <script src="js/views/notifs-view.js"></script>
   <script src="js/views/settings-view.js"></script>
+  <script src="js/admin-motion.js"></script>
   <script src="js/admin-app.js"></script>
 </body>
 </html>

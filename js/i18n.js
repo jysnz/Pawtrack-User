@@ -1094,10 +1094,6 @@
         window.pawApp.renderCurrentView();
       }
 
-      if (showToastNotification && window.notifManager) {
-        const msg = this.t('toast.langSwitched', lang === 'fil' ? 'Pinalitan ang wika sa Filipino.' : 'Language switched to English.');
-        window.notifManager.showToast(msg, 'info', 2500);
-      }
     }
 
     toggleLanguage() {

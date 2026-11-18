@@ -109,11 +109,16 @@ class PublicView {
         </div>
 
         <!-- Interactive Leaflet Map with Google Maps Styled Controls & Directions HUD -->
-        <div class="glass-card" style="position:relative; overflow:hidden; min-height:520px; padding:0;">
+        <div class="glass-card public-map-card" id="public-map-card" style="position:relative; overflow:hidden; min-height:520px; padding:0;">
           <div id="public-map-container" style="min-height:520px;"></div>
 
           <!-- Quick Navigation & View Control Tools -->
           <div class="gmap-quick-tools">
+            <button type="button" class="gmap-tool-btn" id="public-map-fullscreen-btn" onclick="window.publicView.toggleMapFullscreen()" title="Full screen map" aria-label="Full screen map" aria-pressed="false">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/>
+              </svg>
+            </button>
             <button type="button" class="gmap-tool-btn" onclick="window.publicView.locateMe()" title="Recenter to My Location (GPS)">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <polygon points="3 11 22 2 13 21 11 13 3 11"/>
@@ -142,6 +147,29 @@ class PublicView {
 
     // Initialize Map with Pets, Shelters, and Community Sightings
     setTimeout(() => this.initMap(pets, shelters), 100);
+  }
+
+  toggleMapFullscreen(force) {
+    const card = document.getElementById('public-map-card');
+    if (!card) return;
+    const on = typeof force === 'boolean' ? force : !card.classList.contains('is-fullscreen');
+    card.classList.toggle('is-fullscreen', on);
+    document.body.classList.toggle('map-fullscreen-open', on);
+    const btn = document.getElementById('public-map-fullscreen-btn');
+    if (btn) {
+      btn.setAttribute('aria-pressed', String(on));
+      btn.title = on ? 'Exit full screen' : 'Full screen map';
+      btn.setAttribute('aria-label', btn.title);
+      btn.innerHTML = on
+        ? '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/><line x1="14" y1="10" x2="21" y2="3"/><line x1="3" y1="21" x2="10" y2="14"/></svg>'
+        : '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>';
+    }
+    if (!this._fsKeyHandler) {
+      this._fsKeyHandler = (e) => { if (e.key === 'Escape') this.toggleMapFullscreen(false); };
+    }
+    document.removeEventListener('keydown', this._fsKeyHandler);
+    if (on) document.addEventListener('keydown', this._fsKeyHandler);
+    setTimeout(() => this.map?.invalidateSize?.(), 60);
   }
 
   renderMapLegend() {
@@ -557,6 +585,7 @@ class PublicView {
             { icon: 'pin', label: 'Address', value: s.address },
             { icon: 'phone', label: 'Hotline', value: s.phone }
           ],
+          extra: this.shelterPetsHtml(s),
           actions: `<button type="button" class="pt-btn pt-btn-primary" onclick="window.publicView.showDirections(${s.lat}, ${s.lng}, '${this.jsArg(s.name)}', '${this.jsArg(s.address)}', '${this.jsArg(s.photoUrl || '')}', 'shelter')">Directions</button>${this.popupMapsLink(s.lat, s.lng)}`
         })}
       `);
@@ -920,7 +949,7 @@ class PublicView {
   }
 
   // Shared look for every map popup: photo header with a status badge, key facts with icons, action buttons
-  popupCard({ badge, tone = MAP_COLORS.missing, photo = '', placeholderIcon = 'paw', title, subtitle = '', rows = [], note = '', actions = '' }) {
+  popupCard({ badge, tone = MAP_COLORS.missing, photo = '', placeholderIcon = 'paw', title, subtitle = '', rows = [], note = '', extra = '', actions = '' }) {
     const e = (v) => this.escapeHtml(String(v ?? ''));
     const icons = {
       pin: '<path d="M21 10c0 7-9 13-9 13S3 17 3 10a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>',
@@ -951,10 +980,91 @@ class PublicView {
           ${subtitle ? `<div class="pt-card-sub">${e(subtitle)}</div>` : ''}
           ${rowsHtml ? `<ul class="pt-card-rows">${rowsHtml}</ul>` : ''}
           ${note ? `<div class="pt-card-note">${e(note)}</div>` : ''}
+          ${extra}
           <div class="pt-card-actions">${actions}</div>
         </div>
       </div>
     `;
+  }
+
+  // ----- Pets being held at an impound facility (shown when its pin is tapped) -----
+  facilityPets(shelterId) {
+    return window.pawStore.getImpoundments()
+      .filter(i => i.shelterId === shelterId && i.status === 'active_impounded')
+      .sort((a, b) => new Date(b.intakeDate || 0) - new Date(a.intakeDate || 0));
+  }
+
+  claimLeft(i) {
+    const d = i.claimDeadline ? new Date(i.claimDeadline).getTime() : NaN;
+    if (!Number.isFinite(d)) return '';
+    const left = d - Date.now();
+    if (left <= 0) return 'Claim window ended';
+    const h = Math.floor(left / 3600000);
+    return h >= 48 ? `${Math.floor(h / 24)} days left to claim` : `${h}h left to claim`;
+  }
+
+  shelterPetsHtml(s) {
+    const e = (v) => this.escapeHtml(String(v ?? ''));
+    const list = this.facilityPets(s.id);
+    const head = `<div class="pt-fp-head"><b>Pets here now</b><span>${list.length}</span></div>`;
+    if (!list.length) return `<div class="pt-fp">${head}<p class="pt-fp-empty">No pets are being held here right now.</p></div>`;
+    const row = (i) => `
+      <li>
+        ${i.photoUrl ? `<img src="${e(i.photoUrl)}" alt="" loading="lazy" onerror="this.replaceWith(Object.assign(document.createElement('span'),{className:'pt-fp-ph',textContent:'🐾'}))" />` : '<span class="pt-fp-ph" aria-hidden="true">🐾</span>'}
+        <span class="pt-fp-text"><b>${e(i.petName || 'Unidentified pet')}</b><small>${e([i.species, i.breed].filter(Boolean).join(' · '))}</small></span>
+      </li>`;
+    return `<div class="pt-fp">${head}
+      <ul class="pt-fp-list">${list.slice(0, 3).map(row).join('')}</ul>
+      <button type="button" class="pt-fp-all" onclick="window.publicView.openShelterPets('${this.jsArg(s.id)}')">${list.length > 3 ? `See all ${list.length} pets` : 'View details'}</button>
+    </div>`;
+  }
+
+  // A list of every pet held at one facility, with a photo, where it was found and how long is left to claim it
+  openShelterPets(shelterId) {
+    const shelter = window.pawStore.getShelters().find(s => s.id === shelterId);
+    if (!shelter) return;
+    const e = (v) => this.escapeHtml(String(v ?? ''));
+    const list = this.facilityPets(shelterId);
+    this.closeShelterPets();
+    const el = document.createElement('div');
+    el.id = 'pt-fp-modal';
+    el.className = 'pt-fp-modal';
+    el.setAttribute('role', 'dialog');
+    el.setAttribute('aria-modal', 'true');
+    el.setAttribute('aria-label', `Pets at ${shelter.name}`);
+    el.innerHTML = `
+      <div class="pt-fp-box">
+        <button type="button" class="pt-fp-close" aria-label="Close">&times;</button>
+        <h2>${e(shelter.name)}</h2>
+        <p class="pt-fp-addr">${e([shelter.address, shelter.phone].filter(Boolean).join(' · '))}</p>
+        <p class="pt-fp-count">${list.length} ${list.length === 1 ? 'pet is' : 'pets are'} being held here now</p>
+        ${list.length ? `<ul class="pt-fp-full">${list.map(i => `
+          <li>
+            ${i.photoUrl ? `<img src="${e(i.photoUrl)}" alt="${e(i.petName || 'Pet')}" loading="lazy" onerror="this.replaceWith(Object.assign(document.createElement('span'),{className:'pt-fp-ph',textContent:'🐾'}))" />` : '<span class="pt-fp-ph" aria-hidden="true">🐾</span>'}
+            <div>
+              <b>${e(i.petName || 'Unidentified pet')}</b>
+              <small>${e([i.species, i.breed].filter(Boolean).join(' · ') || 'Pet')}</small>
+              ${i.impoundLocation ? `<small>Found near ${e(i.impoundLocation)}</small>` : ''}
+              <em>${e(this.claimLeft(i))}</em>
+            </div>
+          </li>`).join('')}</ul>` : '<p class="pt-fp-empty">No pets are being held here right now.</p>'}
+        <p class="pt-fp-note">Think one of them is yours? Contact the facility, and bring a valid ID and proof that the pet is yours.</p>
+        <div class="pt-fp-actions">
+          ${shelter.phone ? `<a class="pt-btn pt-btn-primary" href="tel:${e(String(shelter.phone).replace(/[^+\d]/g, ''))}">Call the facility</a>` : ''}
+          <a class="pt-btn pt-btn-ghost" href="https://www.google.com/maps/dir/?api=1&destination=${e(shelter.lat)},${e(shelter.lng)}" target="_blank" rel="noopener">Directions</a>
+        </div>
+      </div>`;
+    el.addEventListener('click', (ev) => { if (ev.target === el) this.closeShelterPets(); });
+    el.querySelector('.pt-fp-close').addEventListener('click', () => this.closeShelterPets());
+    this._fpKey = (ev) => { if (ev.key === 'Escape') this.closeShelterPets(); };
+    document.addEventListener('keydown', this._fpKey);
+    document.body.appendChild(el);
+    el.querySelector('.pt-fp-close').focus({ preventScroll: true });
+  }
+
+  closeShelterPets() {
+    document.getElementById('pt-fp-modal')?.remove();
+    if (this._fpKey) { document.removeEventListener('keydown', this._fpKey); this._fpKey = null; }
   }
 
   popupMapsLink(lat, lng) {
@@ -1042,10 +1152,6 @@ class PublicView {
       });
     }
 
-    if (notify && window.notifManager) {
-      const label = type === 'satellite' ? 'Actual Aerial Satellite View' : type === 'hybrid' ? 'Hybrid Street Imagery' : type === 'dark' ? 'Dark Theme' : type === 'light' ? 'Light Theme' : 'Google Roadmap';
-      window.notifManager.showToast(`Switched map layer to ${label}`, 'info', 2000);
-    }
   }
 
   // Asks the browser for the user's position when they tap Directions (free; the browser prompts once)

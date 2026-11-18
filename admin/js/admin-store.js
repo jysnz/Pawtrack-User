@@ -4,18 +4,20 @@
  */
 
 const STORAGE_KEYS = {
-  PETS: 'pawtrack_pets',
-  IMPOUNDMENTS: 'pawtrack_impoundments',
-  NOTIFICATIONS: 'pawtrack_notifications',
-  SHELTERS: 'pawtrack_shelters',
+  PETS: 'pawtrack_admin_pets',
+  IMPOUNDMENTS: 'pawtrack_admin_impoundments',
+  NOTIFICATIONS: 'pawtrack_admin_notifications',
+  SHELTERS: 'pawtrack_admin_shelters',
   CURRENT_USER: 'pawtrack_current_user',
   THEME: 'pawtrack_theme',
-  RFID_TAGS: 'pawtrack_rfid_tags',
+  RFID_TAGS: 'pawtrack_admin_rfid_tags',
   ADMIN_LOGS: 'pawtrack_admin_logs',
   SETTINGS: 'pawtrack_system_settings',
-  SIGHTINGS: 'pawtrack_sightings',
-  CASES: 'pawtrack_cases',
-  SHELTER_EXTRAS: 'pawtrack_shelter_extras'
+  SIGHTINGS: 'pawtrack_admin_sightings',
+  CASES: 'pawtrack_admin_cases',
+  SHELTER_EXTRAS: 'pawtrack_shelter_extras',
+  TICKETS: 'pawtrack_penalty_tickets',
+  EXTRA_MAINS: 'pawtrack_extra_main_ids'
 };
 
 // Bumped when the cached lists change meaning; older caches are cleared on load (v1: Supabase replaces the
@@ -56,7 +58,7 @@ class AdminStore {
     // Lists cached from the old local JSON database are cleared once; Supabase fills them again
     if (localStorage.getItem('pawtrack_admin_data_source') !== DATA_SOURCE_VERSION) {
       [STORAGE_KEYS.PETS, STORAGE_KEYS.IMPOUNDMENTS, STORAGE_KEYS.NOTIFICATIONS, STORAGE_KEYS.SHELTERS,
-        STORAGE_KEYS.RFID_TAGS, STORAGE_KEYS.SIGHTINGS, STORAGE_KEYS.CASES].forEach((key) => localStorage.setItem(key, '[]'));
+        STORAGE_KEYS.RFID_TAGS, STORAGE_KEYS.SIGHTINGS, STORAGE_KEYS.CASES, STORAGE_KEYS.TICKETS].forEach((key) => localStorage.setItem(key, '[]'));
       localStorage.setItem('pawtrack_admin_data_source', DATA_SOURCE_VERSION);
     }
     // Safe initialization: Only set defaults if keys do not exist in localStorage
@@ -139,11 +141,102 @@ class AdminStore {
     return this.client();
   }
 
+  // ---- Keeping the data current ----
+  // 1. Realtime: the database pushes a change on the tables below, and we reload (about a second later).
+  // 2. A safety-net poll: every 60s while Realtime is live, every 15s while it is not; backs off 15s, 30s, 60s
+  //    after failures; skipped while the tab is hidden.
+  // 3. Coming back to the tab reloads, but never more than once per 10s.
+  // 4. Our own saves reload at once (see write()).
+  // syncStatus tells the UI the truth: 'live' (Realtime), 'connected' (polling only), 'offline', 'connecting'.
+  static get REALTIME_TABLES() { return ['impounded_pets', 'penalty_tickets', 'notifications', 'missing_pets']; }
+
   startSupabaseSync() {
+    this.realtime = 'off';
+    this.syncFailures = 0;
+    this.realtimeDebounceMs = this.realtimeDebounceMs || 400;
+    this.statusListeners = [];
+    this._pollStarted = true;
     this.syncFromSupabase();
-    this.pollTimer = setInterval(() => { if (!document.hidden) this.syncFromSupabase(); }, 20000);
+    this.schedulePoll();
+    this.connectRealtime();
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) this.syncIfStale(10000); });
+    if (typeof window.addEventListener === 'function') {
+      window.addEventListener('online', () => this.syncFromSupabase());
+      window.addEventListener('offline', () => this.setStatus('offline'));
+    }
+  }
+
+  // Be told when the connection state changes (does not redraw pages, unlike subscribe)
+  onStatus(fn) {
+    this.statusListeners = this.statusListeners || [];
+    this.statusListeners.push(fn);
+    return () => { this.statusListeners = this.statusListeners.filter((x) => x !== fn); };
+  }
+
+  setStatus(next) {
+    if (this.syncStatus === next) return;
+    this.syncStatus = next;
+    (this.statusListeners || []).forEach((fn) => { try { fn(next); } catch (e) { /* a listener must not break syncing */ } });
+  }
+
+  pollDelay() {
+    if (this.syncFailures > 0) return [15000, 30000, 60000][Math.min(this.syncFailures - 1, 2)];
+    return this.realtime === 'live' ? 60000 : 15000;
+  }
+
+  // One timer, restarted after every sync, so a poll never follows right behind a push-triggered load
+  schedulePoll() {
+    if (!this._pollStarted) return;
+    clearTimeout(this.pollTimer);
+    this.pollTimer = setTimeout(() => {
+      if (!document.hidden) this.syncFromSupabase(); // syncFromSupabase schedules the next poll itself
+      else this.schedulePoll();
+    }, this.pollDelay());
     if (this.pollTimer && this.pollTimer.unref) this.pollTimer.unref(); // tests running in Node can exit
-    document.addEventListener('visibilitychange', () => { if (!document.hidden) this.syncFromSupabase(); });
+  }
+
+  syncIfStale(maxAgeMs) {
+    if (!this.lastSyncedAt || Date.now() - this.lastSyncedAt >= maxAgeMs) return this.syncFromSupabase();
+    return Promise.resolve(true);
+  }
+
+  // A burst of changes (an intake touches several tables) becomes one reload; a change that lands while a
+  // reload is running gets its own reload straight after
+  queueSync() {
+    clearTimeout(this._rtTimer);
+    this._rtTimer = setTimeout(() => {
+      if (this.syncing) this.syncing.then(() => this.syncFromSupabase());
+      else this.syncFromSupabase();
+    }, this.realtimeDebounceMs);
+    if (this._rtTimer && this._rtTimer.unref) this._rtTimer.unref();
+  }
+
+  async connectRealtime() {
+    if (this._rtStarting) return;
+    this._rtStarting = true;
+    const sb = await this.waitForClient();
+    if (!sb || typeof sb.channel !== 'function' || this.rtChannel) return;
+    try {
+      const channel = sb.channel('admin-live');
+      AdminStore.REALTIME_TABLES.forEach((table) => {
+        channel.on('postgres_changes', { event: '*', schema: 'public', table }, () => this.queueSync());
+      });
+      channel.subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          this.realtime = 'live';
+          if (this.syncStatus === 'connected') this.setStatus('live');
+          this.syncFromSupabase(); // anything that changed while the channel was connecting
+        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+          // supabase-js reconnects by itself and reports SUBSCRIBED again; until then the poll is quicker
+          this.realtime = 'off';
+          if (this.syncStatus === 'live') this.setStatus('connected');
+          this.schedulePoll();
+        }
+      });
+      this.rtChannel = channel;
+    } catch (e) {
+      console.warn('[AdminStore] Realtime is unavailable, using the timer only:', e && e.message);
+    }
   }
 
   isDbId(id) {
@@ -154,16 +247,26 @@ class AdminStore {
     if (this.syncing) return this.syncing;
     this.syncing = (async () => {
       const sb = await this.waitForClient();
-      if (!sb) { this.syncStatus = 'offline'; return false; }
-      const [pets, reports, sightings, impounded, shelters, tags, notifs] = await Promise.all([
+      if (!sb) { this.syncFailures = (this.syncFailures || 0) + 1; this.setStatus('offline'); this.schedulePoll(); return false; }
+      const [pets, reports, sightings, impounded, shelters, tags, notifs, tickets, extraMains] = await Promise.all([
         sb.from('registered_pets').select('*').order('created_at', { ascending: false }),
         sb.from('missing_pets').select('*').order('created_at', { ascending: false }),
         sb.from('community_sightings').select('*').order('created_at', { ascending: false }).limit(1000),
         sb.from('impounded_pets').select('*').order('intake_at', { ascending: false }),
         sb.from('shelters').select('*').order('name'),
         sb.from('nfc_tags').select('*').order('created_at', { ascending: false }),
-        sb.from('notifications').select('*').order('created_at', { ascending: false }).limit(300)
+        sb.from('notifications').select('*').order('created_at', { ascending: false }).limit(300),
+        sb.from('penalty_tickets').select('*').order('created_at', { ascending: false }),
+        sb.from('facility_extra_mains').select('shelter_id')
       ].map((p) => Promise.resolve(p).catch((error) => ({ error }))));
+
+      // Every core list failed: the database cannot be reached. Keep what we have, show it, and back off.
+      if ([pets, impounded, shelters].every((r) => r && r.error)) {
+        this.syncFailures = (this.syncFailures || 0) + 1;
+        this.setStatus('offline');
+        this.schedulePoll();
+        return false;
+      }
 
       let changed = false;
       const put = (key, list) => {
@@ -185,9 +288,25 @@ class AdminStore {
       if (!impounded.error) put(STORAGE_KEYS.IMPOUNDMENTS, (impounded.data || []).map((i) => this.fromImpoundRow(i, shelterList)));
       if (!tags.error) put(STORAGE_KEYS.RFID_TAGS, (tags.data || []).map((t) => this.fromTagRow(t, petRows || [])));
       if (!notifs.error) put(STORAGE_KEYS.NOTIFICATIONS, (notifs.data || []).map((n) => this.fromNotificationRow(n)));
+      // Main facilities this account manages besides its own (a database without them simply has none)
+      put(STORAGE_KEYS.EXTRA_MAINS, extraMains && !extraMains.error ? (extraMains.data || []).map((r) => r.shelter_id) : []);
+      // The ticket table may not exist yet on an older database: then there are simply no tickets
+      put(STORAGE_KEYS.TICKETS, tickets.error ? [] : (tickets.data || []).map((t) => this.fromTicketRow(t)));
+      // Facility settings that only newer databases have (the penalty amount): used to show or hide those fields
+      this.penaltyReady = !shelters.error && (shelters.data || []).some((r) => 'penalty_php' in r);
 
-      this.syncStatus = 'connected';
-      if (changed) this.notify('supabase_sync');
+      this.syncFailures = 0;
+      this.setStatus(this.realtime === 'live' ? 'live' : 'connected');
+      this.lastSyncedAt = Date.now();
+      this.schedulePoll();
+      // A manager may have added or removed this account from a facility since the last poll
+      this.refreshAccount().catch(() => {});
+      // The first answer always notifies, even when it matches the cache, so a page waiting on it can stop showing a skeleton
+      const firstSync = !this.hasSynced;
+      this.hasSynced = true;
+      if (changed || firstSync) this.notify('supabase_sync');
+      // Uncollected pets at sub-facilities move to the main facility after their holding window
+      this.runOverdueTransfers().catch(() => {});
       return true;
     })().finally(() => { this.syncing = null; });
     return this.syncing;
@@ -224,6 +343,7 @@ class AdminStore {
       ageMonths: months,
       status: p.status === 'missing' ? 'lost' : (p.status || 'safe'),
       rfidTag: p.nfc_tag || '',
+      nfcSerial: p.nfc_serial || '',
       microchipNo: p.microchip_no || '',
       medicalNotes: p.medical_notes || '',
       description: p.description || '',
@@ -313,6 +433,12 @@ class AdminStore {
       healthCondition: i.health_condition || '',
       shelterId: i.shelter_id,
       shelterName: shelter ? shelter.name : 'Animal facility',
+      originShelterId: i.origin_shelter_id || null,
+      transferStatus: i.transfer_status || null,          // null | 'pending' | 'received' | 'not_arrived'
+      transferToId: i.transfer_to_shelter_id || null,
+      transferStartedAt: i.transfer_started_at || null,
+      transferResolvedAt: i.transfer_resolved_at || null,
+      transferNotes: i.transfer_notes || '',
       intakeDate: i.intake_at,
       claimDeadline: i.claim_deadline,
       status: i.status === 'in_holding' ? 'active_impounded' : i.status,
@@ -321,12 +447,14 @@ class AdminStore {
     };
   }
 
-  // Columns from Supabase; the console's own extras (partner flag, officer, capacity, city) from this device
+  // Columns from Supabase (older device-only extras are only a fallback)
   fromShelterRow(s) {
     const extras = this.getShelterExtras()[s.id] || {};
     return {
       ...extras,
       id: s.id,
+      parentId: s.parent_id || null,   // set for a sub-facility: the main facility it belongs to
+      penaltyPhp: s.penalty_php != null ? s.penalty_php : null,
       name: s.name,
       address: s.address,
       phone: s.phone || '',
@@ -337,7 +465,31 @@ class AdminStore {
       coords: [s.lat, s.lng],
       fee: s.daily_fee_php != null ? `PHP ${s.daily_fee_php} / day` : (extras.fee || ''),
       holdingPeriodDays: s.holding_period_days,
-      photoUrl: s.photo_url || extras.photoUrl || ''
+      photoUrl: s.photo_url || extras.photoUrl || '',
+      // Shared columns; older device-only extras are the fallback until the database has them
+      capacity: s.capacity != null ? s.capacity : (extras.capacity || 50),
+      officerInCharge: s.officer_in_charge || extras.officerInCharge || '',
+      city: s.city || extras.city || '',
+      type: s.facility_type || extras.type || ''
+    };
+  }
+
+  fromTicketRow(t) {
+    return {
+      id: t.id,
+      ticketNo: t.ticket_no,
+      impoundId: t.impound_id,
+      petId: t.pet_id,
+      petName: t.pet_name,
+      ownerId: t.owner_id,
+      issuedByShelterId: t.issued_by_shelter_id,
+      payeeShelterId: t.payee_shelter_id,
+      amount: t.amount_php,
+      status: t.status,                // 'unpaid' | 'paid' | 'waived'
+      createdAt: t.created_at,
+      paidAt: t.paid_at,
+      reference: t.payment_reference || '',
+      waivedReason: t.waived_reason || ''
     };
   }
 
@@ -435,7 +587,8 @@ class AdminStore {
   getPetByRFID(rfidTag) {
     if (!rfidTag) return null;
     const clean = rfidTag.trim().toUpperCase();
-    return this.getPets().find(p => (p.rfidTag || '').toUpperCase() === clean);
+    // a tag is found by its PawTrack ID, or by the hardware serial of the chip
+    return this.getPets().find(p => (p.rfidTag || '').toUpperCase() === clean || (p.nfcSerial || '').toUpperCase() === clean);
   }
 
   // Saves to registered_pets. Returns the pet at once (the cache is updated); the database write follows.
@@ -555,7 +708,7 @@ class AdminStore {
         ...data
       };
       impoundments.unshift(record);
-      if (data.petId) this.updatePetStatus(data.petId, 'impounded');
+      // the pet is marked impounded AFTER the impound is saved: a missing pet's penalty ticket is decided at that moment
       this.logAction('Created Impoundment', `Logged impoundment for ${data.petName} at ${data.shelterName}`);
     }
     localStorage.setItem(STORAGE_KEYS.IMPOUNDMENTS, JSON.stringify(impoundments));
@@ -586,13 +739,20 @@ class AdminStore {
       isNew || !this.isDbId(record.id)
         ? sb.from('impounded_pets').insert(row)
         : sb.from('impounded_pets').update(row).eq('id', record.id)
-    ));
+    )).then((saved) => {
+      if (isNew && saved !== null && record.petId) this.updatePetStatus(record.petId, 'impounded');
+    });
     return record;
   }
 
   claimImpoundment(impoundId, operator = 'Admin') {
     const impoundments = this.getImpoundments();
     const imp = impoundments.find(i => i.id === impoundId);
+    const ticket = imp && this.getTicketForImpound(imp.id);
+    if (ticket && ticket.status === 'unpaid') {
+      this.dbError('Could not release the pet', { message: `penalty ticket ${ticket.ticketNo} (PHP ${ticket.amount}) is unpaid. Record the payment, or waive it, first.` });
+      return null;
+    }
     if (imp) {
       imp.status = 'claimed';
       imp.closedAt = new Date().toISOString();
@@ -634,16 +794,196 @@ class AdminStore {
     }
   }
 
-  // onDone(databaseId) runs once the database has answered (null if it failed)
+  // ----- Facility membership -----
+  // An admin account works for ONE facility (admin_accounts.shelter_id) as its manager or as staff, and a facility
+  // has many accounts. The first staff member registers the facility and becomes its manager; the rest join with
+  // the manager's invite code. Membership only changes through database functions.
+  currentAdmin() {
+    return (window.adminApp && window.adminApp.currentAdmin) || null;
+  }
+
+  currentAdminId() {
+    const a = this.currentAdmin();
+    return a ? a.id : null;
+  }
+
+  myShelterId() {
+    const a = this.currentAdmin();
+    return (a && a.shelter_id) || null;
+  }
+
+  // 'manager', 'staff', or null when the account has no facility yet
+  myFacilityRole() {
+    const a = this.currentAdmin();
+    return a && a.shelter_id ? (a.facility_role || 'staff') : null;
+  }
+
+  isFacilityManager() {
+    return this.myFacilityRole() === 'manager';
+  }
+
+  getMyShelter() {
+    const id = this.myShelterId();
+    return id ? (this.getShelters().find(s => s.id === id) || null) : null;
+  }
+
+  // ----- Main facility and its sub-facilities -----
+  // A main facility has sub-facilities; main staff see and manage the whole tree, sub-facility staff only their own.
+  isMainFacility() {
+    const mine = this.getMyShelter();
+    return !!mine && !mine.parentId;
+  }
+
+  // Ids of the other main facilities this account manages (it can add more than one main facility)
+  getExtraMainIds() {
+    try {
+      const list = JSON.parse(localStorage.getItem(STORAGE_KEYS.EXTRA_MAINS));
+      return Array.isArray(list) && this.isFacilityManager() && this.isMainFacility() ? list : [];
+    } catch {
+      return [];
+    }
+  }
+
+  // The main facilities this account works in: its own plus any it added (empty for a sub-facility employee)
+  getMainFacilities() {
+    if (!this.isMainFacility()) return [];
+    const all = this.getShelters();
+    return [this.myShelterId(), ...this.getExtraMainIds()]
+      .map(id => all.find(s => s.id === id))
+      .filter(Boolean);
+  }
+
+  getSubFacilities() {
+    const mains = this.getMainFacilities().map(s => s.id);
+    return mains.length ? this.getShelters().filter(s => mains.includes(s.parentId)) : [];
+  }
+
+  // For a sub-facility employee: the main facility their pets go to after the holding window
+  getMainFacility() {
+    const mine = this.getMyShelter();
+    return mine && mine.parentId ? (this.getShelters().find(s => s.id === mine.parentId) || null) : null;
+  }
+
+  // Every facility this account works in: its own, plus the sub-facilities of a main facility
+  getMyFacilityIds() {
+    const id = this.myShelterId();
+    if (!id) return [];
+    return [...this.getMainFacilities().map(s => s.id).concat(this.isMainFacility() ? [] : [id])].filter((v, i, a) => a.indexOf(v) === i)
+      .concat(this.getSubFacilities().map(s => s.id));
+  }
+
+  // Facilities this account may edit and manage the team of (managers only)
+  getManagedShelterIds() {
+    return this.isFacilityManager() ? this.getMyFacilityIds() : [];
+  }
+
+  // Impounds in the signed-in admin's facility, and in its sub-facilities when it is a main facility
+  getMyImpoundments() {
+    const ids = this.getMyFacilityIds();
+    return ids.length ? this.getImpoundments().filter(i => ids.includes(i.shelterId)) : [];
+  }
+
+  // Pets on their way to this (main) facility that staff still have to confirm
+  getIncomingTransfers() {
+    const ids = this.getMainFacilities().map(s => s.id);
+    return ids.length ? this.getImpoundments().filter(i => i.transferStatus === 'pending' && ids.includes(i.transferToId) && i.status === 'active_impounded') : [];
+  }
+
+  // Pets of this facility (or its sub-facilities) that are waiting to move to the main facility
+  getOutgoingTransfers() {
+    const ids = this.getMyFacilityIds();
+    return this.getImpoundments().filter(i => i.transferStatus === 'pending' && ids.includes(i.shelterId));
+  }
+
+  async runOverdueTransfers() {
+    if (!this.hasFacility()) return 0;
+    const sb = this.client();
+    if (!sb) return 0;
+    const { data, error } = await sb.rpc('run_overdue_transfers');
+    if (error || !data) return 0;   // quiet: this runs in the background
+    this.syncFromSupabase();
+    return data;
+  }
+
+  async confirmTransferArrival(impoundId, arrived, cage, notes) {
+    const res = await this.rpc('Could not save the arrival', 'confirm_transfer_arrival', { p_impound: impoundId, p_arrived: !!arrived, p_cage: cage || null, p_notes: notes || null });
+    if (res.ok) {
+      this.logAction(arrived ? 'Transfer Received' : 'Transfer Not Arrived', `Impound ${impoundId}`);
+      await this.syncFromSupabase();
+    }
+    return res.ok;
+  }
+
+  async createSubFacility(shelterData, onDone) {
+    return this.saveShelter({ ...shelterData, asSub: true }, onDone);
+  }
+
+  // ----- Penalty tickets: owners of missing pets pay a penalty to the main facility -----
+  getTickets() {
+    try {
+      const list = JSON.parse(localStorage.getItem(STORAGE_KEYS.TICKETS));
+      return Array.isArray(list) ? list : [];
+    } catch {
+      return [];
+    }
+  }
+
+  getTicketForImpound(impoundId) {
+    return this.getTickets().find(t => t.impoundId === impoundId) || null;
+  }
+
+  // Unpaid tickets this (main) facility is waiting to be paid
+  getTicketsToCollect() {
+    const ids = this.getMyFacilityIds();
+    return ids.length ? this.getTickets().filter(t => t.status === 'unpaid' && ids.includes(t.payeeShelterId)) : [];
+  }
+
+  async recordTicketPayment(ticketId, reference) {
+    const res = await this.rpc('Could not record the payment', 'record_ticket_payment', { p_ticket: ticketId, p_reference: reference || null });
+    if (res.ok) { this.logAction('Penalty Paid', `Ticket ${ticketId} recorded as paid`); await this.syncFromSupabase(); }
+    return res.ok;
+  }
+
+  async waiveTicket(ticketId, reason) {
+    const res = await this.rpc('Could not waive the ticket', 'waive_ticket', { p_ticket: ticketId, p_reason: reason });
+    if (res.ok) { this.logAction('Penalty Waived', `Ticket ${ticketId} waived`); await this.syncFromSupabase(); }
+    return res.ok;
+  }
+
+  // Re-reads the signed-in admin's own account (their facility membership may have changed)
+  async refreshAccount() {
+    if (window.adminApp && typeof window.adminApp.refreshAccount === 'function') await window.adminApp.refreshAccount();
+  }
+
+  // Registering and joining are the two ways in; both are offered wherever a facility is missing
+  hasFacility() {
+    return !!this.myShelterId();
+  }
+
+  // Runs a database function; resolves { ok, data }. Errors are shown once as a toast.
+  async rpc(what, name, args) {
+    const sb = await this.waitForClient(5000);
+    if (!sb) { this.dbError(what, { message: 'no connection to the database' }); return { ok: false, data: null }; }
+    const { data, error } = await sb.rpc(name, args || {});
+    if (error) { this.dbError(what, error); return { ok: false, data: null }; }
+    return { ok: true, data };
+  }
+
+  // Register the admin's facility (they become its manager), or update it (manager only).
+  // onDone(databaseId) runs once the database has answered (null if it failed or was refused).
   saveShelter(shelterData, onDone) {
-    const shelters = this.getShelters();
-    const index = shelters.findIndex(s => s.id === shelterData.id);
-    const isNew = index < 0 || !this.isDbId(shelterData.id);
-    if (index >= 0) shelters[index] = { ...shelters[index], ...shelterData };
-    else shelters.push(shelterData);
-    localStorage.setItem(STORAGE_KEYS.SHELTERS, JSON.stringify(shelters));
-    this.logAction(isNew ? 'Added Facility' : 'Updated Facility', `${isNew ? 'Added new shelter facility' : 'Updated shelter details for'} ${shelterData.name}`);
-    this.notify('shelters_updated');
+    const finish = (id) => { if (typeof onDone === 'function') onDone(id || null); return null; };
+    const refuse = (message) => { this.dbError('Could not save the facility', { message }); return finish(null); };
+    if (!this.currentAdminId()) return refuse('sign in again');
+
+    const isNew = !this.isDbId(shelterData.id);
+    const asSub = !!shelterData.asSub;
+    const asMain = !!shelterData.asMain;
+    if (asSub && !(this.isFacilityManager() && this.isMainFacility())) return refuse('only the main facility\'s manager can create a sub-facility');
+    if (asSub && shelterData.parentId && !this.getMainFacilities().some(s => s.id === shelterData.parentId)) return refuse('that main facility is not yours');
+    if (asMain && !(this.isFacilityManager() && this.isMainFacility())) return refuse('only the manager of a main facility can add another main facility');
+    if (isNew && !asSub && !asMain && this.myShelterId()) return refuse('your account already belongs to a facility');
+    if (!isNew && !(this.isFacilityManager() && this.getManagedShelterIds().includes(shelterData.id))) return refuse('only the facility manager can edit its details');
 
     const coords = Array.isArray(shelterData.coords) ? shelterData.coords : [shelterData.lat, shelterData.lng];
     const row = {
@@ -656,41 +996,146 @@ class AdminStore {
       lng: +coords[1],
       daily_fee_php: parseInt(String(shelterData.fee || '').replace(/[^0-9]/g, ''), 10) || 0,
       holding_period_days: parseInt(shelterData.holdingPeriodDays, 10) || 3,
-      photo_url: /^https:\/\//.test(shelterData.photoUrl || '') ? shelterData.photoUrl : null
+      capacity: parseInt(shelterData.capacity, 10) || 50,
+      officer_in_charge: shelterData.officerInCharge || null,
+      city: shelterData.city || null,
+      facility_type: shelterData.type || null
     };
-    this.write('Could not save the shelter', (sb) => (
-      isNew ? sb.from('shelters').insert(row).select('id') : sb.from('shelters').update(row).eq('id', shelterData.id).select('id')
-    )).then((rows) => {
-      // Fields with no column are kept on this device, keyed by the shelter's database id
-      const id = rows && rows[0] && rows[0].id;
-      if (typeof onDone === 'function') onDone(id || null);
-      if (id) {
-        const { partnered, officerInCharge, capacity, occupied, city, type } = shelterData;
-        this.setShelterExtras(id, { partnered, officerInCharge, capacity, occupied, city, type });
+
+    if (isNew) {
+      if (asSub) {
+        const subRow = shelterData.parentId ? { ...row, parent_id: shelterData.parentId } : row;
+        this.write('Could not create the sub-facility', (sb) => sb.rpc('create_sub_facility', { p: subRow })).then(async (id) => {
+          if (typeof id !== 'string') return finish(null); // the error was already shown
+          this.logAction('Created Sub-facility', `Created sub-facility ${shelterData.name}`);
+          finish(id);
+        });
+        return shelterData;
       }
+      if (asMain) {
+        this.write('Could not add the main facility', (sb) => sb.rpc('add_main_facility', { p: row })).then(async (id) => {
+          if (typeof id !== 'string') return finish(null); // the error was already shown
+          await this.syncFromSupabase();
+          this.logAction('Added Main Facility', `Added main facility ${shelterData.name}`);
+          finish(id);
+        });
+        return shelterData;
+      }
+      this.write('Could not register the facility', (sb) => sb.rpc('register_facility', { p: row })).then(async (id) => {
+        if (typeof id !== 'string') return finish(null); // the error was already shown
+        await this.refreshAccount();
+        this.logAction('Registered Facility', `Registered ${shelterData.name} and became its manager`);
+        finish(id);
+      });
+      return shelterData;
+    }
+
+    // Update: show it straight away, then let the database confirm
+    const shelters = this.getShelters();
+    const index = shelters.findIndex(s => s.id === shelterData.id);
+    if (index >= 0) {
+      shelters[index] = { ...shelters[index], ...shelterData };
+      localStorage.setItem(STORAGE_KEYS.SHELTERS, JSON.stringify(shelters));
+      this.notify('shelters_updated');
+    }
+    this.logAction('Updated Facility', `Updated shelter details for ${shelterData.name}`);
+    this.write('Could not save the facility', (sb) => (
+      sb.from('shelters').update({ ...row, ...(this.penaltyReady && shelterData.penaltyPhp != null ? { penalty_php: Math.max(0, parseInt(shelterData.penaltyPhp, 10) || 0) } : {}), ...(shelterData.photoUrl !== undefined ? { photo_url: /^https:\/\//.test(shelterData.photoUrl || '') ? shelterData.photoUrl : null } : {}) }).eq('id', shelterData.id).select('id')
+    )).then((rows) => {
+      const id = rows && rows[0] && rows[0].id;
+      // No error but no row back: the database's access rules turned the change away
+      if (rows && !id) this.dbError('Could not save the facility', { message: 'the database did not accept the change (only the facility manager can edit it)' });
+      finish(id);
     });
     return shelterData;
   }
 
-  deleteShelter(shelterId) {
-    localStorage.setItem(STORAGE_KEYS.SHELTERS, JSON.stringify(this.getShelters().filter(s => s.id !== shelterId)));
-    if (this.isDbId(shelterId)) this.write('Could not delete the shelter', (sb) => sb.from('shelters').delete().eq('id', shelterId));
-    this.logAction('Deleted Facility', `Removed facility with ID ${shelterId}`);
-    this.notify('shelters_deleted');
-    return true;
+  // Stores a facility's photo in the public "facility-photos" bucket (folder = the facility's id) and points the
+  // facility at it. Pass null to clear the photo. Returns the new URL, '' when cleared, or null when it failed.
+  async setFacilityPhoto(shelterId, blob) {
+    const sb = this.client();
+    if (!sb || !this.isDbId(shelterId)) { this.dbError('Could not save the facility photo', { message: 'the facility is not saved yet' }); return null; }
+    const shelters = this.getShelters();
+    const current = (shelters.find(s => s.id === shelterId) || {}).photoUrl || '';
+    let url = '';
+    let path = '';
+    if (blob) {
+      path = (window.FacilityPhoto ? window.FacilityPhoto.pathFor(shelterId) : `${shelterId}/${Date.now()}.jpg`);
+      const up = await sb.storage.from('facility-photos').upload(path, blob, { contentType: 'image/jpeg', cacheControl: '31536000' });
+      if (up.error) { this.dbError('Could not upload the facility photo', up.error); return null; }
+      url = sb.storage.from('facility-photos').getPublicUrl(path).data.publicUrl || '';
+    }
+    const res = await sb.from('shelters').update({ photo_url: url || null }).eq('id', shelterId).select('id');
+    if (res.error || !res.data || !res.data[0]) {
+      if (path) sb.storage.from('facility-photos').remove([path]).catch(() => {});
+      this.dbError('Could not save the facility photo', res.error || { message: 'only the facility manager can change it' });
+      return null;
+    }
+    // The previous file is no longer used: remove it (best effort)
+    const old = current.split('/facility-photos/')[1];
+    if (old) sb.storage.from('facility-photos').remove([decodeURIComponent(old)]).catch(() => {});
+    const index = shelters.findIndex(s => s.id === shelterId);
+    if (index >= 0) {
+      shelters[index] = { ...shelters[index], photoUrl: url, photo: url };
+      localStorage.setItem(STORAGE_KEYS.SHELTERS, JSON.stringify(shelters));
+      this.notify('shelters_updated');
+    }
+    this.logAction(url ? 'Updated Facility Photo' : 'Removed Facility Photo', 'Changed the facility photo');
+    return url;
   }
 
-  // The partner flag has no column: it is kept on this device
-  toggleShelterPartner(shelterId) {
-    const shelters = this.getShelters();
-    const sh = shelters.find(s => s.id === shelterId);
-    if (!sh) return null;
-    sh.partnered = !sh.partnered;
-    localStorage.setItem(STORAGE_KEYS.SHELTERS, JSON.stringify(shelters));
-    this.setShelterExtras(shelterId, { partnered: sh.partnered });
-    this.logAction('Partnership Toggled', `${sh.name} partnership set to: ${sh.partnered ? 'Partnered' : 'Not Partnered'}`);
-    this.notify('shelters_updated');
-    return sh;
+  async joinFacility(code, onDone) {
+    const res = await this.rpc('Could not join the facility', 'join_facility', { p_code: code });
+    if (res.ok) {
+      await this.refreshAccount();
+      await this.syncFromSupabase();
+      this.logAction('Joined Facility', 'Joined a facility with an invite code');
+    }
+    if (typeof onDone === 'function') onDone(res.ok ? res.data : null);
+    return res.ok;
+  }
+
+  async leaveFacility() {
+    const res = await this.rpc('Could not leave the facility', 'leave_facility');
+    if (res.ok) { await this.refreshAccount(); this.logAction('Left Facility', 'Left the facility'); }
+    return res.ok;
+  }
+
+  // Manager tools
+  async getFacilityTeam(shelterId) {
+    const sb = this.client();
+    const sid = shelterId || this.myShelterId();
+    if (!sb || !sid) return [];
+    const { data, error } = await sb.from('admin_accounts').select('id, full_name, email, position, facility_role, status').eq('shelter_id', sid).order('full_name');
+    if (error) { this.dbError('Could not load the team', error); return []; }
+    return data || [];
+  }
+
+  async getInviteCode(shelterId) {
+    const sb = this.client();
+    const sid = shelterId || this.myShelterId();
+    if (!sb || !sid) return null;
+    const { data, error } = await sb.from('facility_invites').select('code').eq('shelter_id', sid).maybeSingle();
+    if (error) { this.dbError('Could not load the invite code', error); return null; }
+    return data ? data.code : null;
+  }
+
+  async rotateInvite(shelterId) {
+    const res = await this.rpc('Could not create a new invite code', 'rotate_facility_invite', shelterId ? { p_shelter: shelterId } : {});
+    if (res.ok) this.logAction('Rotated Invite Code', 'Created a new facility invite code');
+    return res.ok ? res.data : null;
+  }
+
+  async removeStaff(adminId) {
+    const res = await this.rpc('Could not remove that person', 'remove_facility_staff', { p_admin: adminId });
+    if (res.ok) this.logAction('Removed Staff', `Removed ${adminId} from the facility`);
+    return res.ok;
+  }
+
+  async setStaffRole(adminId, role) {
+    const res = await this.rpc('Could not change the role', 'set_facility_role', { p_admin: adminId, p_role: role });
+    if (res.ok) { await this.refreshAccount(); this.logAction('Changed Role', `Set ${adminId} to ${role}`); }
+    return res.ok;
   }
 
   // --- RFID Tag Management (nfc_tags) ---
@@ -725,20 +1170,6 @@ class AdminStore {
       localStorage.setItem(STORAGE_KEYS.RFID_TAGS, JSON.stringify(tags));
     }
     this.write('Could not free the tag', (sb) => sb.from('nfc_tags').update({ status: 'available', pet_id: null }).eq('code', clean));
-  }
-
-  createRfidTag(tagData) {
-    const newTag = { id: 'tag-' + Date.now(), status: 'available', frequency: '134.2 kHz FDX-B', battery: '100%', ...tagData };
-    localStorage.setItem(STORAGE_KEYS.RFID_TAGS, JSON.stringify([newTag, ...this.getRfidTags()]));
-    this.write('Could not create the tag', (sb) => sb.from('nfc_tags').insert({
-      code: String(newTag.code || '').trim().toUpperCase(),
-      status: ['available', 'assigned', 'lost', 'retired'].includes(newTag.status) ? newTag.status : 'available',
-      frequency: newTag.frequency || null,
-      battery_pct: parseInt(newTag.battery, 10) || 100
-    }));
-    this.logAction('Generated RFID Tag', `Provisioned tag ${newTag.code}`);
-    this.notify('rfid_updated');
-    return newTag;
   }
 
   // --- Notifications & Broadcasts API (notifications table; admins see and manage all) ---
@@ -901,7 +1332,7 @@ class AdminStore {
   // database is deleted.
   resetToDefaults() {
     [STORAGE_KEYS.PETS, STORAGE_KEYS.IMPOUNDMENTS, STORAGE_KEYS.NOTIFICATIONS, STORAGE_KEYS.SHELTERS,
-      STORAGE_KEYS.RFID_TAGS, STORAGE_KEYS.SIGHTINGS, STORAGE_KEYS.CASES].forEach((key) => localStorage.setItem(key, '[]'));
+      STORAGE_KEYS.RFID_TAGS, STORAGE_KEYS.SIGHTINGS, STORAGE_KEYS.CASES, STORAGE_KEYS.TICKETS].forEach((key) => localStorage.setItem(key, '[]'));
     localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(SEED_SETTINGS));
     this.logAction('Reset Console', 'Cleared this device\'s cached data and settings; reloading from Supabase.');
     this.notify('factory_reset');

@@ -1,0 +1,112 @@
+/* PawTrack splash screen: shown by js/splash.js before the app renders (owner app and admin console). */
+html.pt-splashing { overflow: hidden; }
+
+#pt-splash {
+  --pt-ease: cubic-bezier(0.23, 1, 0.32, 1);
+  --pt-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  position: fixed;
+  inset: 0;
+  z-index: 2147483000;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background: #faf8f5;
+  color: #1c1917;
+  font-family: 'Plus Jakarta Sans', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  opacity: 1;
+  transition: opacity 460ms var(--pt-ease);
+}
+#pt-splash.is-leaving { opacity: 0; pointer-events: none; }
+#pt-splash.is-leaving .pt-splash-stack { transform: translateY(-10px) scale(1.04); }
+.pt-splash-stack { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; gap: 20px; transition: transform 460ms var(--pt-ease); }
+
+/* A warm glow that breathes behind the mark */
+.pt-glow {
+  position: absolute; left: 50%; top: 50%; width: 520px; height: 520px; margin: -260px 0 0 -260px; border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(194, 65, 12, 0.13), rgba(194, 65, 12, 0.04) 55%, transparent 75%);
+  opacity: 0; animation: pt-glow-in 900ms var(--pt-ease) 100ms forwards, pt-breathe 3200ms ease-in-out 1000ms infinite;
+}
+
+/* The mark */
+.pt-splash-mark { position: relative; width: 116px; height: 116px; display: grid; place-items: center; }
+.pt-splash-mark > svg { position: relative; z-index: 1; width: 116px; height: 116px; overflow: visible; animation: pt-pop 640ms var(--pt-spring) both; filter: drop-shadow(0 12px 24px rgba(28, 25, 23, 0.24)); }
+.pt-ring { position: absolute; inset: 0; border-radius: 50%; border: 2px solid #c2410c; opacity: 0; animation: pt-ring 2200ms var(--pt-ease) 500ms infinite; }
+.pt-ring:nth-child(2) { animation-delay: 1200ms; }
+.pt-ring:nth-child(3) { animation-delay: 1900ms; }
+
+/* The owner app's logo: the header logo (gradient disc, golden paw, pale border), drawn bigger. Unscoped so the flying copy keeps its look. */
+.pt-logo {
+  position: relative; z-index: 1; box-sizing: border-box; width: 116px; height: 116px; border-radius: 50%; overflow: hidden;
+  display: grid; place-items: center; color: #ea9d1e;
+  background: linear-gradient(135deg, #c2410c, #7c2d12);
+  border: 4.5px solid rgba(254, 215, 170, 0.3);
+  box-shadow: 0 6px 24px rgba(194, 65, 12, 0.38);
+}
+.pt-logo svg { width: 58%; height: 58%; }
+#pt-splash .pt-logo { animation: pt-pop 640ms var(--pt-spring) both; }
+#pt-splash .pt-logo svg { transform-origin: center bottom; animation: pt-paw 560ms var(--pt-spring) 480ms both; }
+#pt-splash.pt-owner .pt-glow { background: radial-gradient(closest-side, rgba(234, 157, 30, 0.16), rgba(194, 65, 12, 0.05) 55%, transparent 75%); }
+
+/* The logo on its way to the page: no entrance animations of its own, frozen in its finished state */
+.pt-flyer, .pt-flyer * { animation: none !important; }
+.pt-flyer .pt-draw { stroke-dashoffset: 0; }
+.pt-flyer .pt-toe, .pt-flyer .pt-pad { opacity: 1; transform: none; }
+#pt-splash.is-flying { background-color: transparent; transition: background-color 560ms var(--pt-ease); }
+#pt-splash.is-flying .pt-splash-stack > *:not(.pt-splash-mark), #pt-splash.is-flying .pt-glow, #pt-splash.is-flying .pt-ring, #pt-splash.is-flying .pt-shine { opacity: 0 !important; transition: opacity 260ms var(--pt-ease); }
+
+/* The outline draws around the disc, then the paw builds up toe by toe */
+.pt-draw { stroke-dasharray: 100; stroke-dashoffset: 100; animation: pt-draw 900ms cubic-bezier(0.65, 0, 0.35, 1) 150ms forwards; }
+.pt-toe, .pt-pad { transform-box: fill-box; transform-origin: center bottom; animation: pt-toe 420ms var(--pt-spring) both; }
+.pt-toe-1 { animation-delay: 620ms; }
+.pt-toe-2 { animation-delay: 720ms; }
+.pt-toe-3 { animation-delay: 820ms; }
+.pt-pad { animation-delay: 520ms; }
+
+/* A single light sweep across the disc once the paw has landed */
+.pt-shine { position: absolute; z-index: 2; inset: 0; border-radius: 50%; overflow: hidden; pointer-events: none; }
+.pt-shine::before {
+  content: ''; position: absolute; top: -20%; bottom: -20%; left: -60%; width: 40%;
+  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.35), transparent);
+  transform: skewX(-12deg); animation: pt-shine 900ms cubic-bezier(0.65, 0, 0.35, 1) 1300ms both;
+}
+
+/* Wordmark: letter by letter */
+.pt-splash-name { display: flex; font-size: 28px; font-weight: 800; letter-spacing: -0.03em; }
+.pt-ch { display: inline-block; opacity: 0; animation: pt-letter 520ms var(--pt-ease) both; animation-delay: calc(var(--i) * 50ms + 900ms); }
+.pt-splash-sub { margin-top: -12px; font-size: 11px; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase; color: #78716c; animation: pt-rise 560ms var(--pt-ease) 1400ms both; }
+.pt-splash-sub:empty { display: none; }
+
+/* Paw prints walking along under the name, on a loop */
+.pt-trail { display: flex; align-items: center; gap: 10px; height: 30px; margin-top: 2px; }
+.pt-print { width: 14px; height: 14px; color: #c2410c; opacity: 0; transform: rotate(90deg) scale(0.6); animation: pt-step 2000ms var(--pt-ease) infinite; animation-delay: calc(var(--i) * 230ms + 1500ms); }
+.pt-print svg { display: block; width: 100%; height: 100%; }
+.pt-print:nth-child(odd) { translate: 0 -5px; }
+.pt-print:nth-child(even) { translate: 0 5px; }
+
+/* Progress: eases toward the end, completes when the splash is about to go */
+.pt-splash-bar { width: 140px; height: 3px; overflow: hidden; border-radius: 99px; background: #e7e5e4; animation: pt-rise 520ms var(--pt-ease) 1000ms both; }
+.pt-splash-bar i { display: block; width: 100%; height: 100%; border-radius: inherit; background: #c2410c; transform-origin: left center; transform: scaleX(0); animation: pt-fill 2200ms cubic-bezier(0.22, 0.61, 0.36, 1) 1000ms forwards; }
+#pt-splash.is-done .pt-splash-bar i { animation: none; transform: scaleX(1); transition: transform 240ms var(--pt-ease); }
+
+@keyframes pt-pop { from { opacity: 0; transform: scale(0.55); } to { opacity: 1; transform: scale(1); } }
+@keyframes pt-paw { from { opacity: 0; transform: scale(0.2) translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes pt-draw { to { stroke-dashoffset: 0; } }
+@keyframes pt-toe { from { opacity: 0; transform: scale(0.2) translateY(6px); } to { opacity: 1; transform: none; } }
+@keyframes pt-ring { 0% { opacity: 0.45; transform: scale(0.9); } 100% { opacity: 0; transform: scale(1.9); } }
+@keyframes pt-shine { from { left: -60%; } to { left: 130%; } }
+@keyframes pt-letter { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+@keyframes pt-rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes pt-step { 0% { opacity: 0; transform: rotate(90deg) scale(0.6); } 18% { opacity: 0.9; transform: rotate(90deg) scale(1); } 55% { opacity: 0.9; } 100% { opacity: 0; transform: rotate(90deg) scale(1); } }
+@keyframes pt-fill { from { transform: scaleX(0); } to { transform: scaleX(0.88); } }
+@keyframes pt-glow-in { to { opacity: 1; } }
+@keyframes pt-breathe { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.08); } }
+
+@media (prefers-reduced-motion: reduce) {
+  #pt-splash { transition: opacity 150ms linear; }
+  #pt-splash.is-leaving .pt-splash-stack { transform: none; }
+  .pt-splash-mark > svg, #pt-splash .pt-logo, #pt-splash .pt-logo svg, .pt-toe, .pt-pad, .pt-ch, .pt-splash-sub, .pt-splash-bar, .pt-glow { animation: none; opacity: 1; }
+  .pt-glow { transform: none; }
+  .pt-draw { animation: none; stroke-dashoffset: 0; }
+  .pt-ring, .pt-shine, .pt-trail { display: none; }
+  .pt-splash-bar i { animation: none; transform: scaleX(1); opacity: 0.5; }
+}

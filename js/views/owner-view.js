@@ -207,30 +207,35 @@ class OwnerView {
           </div>
 
           <!-- Interactive Leaflet Map with Google Maps Styled Controls & Directions HUD -->
-          <div class="glass-card" style="position:relative; overflow:hidden; min-height:520px; padding:0;">
+          <div class="glass-card public-map-card" id="public-map-card" style="position:relative; overflow:hidden; min-height:520px; padding:0;">
             <div id="public-map-container" style="min-height:520px;"></div>
 
             <!-- Google Maps Layer Switcher Floating Dock -->
             <div class="gmap-layer-dock" id="gmap-layer-dock">
               <button type="button" class="gmap-layer-btn ${window.publicView && window.publicView.currentMapType === 'roadmap' ? 'active' : ''}" onclick="window.publicView ? window.publicView.setMapLayer('roadmap') : null" title="Roadmap View (Default Street Network)">
-                <span>Map</span>
+                <i data-lucide="map"></i><span>Map</span>
               </button>
               <button type="button" class="gmap-layer-btn ${window.publicView && window.publicView.currentMapType === 'satellite' ? 'active' : ''}" onclick="window.publicView ? window.publicView.setMapLayer('satellite') : null" title="Satellite / Actual Photographic Aerial View">
-                <span>Satellite</span>
+                <i data-lucide="satellite"></i><span>Satellite</span>
               </button>
               <button type="button" class="gmap-layer-btn ${window.publicView && window.publicView.currentMapType === 'hybrid' ? 'active' : ''}" onclick="window.publicView ? window.publicView.setMapLayer('hybrid') : null" title="Hybrid View (Satellite + Street Labels)">
-                <span>Hybrid</span>
+                <i data-lucide="layers"></i><span>Hybrid</span>
               </button>
               <button type="button" class="gmap-layer-btn gmap-layer-btn-dark ${window.publicView && window.publicView.currentMapType === 'dark' ? 'active' : ''}" onclick="window.publicView ? window.publicView.setMapLayer('dark') : null" title="Dark Theme Style">
-                <span>Dark</span>
+                <i data-lucide="moon"></i><span>Dark</span>
               </button>
               <button type="button" class="gmap-layer-btn gmap-layer-btn-light ${window.publicView && window.publicView.currentMapType === 'light' ? 'active' : ''}" onclick="window.publicView ? window.publicView.setMapLayer('light') : null" title="Light Theme Style">
-                <span>Light</span>
+                <i data-lucide="sun"></i><span>Light</span>
               </button>
             </div>
 
             <!-- Quick Navigation & View Control Tools -->
             <div class="gmap-quick-tools">
+              <button type="button" class="gmap-tool-btn" id="public-map-fullscreen-btn" onclick="window.publicView ? window.publicView.toggleMapFullscreen() : null" title="Full screen map" aria-label="Full screen map" aria-pressed="false">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/>
+                </svg>
+              </button>
               <button type="button" class="gmap-tool-btn" onclick="window.publicView ? window.publicView.locateMe() : null" title="Recenter to My Location (GPS)">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <polygon points="3 11 22 2 13 21 11 13 3 11"/>

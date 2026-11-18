@@ -1,5 +1,5 @@
 @echo off
-title PawTrack Pet Owner Portal Server (Port 3000)
+title PawTrack Pet Owner Portal Server
 cd /d "%~dp0"
 
 echo =======================================================
@@ -17,8 +17,9 @@ if %errorlevel% neq 0 (
     exit /b 1
 )
 
-echo [*] Starting Node.js backend server on http://localhost:3000 ...
-start "" http://localhost:3000
+echo [*] Starting Node.js backend server (uses the next free port if 3000 is taken)...
+REM The server opens the browser itself, at whichever port it ends up on
+set PAWTRACK_OPEN=1
 
 node server.js
 if %errorlevel% neq 0 (

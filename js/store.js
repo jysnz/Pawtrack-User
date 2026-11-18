@@ -375,8 +375,12 @@ class Store {
   }
 
   fromShelterRow(s) {
+    // The admin console runs on the same address and shares this saved list (pawtrack_shelters), so keep the same
+    // fields it writes; otherwise its figures (capacity in use) blank out until it syncs again.
     return {
       id: s.id,
+      parentId: s.parent_id || null,
+      penaltyPhp: s.penalty_php != null ? s.penalty_php : null,
       name: s.name,
       address: s.address,
       phone: s.phone || '',
@@ -384,9 +388,14 @@ class Store {
       hours: s.hours || '',
       lat: s.lat,
       lng: s.lng,
+      coords: [s.lat, s.lng],
       fee: s.daily_fee_php != null ? `PHP ${s.daily_fee_php} / day` : '',
       holdingPeriodDays: s.holding_period_days,
-      photoUrl: s.photo_url || ''
+      photoUrl: s.photo_url || '',
+      capacity: s.capacity != null ? s.capacity : 50,
+      officerInCharge: s.officer_in_charge || '',
+      city: s.city || '',
+      type: s.facility_type || ''
     };
   }
 
@@ -520,8 +529,13 @@ class Store {
   setGoogleUser(user) {
     const before = (this.getGoogleUser() || {}).id;
     if (before !== (user && user.id)) setTimeout(() => this.syncFromSupabase(), 0);
+    // Coming back to the tab makes Supabase re-announce the same session; an identical profile must not
+    // notify subscribers, or the dashboard rebuilds itself and its numbers flash
+    const prev = localStorage.getItem(STORAGE_KEYS.GOOGLE_AUTH);
+    const next = user ? JSON.stringify(user) : null;
+    if (prev === next) return;
     if (user) {
-      localStorage.setItem(STORAGE_KEYS.GOOGLE_AUTH, JSON.stringify(user));
+      localStorage.setItem(STORAGE_KEYS.GOOGLE_AUTH, next);
     } else {
       localStorage.removeItem(STORAGE_KEYS.GOOGLE_AUTH);
     }

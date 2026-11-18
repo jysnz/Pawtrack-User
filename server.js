@@ -4,7 +4,10 @@ const path = require('path');
 const autoSync = require('./scripts/auto-sync');
 
 
-const PORT = process.env.PORT || 3000;
+// Preferred port. If it is taken (another dev server running), the next free one is used automatically.
+const BASE_PORT = parseInt(process.env.PORT, 10) || 3000;
+const MAX_PORT_ATTEMPTS = 20;
+let PORT = BASE_PORT;
 const PUBLIC_DIR = __dirname;
 
 const MIME_TYPES = {
@@ -159,21 +162,70 @@ const server = http.createServer((req, res) => {
   });
 });
 
+// Bind dual-stack ('::' accepts IPv4 and IPv6) so http://localhost works however the browser resolves it.
+// Binding IPv4 only made Chrome (which tries ::1 first) hit whatever else owned that port on IPv6.
+let HOST = '::';
+
 server.on('error', (err) => {
+  if ((err.code === 'EAFNOSUPPORT' || err.code === 'EADDRNOTAVAIL') && HOST === '::') {
+    HOST = '0.0.0.0'; // IPv6 disabled on this machine
+    startListening();
+    return;
+  }
   if (err.code === 'EADDRINUSE') {
-    console.warn('\n[NOTICE] Port ' + PORT + ' is already in use.');
-    console.warn('PawTrack Pet Owner service is already running on http://localhost:' + PORT);
+    if (PORT - BASE_PORT + 1 >= MAX_PORT_ATTEMPTS) {
+      console.error('\n[ERROR] Ports ' + BASE_PORT + '-' + PORT + ' are all in use. Free one up or set PORT=<number>.');
+      process.exit(1);
+    }
+    console.warn('[NOTICE] Port ' + PORT + ' is already in use, trying ' + (PORT + 1) + '...');
+    PORT += 1;
+    startListening();
   } else {
     console.error('Server encountered an error:', err);
   }
 });
 
-server.listen(PORT, '0.0.0.0', () => {
+function startListening() {
+  server.listen(PORT, HOST);
+}
+
+server.on('listening', () => {
   console.log('\n==================================================');
   console.log('  🐾 PawTrack Pet Owner Portal Server Running');
+  if (PORT !== BASE_PORT) console.log('  (port ' + BASE_PORT + ' was busy, switched to ' + PORT + ')');
   console.log('  Local URL:    http://localhost:' + PORT);
+  console.log('  Admin:        http://localhost:' + PORT + '/admin/');
   console.log('  Health API:   http://localhost:' + PORT + '/api/health');
   console.log('  Git Status:   http://localhost:' + PORT + '/api/git/status');
   console.log('  Git Sync:     POST http://localhost:' + PORT + '/api/git/sync');
   console.log('==================================================\n');
+  openBrowserIfRequested();
 });
+
+// Opens the browser at the port that was actually bound (never a hardcoded one).
+// Enabled with `--open` or PAWTRACK_OPEN=1. PAWTRACK_OPEN may also be a comma-separated list of paths, e.g. "/,/admin/".
+function openBrowserIfRequested() {
+  const flag = process.env.PAWTRACK_OPEN;
+  if (!process.argv.includes('--open') && !flag) return;
+  const paths = (flag && flag !== '1' && flag.toLowerCase() !== 'true' ? flag.split(',') : ['/'])
+    .map(p => p.trim())
+    .filter(Boolean);
+
+  const { spawn } = require('child_process');
+  paths.forEach(p => {
+    const url = 'http://localhost:' + PORT + (p.startsWith('/') ? p : '/' + p);
+    const [cmd, args] =
+      process.platform === 'win32' ? ['cmd', ['/c', 'start', '""', url]] :
+      process.platform === 'darwin' ? ['open', [url]] :
+      ['xdg-open', [url]];
+    try {
+      const child = spawn(cmd, args, { stdio: 'ignore', detached: true, windowsVerbatimArguments: true });
+      child.on('error', () => console.log('  Open this in your browser: ' + url));
+      child.unref();
+    } catch (e) {
+      console.log('  Open this in your browser: ' + url);
+    }
+  });
+}
+
+startListening();
