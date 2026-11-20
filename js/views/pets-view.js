@@ -13,6 +13,7 @@ class PetsView {
     this.pets = [];
     this.vaccines = {};      // pet id -> vaccination rows
     this.state = 'idle';     // idle | loading | ready | error
+    this.layout = this.loadLayout(); // tiles | rows
     this.fetchedAt = 0;
     this.container = null;
     this.openPetId = null;
@@ -45,6 +46,7 @@ class PetsView {
       return;
     }
     const first = this.state !== 'ready';
+    const before = first ? '' : this.signature();
     this.state = 'loading';
     if (first) this.draw();
 
@@ -91,8 +93,14 @@ class PetsView {
       this.state = 'error';
       this.error = err.message;
     }
+    // Same data as already on screen: leave the page alone, redrawing it makes the cards and photos flash
+    if (!first && this.state === 'ready' && before === this.signature()) return;
     this.draw();
     if (this.openPetId) this.renderDetail();
+  }
+
+  signature() {
+    return JSON.stringify([this.pets, this.vaccines]);
   }
 
   // The missing-pet report lists pets from the copy saved on this device, so make sure every pet
@@ -181,28 +189,45 @@ class PetsView {
 
     if (!user || !user.name) {
       body = this.emptyState('lock', 'Sign in to see your pets', 'Your registered pets and their vaccination records are tied to your account.', `<button class="btn btn-primary" onclick="window.pawApp.openLoginDialog && window.pawApp.openLoginDialog()">Log In</button>`);
-    } else if (this.state === 'loading' || this.state === 'idle') {
+    } else if ((this.state === 'loading' && !this.fetchedAt) || this.state === 'idle') {
       body = `<div class="pets-grid">${[1, 2, 3].map(() => '<div class="pet-card pet-card-skeleton" aria-hidden="true"></div>').join('')}</div>`;
     } else if (this.state === 'error') {
       body = this.emptyState('wifi-off', 'Could not load your pets', this.esc(this.error || 'Check your connection and try again.'), `<button class="btn btn-primary" onclick="window.petsView.refresh(true)">Try again</button>`);
     } else if (!this.pets.length) {
       body = this.emptyState('paw-print', 'No pets yet', 'Register your first pet and link an NFC tag to its collar. Then keep its vaccination records here.', `<button class="btn btn-primary" onclick="window.ownerView && window.ownerView.openRegisterModal()"><i data-lucide="plus-circle"></i> Register Pet</button>`);
     } else {
-      body = `<div class="pets-grid">${this.pets.map((p) => this.cardHtml(p)).join('')}</div>`;
+      body = `<div class="pets-grid${this.layout === 'rows' ? ' is-rows' : ''}">${this.pets.map((p) => this.cardHtml(p)).join('')}</div>`;
     }
 
+    const showToggle = this.pets.length > 0 && (this.state === 'ready' || (this.state === 'loading' && !!this.fetchedAt));
     this.container.innerHTML = `
       <div class="view-header">
         <div class="view-title-group">
           <h1>${this.t('pets.title', 'My Pets')}</h1>
           <div class="view-subtitle">${this.t('pets.subtitle', 'Tap a pet to see its details and keep its vaccination records.')}</div>
         </div>
+      </div>
+      <div class="pets-toolbar">
         <button class="btn btn-primary btn-sm" onclick="window.ownerView && window.ownerView.openRegisterModal()">
           <i data-lucide="plus-circle"></i> ${this.t('pets.register', 'Register Pet')}
         </button>
+        ${showToggle ? `<button class="btn btn-secondary btn-sm pets-layout-btn" id="btn-pets-layout" onclick="window.petsView.toggleLayout()" title="${this.layout === 'rows' ? 'Show as tiles' : 'Show as rows'}" aria-label="${this.layout === 'rows' ? 'Show pets as tiles' : 'Show pets as rows'}">
+            <i data-lucide="${this.layout === 'rows' ? 'layout-grid' : 'list'}"></i>
+          </button>` : ''}
       </div>
       ${body}`;
     if (window.lucide) window.lucide.createIcons({ root: this.container });
+  }
+
+  loadLayout() {
+    try { return localStorage.getItem('pawtrack_pets_layout') === 'rows' ? 'rows' : 'tiles'; } catch (e) { return 'tiles'; }
+  }
+
+  // Switch between tiles and rows; the choice is remembered on this device
+  toggleLayout() {
+    this.layout = this.layout === 'rows' ? 'tiles' : 'rows';
+    try { localStorage.setItem('pawtrack_pets_layout', this.layout); } catch (e) { /* private mode: just not remembered */ }
+    this.draw();
   }
 
   emptyState(icon, title, text, action) {

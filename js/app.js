@@ -1,3 +1,16 @@
+// Profile picture in a circle; falls back to the initial if it fails to load. The container is captured,
+// so a late error after the avatar was redrawn (the image is detached by then) is harmless.
+function setAvatarImage(box, src, alt, initial) {
+  box.textContent = '';
+  const img = document.createElement('img');
+  img.alt = alt || '';
+  img.referrerPolicy = 'no-referrer';
+  img.style.cssText = 'width:100%;height:100%;border-radius:50%;object-fit:cover;display:block;';
+  img.addEventListener('error', () => { if (img.parentNode === box) box.textContent = initial; }, { once: true });
+  img.src = src;
+  box.appendChild(img);
+}
+
 /**
  * PawTrack Application Controller & Router
  */
@@ -1741,7 +1754,7 @@ class App {
       const renderAvatar = (el) => {
         if (!el) return;
         if (user.picture) {
-          el.innerHTML = `<img src="${user.picture}" alt="${user.name || 'User'}" style="width: 100%; height: 100%; border-radius: 50%; object-fit: cover; display: block;" onerror="this.style.display='none'; this.parentElement.textContent='${initial}';" />`;
+          setAvatarImage(el, user.picture, user.name || 'User', initial);
         } else {
           el.textContent = initial;
         }
@@ -1810,7 +1823,7 @@ class App {
     const renderAvatarBox = (boxEl, pic, init) => {
       if (!boxEl) return;
       if (pic) {
-        boxEl.innerHTML = `<img src="${pic}" alt="${name}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;display:block;" onerror="this.style.display='none'; this.parentElement.textContent='${init}';" />`;
+        setAvatarImage(boxEl, pic, name, init);
       } else {
         boxEl.textContent = init;
       }

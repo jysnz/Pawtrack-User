@@ -15,7 +15,6 @@ class ImpoundView {
 
     // facility list
     this.fQuery = '';
-    this.fFilter = 'all';        // 'all' | 'pets' | 'empty'
     this.fSort = 'name';         // 'name' | 'pets'
     // pets of one facility
     this.pQuery = '';
@@ -185,7 +184,6 @@ class ImpoundView {
             ${this.searchBox('ip-fsearch', 'Search a facility, address or city', this.fQuery)}
             ${this.select('ip-fsort', 'Sort', this.fSort, [['name', 'Name A to Z'], ['pets', 'Most animals']])}
           </div>
-          <div class="ip-pills" id="ip-pills" role="group" aria-label="Filter facilities"></div>
         </div>
         <div class="ip-summary" id="ip-summary" aria-live="polite"></div>
         <div id="ip-results"></div>
@@ -209,14 +207,8 @@ class ImpoundView {
     this.countUp(this.container.querySelector('#ip-s3'), impounds.filter((i) => this.closingSoon(i)).length);
 
     const searched = shelters.filter((s) => this.matches(this.fQuery, [s.name, s.address, s.city, s.phone]));
-    const withPets = searched.filter((s) => holdingBy[s.id]);
-    const counts = { all: searched.length, pets: withPets.length, empty: searched.length - withPets.length };
 
-    this.container.querySelector('#ip-pills').innerHTML = [['all', 'All facilities'], ['pets', 'With animals'], ['empty', 'No animals now']]
-      .map(([k, l]) => `<button type="button" class="ip-pill ${this.fFilter === k ? 'is-on' : ''}" data-f="${k}" aria-pressed="${this.fFilter === k}">${l}<span>${counts[k]}</span></button>`).join('');
-    this.container.querySelectorAll('#ip-pills .ip-pill').forEach((b) => b.addEventListener('click', () => { this.fFilter = b.dataset.f; this.fresh = true; this.drawFacilities(); }));
-
-    let list = searched.filter((s) => this.fFilter === 'all' || (this.fFilter === 'pets' ? holdingBy[s.id] : !holdingBy[s.id]));
+    let list = searched;
     list = list.slice().sort((a, b) => this.fSort === 'pets'
       ? (holdingBy[b.id] || 0) - (holdingBy[a.id] || 0) || String(a.name).localeCompare(String(b.name))
       : String(a.name).localeCompare(String(b.name)));

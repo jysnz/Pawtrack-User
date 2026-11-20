@@ -299,7 +299,6 @@ class FoundView {
         ${row}
       </section>`;
     }
-    const chip = (key, label) => `<button type="button" class="found-chip${this.species === key ? ' is-active' : ''}" data-species="${key}" aria-pressed="${this.species === key}">${label}</button>`;
     return `
       <section class="glass-card found-card">
         <div class="found-section-head">
@@ -312,10 +311,13 @@ class FoundView {
           <label class="found-search"><i data-lucide="search"></i>
             <input type="search" class="form-control" id="found-search" placeholder="Search by name, breed, color or area" value="${this.esc(this.query)}" autocomplete="off" aria-label="Search missing pets" />
           </label>
-          <div class="found-chips-row">
-            <div class="found-chips" role="group" aria-label="Filter by species">${chip('', 'All')}${chip('Dog', 'Dogs')}${chip('Cat', 'Cats')}${chip('Other', 'Other')}</div>
-            <button type="button" class="found-other-btn" id="found-other" aria-pressed="false" title="Report a pet that is not registered in PawTrack">Other pet (not registered)</button>
-          </div>
+          <label class="found-species-select" for="found-species">
+            <span>Show</span>
+            <select id="found-species" aria-label="Filter by pet type">
+              ${[['', 'All'], ['Dog', 'Dogs'], ['Cat', 'Cats'], ['Other', 'Other']].map(([k, l]) => `<option value="${k}"${this.species === k ? ' selected' : ''}>${l}</option>`).join('')}
+              <option value="__none">Other pet (not registered)</option>
+            </select>
+          </label>
         </div>
         <div class="found-matches" id="found-pick-list" role="radiogroup" aria-label="Missing pets">${this.pickRowsHtml()}</div>
       </section>`;
@@ -491,7 +493,6 @@ class FoundView {
     ['found-file', 'found-cam'].forEach((id) => $(id)?.addEventListener('change', (e) => this.pickPhoto(e.target.files[0])));
     $('found-scan')?.addEventListener('click', () => this.scan());
     $('found-none')?.addEventListener('click', () => this.select('none'));
-    $('found-other')?.addEventListener('click', () => this.select('none'));
     $('found-change-pet')?.addEventListener('click', () => { this.keepForm(); this.selectedId = null; this.render(); });
     this.bindMore();
     $('found-again')?.addEventListener('click', () => { this.reset(); this.render(); });
@@ -505,16 +506,13 @@ class FoundView {
     this.container.querySelectorAll('.found-match').forEach((b) => b.addEventListener('click', () => this.select(b.dataset.pet)));
     this.container.querySelectorAll('.found-mode-btn').forEach((b) => b.addEventListener('click', () => this.setMode(b.dataset.mode)));
     $('found-search')?.addEventListener('input', (e) => { this.query = e.target.value; this.listLimit = 6; this.refreshList(); });
-    this.container.querySelectorAll('.found-chip').forEach((b) => b.addEventListener('click', () => {
-      this.species = b.dataset.species;
+    $('found-species')?.addEventListener('change', (e) => {
+      // The last choice is not a filter: it reports a pet that is not registered in PawTrack
+      if (e.target.value === '__none') { this.select('none'); return; }
+      this.species = e.target.value;
       this.listLimit = 6;
-      this.container.querySelectorAll('.found-chip').forEach((c) => {
-        const on = c.dataset.species === this.species;
-        c.classList.toggle('is-active', on);
-        c.setAttribute('aria-pressed', String(on));
-      });
       this.refreshList();
-    }));
+    });
 
     const drop = $('found-drop');
     if (drop) {

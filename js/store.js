@@ -790,6 +790,12 @@ class Store {
       p_notes: notes ? String(notes).slice(0, 1000) : null
     });
     if (error) { this.dbError('Could not alert the owner', error); return false; }
+    // A passerby found the pet: the facility the report was routed to emails the owner (through Brevo)
+    if (data && kind === 'found') {
+      sb.functions.invoke('notify-owner-found', { body: { missing_pet_id: missingReportId } })
+        .then((r) => { if (r && r.error) console.warn('[PawTrack] Owner email not sent:', r.error.message); })
+        .catch((err) => console.warn('[PawTrack] Owner email not sent:', err.message));
+    }
     return !!data;
   }
 
@@ -1227,6 +1233,38 @@ class Store {
     return [...this.getPets(), ...this.getUnregisteredMissingPets()];
   }
 
+  // The barangay and city of a map point, for routing a lost report to the facility that covers it.
+  // Google's geocoder when Google Maps is loaded, otherwise OpenStreetMap. Never throws: unknown parts are null.
+  async resolveAdminArea(lat, lng) {
+    const none = { barangay: null, city: null };
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return none;
+    const clean = (v) => (v ? String(v).replace(/^\s*(barangay|brgy\.?)\s+/i, '').trim().slice(0, 120) : null) || null;
+    try {
+      if (document.documentElement.classList.contains('google-maps-active') && window.google && google.maps && google.maps.importLibrary) {
+        const { Geocoder } = await google.maps.importLibrary('geocoding');
+        const { results } = await new Geocoder().geocode({ location: { lat, lng } });
+        const parts = (results || []).flatMap((r) => r.address_components || []);
+        const find = (...types) => { const c = parts.find((x) => types.some((t) => x.types.includes(t))); return c ? c.long_name : null; };
+        const out = {
+          barangay: clean(find('sublocality_level_1', 'sublocality', 'neighborhood')),
+          city: clean(find('locality', 'administrative_area_level_2'))
+        };
+        if (out.barangay || out.city) return out;
+      }
+      const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=16&addressdetails=1&lat=${lat}&lon=${lng}`,
+        { headers: { 'Accept-Language': 'en' }, signal: AbortSignal.timeout(6000) });
+      if (!res.ok) return none;
+      const a = (await res.json()).address || {};
+      return {
+        barangay: clean(a.suburb || a.quarter || a.neighbourhood || a.village || a.city_district),
+        city: clean(a.city || a.town || a.municipality)
+      };
+    } catch (err) {
+      console.warn('[PawTrack] Could not work out the barangay of the last-seen point:', err.message);
+      return none;
+    }
+  }
+
   // Files a report in missing_pets (as the signed-in guardian). Returns the saved report, or null.
   async createMissingReport(reportData) {
     const sb = await this.waitForClient(5000);
@@ -1234,6 +1272,8 @@ class Store {
     const petId = this.isDbId(reportData.petId) ? reportData.petId : null;
     const coords = reportData.lastSeenCoords || [];
     const photoUrl = await this.uploadPhoto(reportData.photoUrl || reportData.photo, 'reports');
+    // The database routes the report to the facility covering this barangay or city (see 20261130 migration)
+    const area = await this.resolveAdminArea(+coords[0], +coords[1]);
     const { data, error } = await sb.from('missing_pets').insert({
       pet_id: petId,
       pet_name: String(reportData.petName || 'Missing pet').slice(0, 80),
@@ -1245,6 +1285,8 @@ class Store {
       description: reportData.description ? String(reportData.description).slice(0, 1000) : null,
       community: reportData.community || null,
       last_seen_location: String(reportData.lastSeenLocation || '').slice(0, 300),
+      last_seen_barangay: area.barangay,
+      last_seen_city: area.city,
       lat: +coords[0],
       lng: +coords[1],
       last_seen_at: new Date(reportData.lastSeenDate || Date.now()).toISOString(),

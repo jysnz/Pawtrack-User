@@ -59,36 +59,34 @@ class SightingsView {
 
       <!-- Search and sort on top, status filters below (pill counts double as the status summary) -->
       <div class="glass-card sightings-filter-bar">
-        <div class="sightings-filter-top">
-          <div class="sightings-search">
-            <input
-              type="text"
-              id="sightings-search-input"
-              placeholder="Search by location, breed, reporter name…"
-              value="${this._esc(this.searchQuery)}"
-              oninput="window.sightingsView.handleSearch(this.value)"
-              style="width:100%;"
-            />
-          </div>
+        <div class="sightings-search">
+          <i data-lucide="search" aria-hidden="true"></i>
+          <input
+            type="text"
+            id="sightings-search-input"
+            placeholder="Search by location, breed, reporter name…"
+            value="${this._esc(this.searchQuery)}"
+            oninput="window.sightingsView.handleSearch(this.value)"
+            aria-label="Search sightings"
+          />
+        </div>
 
-          <div class="sightings-sort">
-            <label for="sightings-sort-select" style="font-size:0.76rem; color:var(--text-muted); white-space:nowrap; flex-shrink:0;">Sort</label>
-            <select id="sightings-sort-select" class="form-control" style="padding:7px 10px; font-size:0.8rem;" onchange="window.sightingsView.setSort(this.value)">
+        <div class="sightings-selects">
+          <label class="sightings-select" for="sightings-filter-select">
+            <span>Show</span>
+            <select id="sightings-filter-select" onchange="window.sightingsView.setFilter(this.value)">
+              ${[['all', 'All Active', stats.active], ['mine', 'Your pets', stats.mine], ['missing', 'Missing', stats.missing], ['possible', 'Possible', stats.possible], ['confirmed', 'Confirmed', stats.confirmed], ['archived', 'Archived', stats.archived], ['reunited', 'Reunited', stats.reunited]]
+                .map(([v, label, n]) => `<option value="${v}" ${this.currentFilter === v ? 'selected' : ''}>${label} (${n})</option>`).join('')}
+            </select>
+          </label>
+          <label class="sightings-select" for="sightings-sort-select">
+            <span>Sort</span>
+            <select id="sightings-sort-select" onchange="window.sightingsView.setSort(this.value)">
               <option value="newest"          ${this.currentSort === 'newest'          ? 'selected' : ''}>Newest First</option>
               <option value="oldest"          ${this.currentSort === 'oldest'          ? 'selected' : ''}>Oldest First</option>
               <option value="confirmed_first" ${this.currentSort === 'confirmed_first' ? 'selected' : ''}>Confirmed First</option>
             </select>
-          </div>
-        </div>
-
-        <div id="sightings-filter-pills" class="sightings-filter-pills">
-          ${this._filterPill('all',       'All Active', stats.active,    this.currentFilter === 'all')}
-          ${this._filterPill('mine',      'Your pets',  stats.mine,      this.currentFilter === 'mine')}
-          ${this._filterPill('missing',   'Missing',    stats.missing,   this.currentFilter === 'missing')}
-          ${this._filterPill('possible',  'Possible',   stats.possible,  this.currentFilter === 'possible')}
-          ${this._filterPill('confirmed', 'Confirmed',  stats.confirmed, this.currentFilter === 'confirmed')}
-          ${this._filterPill('archived',  'Archived',   stats.archived,  this.currentFilter === 'archived')}
-          ${this._filterPill('reunited',  'Reunited',   stats.reunited,  this.currentFilter === 'reunited')}
+          </label>
         </div>
       </div>
 
