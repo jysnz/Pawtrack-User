@@ -317,6 +317,7 @@
       const geocoder = new Geocoder();
       let marker = null;
       let pin = null;
+      let limit = null;   // the city's bounds, once chosen
 
       const place = (pos) => {
         pin = { lat: pos.lat, lng: pos.lng };
@@ -339,9 +340,28 @@
         canGeocode: true,
         setPin(pos, zoom = 17) { place(pos); map.panTo(pin); map.setZoom(zoom); },
         getPin: () => (pin ? { ...pin } : null),
+        clearPin() { if (marker) marker.map = null; marker = null; pin = null; },
+        // Limit the map to a city: it cannot be panned or zoomed out of it, and address lookups favour it
+        setBounds(b) {
+          limit = b || null;
+          map.setOptions({ restriction: limit ? { latLngBounds: limit, strictBounds: true } : null, minZoom: limit ? 10 : null });
+          if (limit) map.fitBounds(limit, 0);
+        },
+        // Draw the chosen barangays (GeoJSON features) and frame them
+        setAreas(features, fit = true) {
+          map.data.forEach((f) => map.data.remove(f));
+          if (!features || !features.length) return;
+          map.data.addGeoJson({ type: 'FeatureCollection', features });
+          map.data.setStyle((f) => (f.getGeometry().getType() === 'Point'
+            ? { icon: { path: google.maps.SymbolPath.CIRCLE, scale: 9, fillColor: '#c2410c', fillOpacity: 0.35, strokeColor: '#c2410c', strokeWeight: 2 }, clickable: false }
+            : { fillColor: '#c2410c', fillOpacity: 0.22, strokeColor: '#c2410c', strokeWeight: 2, clickable: false }));
+          const box = new google.maps.LatLngBounds();
+          map.data.forEach((f) => f.getGeometry().forEachLatLng((ll) => box.extend(ll)));
+          if (fit && !box.isEmpty()) map.fitBounds(box, 40);
+        },
         async geocode(address) {
           try {
-            const { results } = await geocoder.geocode({ address, region: 'PH' });
+            const { results } = await geocoder.geocode({ address, region: 'PH', ...(limit ? { bounds: limit } : {}) });
             const r = results && results[0];
             return r ? { ...toLL(r.geometry.location), address: r.formatted_address, city: cityOf(r) } : null;
           } catch (e) { return null; }
@@ -360,7 +380,7 @@
     function leafletImpl(el, start, onPick) {
       if (typeof L === 'undefined') {
         el.innerHTML = '<div class="shm-fallback">The map could not load. Check your connection and reload the page.</div>';
-        return { engine: 'none', canGeocode: false, setPin() {}, getPin: () => null, geocode: async () => null, reverse: async () => null, destroy() {} };
+        return { engine: 'none', canGeocode: false, setPin() {}, clearPin() {}, setBounds() {}, setAreas() {}, getPin: () => null, geocode: async () => null, reverse: async () => null, destroy() {} };
       }
       el.innerHTML = '';
       const map = L.map(el, { center: start ? [start.lat, start.lng] : [DEFAULT_CENTER.lat, DEFAULT_CENTER.lng], zoom: start ? 17 : 11 });
@@ -369,6 +389,8 @@
         attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors'
       }).addTo(map);
       let marker = null;
+      let areaLayer = null;
+      let limit = null;   // the city's bounds, once chosen
       const place = (pos) => {
         if (!marker) {
           marker = L.marker([pos.lat, pos.lng], {
@@ -387,11 +409,60 @@
 
       return {
         engine: 'leaflet',
-        canGeocode: false,
+        canGeocode: true,   // OpenStreetMap (Nominatim) address lookup
         setPin(pos, zoom = 17) { place(pos); map.setView([pos.lat, pos.lng], zoom); },
         getPin() { if (!marker) return null; const p = marker.getLatLng(); return { lat: p.lat, lng: p.lng }; },
-        geocode: async () => null,
-        reverse: async () => null,
+        clearPin() { if (marker) marker.remove(); marker = null; },
+        setBounds(b) {
+          limit = b || null;
+          if (!b) { map.setMaxBounds(null); map.setMinZoom(0); return; }
+          const box = L.latLngBounds([b.south, b.west], [b.north, b.east]);
+          map.setMaxBounds(box.pad(0.02));
+          map.options.maxBoundsViscosity = 1;
+          map.fitBounds(box);
+          map.setMinZoom(Math.max(0, map.getZoom() - 1));
+        },
+        setAreas(features, fit = true) {
+          if (areaLayer) { map.removeLayer(areaLayer); areaLayer = null; }
+          if (!features || !features.length) return;
+          const style = { color: '#c2410c', weight: 2, fillColor: '#c2410c', fillOpacity: 0.22 };
+          areaLayer = L.geoJSON({ type: 'FeatureCollection', features }, {
+            style: () => style, interactive: false,
+            pointToLayer: (_f, ll) => L.circleMarker(ll, { ...style, radius: 9, fillOpacity: 0.35 })
+          }).addTo(map);
+          const box = areaLayer.getBounds();
+          if (fit && box.isValid()) map.fitBounds(box, { padding: [30, 30] });
+        },
+        // Address -> point. The full text is tried first, then with the leading parts (house no., street) dropped,
+        // since OpenStreetMap often knows the barangay but not the exact street. At least "area, city, country" is
+        // kept, so a fallback never lands on the bare city centre. The city is only a preference (not a filter): a
+        // match outside it is still returned when nothing inside is found, so the form can say the address is
+        // not in the city instead of quietly pinning somewhere else.
+        async geocode(address) {
+          const box = limit ? `&viewbox=${limit.west},${limit.north},${limit.east},${limit.south}` : '';
+          const parts = String(address).split(',').map((x) => x.trim()).filter(Boolean);
+          let outside = null;
+          for (let i = 0; i <= Math.min(2, parts.length - 3) || i === 0; i++) {
+            try {
+              const res = await fetch('https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&limit=1&countrycodes=ph' + box + '&q=' + encodeURIComponent(parts.slice(i).join(', ')));
+              const hit = res.ok ? (await res.json())[0] : null;
+              if (hit) {
+                const found = { lat: Number(hit.lat), lng: Number(hit.lon), address: hit.display_name, city: '', places: hit.address ? ['city', 'town', 'municipality', 'city_district', 'county', 'state_district'].map((k) => hit.address[k]).filter(Boolean) : [] };
+                if (!limit || (found.lat >= limit.south && found.lat <= limit.north && found.lng >= limit.west && found.lng <= limit.east)) return found;
+                outside = outside || found;
+              }
+            } catch (e) { return outside; }
+            await new Promise((r) => setTimeout(r, 1100));   // Nominatim allows one request a second
+          }
+          return outside;
+        },
+        async reverse(pos) {
+          try {
+            const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=18&lat=${pos.lat}&lon=${pos.lng}`);
+            const hit = res.ok ? await res.json() : null;
+            return hit && hit.display_name ? { address: hit.display_name, city: '' } : null;
+          } catch (e) { return null; }
+        },
         destroy() { try { map.remove(); } catch (e) { /* already gone */ } }
       };
     }
@@ -410,7 +481,9 @@
         api.canGeocode = next.canGeocode;
         if (opts.onEngine) opts.onEngine(api);
       };
-      ['setPin', 'getPin', 'geocode', 'reverse', 'destroy'].forEach((m) => { api[m] = (...a) => impl[m](...a); });
+      api.setBounds = (b) => { api._bounds = b || null; if (impl) impl.setBounds(b); };
+      api.setAreas = (f, fit) => { api._areas = f || null; if (impl) impl.setAreas(f, fit); };
+      ['setPin', 'clearPin', 'getPin', 'geocode', 'reverse', 'destroy'].forEach((m) => { api[m] = (...a) => impl[m](...a); });
 
       try {
         if (window.PawGoogleMaps && await window.PawGoogleMaps.isConfigured()) {
@@ -423,6 +496,8 @@
               const pin = api.getPin();
               impl.destroy();
               use(leafletImpl(el, pin, onPick));
+              if (api._bounds) impl.setBounds(api._bounds);
+              if (api._areas) impl.setAreas(api._areas);
             });
             watcher.observe(el, { childList: true, subtree: true });
             setTimeout(() => watcher.disconnect(), 15000);
@@ -439,6 +514,136 @@
     return { create };
   })();
 
-  window.FacilityForm = { phone, hours, MapPicker, esc };
+
+  // ==========================================================================
+  // City: pick the facility's city (Google search, or OpenStreetMap when Google is off). The result carries the
+  // city's bounds, which limit the map and the pin.
+  // ==========================================================================
+  const City = (function () {
+    const round = (n) => Math.round(n * 1e6) / 1e6;
+    const norm = (b) => (b && [b.north, b.south, b.east, b.west].every((x) => Number.isFinite(+x))
+      ? { north: round(+b.north), south: round(+b.south), east: round(+b.east), west: round(+b.west) } : null);
+    const inBounds = (pin, b) => !b || !pin || (pin.lat >= b.south && pin.lat <= b.north && pin.lng >= b.west && pin.lng <= b.east);
+    const googleOn = async () => !!(window.PawGoogleMaps && await window.PawGoogleMaps.isConfigured().catch(() => false));
+
+    // Look a city up by name -> { name, placeId, bounds } or null
+    async function resolve(text, province) {
+      const q = [String(text || '').trim(), province].filter(Boolean).join(', ');
+      if (!q) return null;
+      try {
+        if (await googleOn()) {
+          await window.PawGoogleMaps.load();
+          const { Geocoder } = await google.maps.importLibrary('geocoding');
+          const { results } = await new Geocoder().geocode({ address: q, region: 'PH', componentRestrictions: { country: 'PH' } });
+          const r = (results || []).find((x) => x.types.some((t) => ['locality', 'administrative_area_level_2', 'administrative_area_level_1'].includes(t))) || (results || [])[0];
+          if (!r) return null;
+          const v = r.geometry.viewport && r.geometry.viewport.toJSON();
+          return { name: String(text || '').trim() || (r.address_components && r.address_components[0] && r.address_components[0].long_name) || q, placeId: r.place_id || '', bounds: norm(v) };
+        }
+        const res = await fetch('https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=ph&q=' + encodeURIComponent(q));
+        const hit = res.ok ? (await res.json())[0] : null;
+        if (!hit || !hit.boundingbox) return null;
+        const [south, north, west, east] = hit.boundingbox.map(Number);
+        return { name: String(text || '').trim() || String(hit.display_name || q).split(',')[0].trim(), placeId: hit.osm_id ? 'osm:' + hit.osm_type + ':' + hit.osm_id : '', bounds: norm({ north, south, east, west }) };
+      } catch (e) { return null; }
+    }
+
+    // Wire a text box: suggestions while typing (Google), a lookup on leaving the box otherwise.
+    // onChange(cityOrNull) fires with the chosen city, or null while the text no longer matches one.
+    function attach(input, onChange) {
+      let chosen = null;
+      let psgcList = null;     // the PSGC city list, once loaded (suggestions come from it)
+      let regionCode = '';     // the region picked first: only its cities are offered
+      const inRegion = (c) => !!regionCode && c.regionCode === regionCode;
+      // Our own list under the box (a <datalist> only shows matches for the typed text, and not at all on many phones)
+      const panel = document.createElement('div');
+      panel.className = 'fm-city-panel';
+      panel.setAttribute('role', 'listbox');
+      panel.hidden = true;
+      if (input.parentNode) { input.parentNode.style.position = 'relative'; input.parentNode.appendChild(panel); }
+      const closePanel = () => { panel.hidden = true; };
+      const renderPanel = () => {
+        if (!psgcList || !regionCode || input.readOnly || input.disabled) { closePanel(); return; }
+        const q = input.value.trim().toLowerCase();
+        const all = psgcList.filter(inRegion);
+        // the box already holds the chosen city: show the whole region, not just that one
+        const rows = !q || (chosen && q === chosen.name.toLowerCase()) ? all : all.filter((c) => c.label.toLowerCase().includes(q));
+        panel.innerHTML = rows.length
+          ? rows.map((c) => `<button type="button" class="fm-city-opt" role="option" data-code="${esc(c.code)}">${esc(c.name)}${c.province ? `<span>${esc(c.province)}</span>` : ''}</button>`).join('')
+          : '<div class="fm-city-empty">No city in this region matches.</div>';
+        panel.hidden = false;
+        panel.scrollTop = 0;
+      };
+      const fillList = () => { if (!panel.hidden) renderPanel(); };
+      const set = (c) => { chosen = c; onChange(c); };
+      // A pick from the PSGC list: keep its code, then look up the city's limits for the map
+      const pickListed = async (c) => {
+        const base = { name: c.name, placeId: 'psgc:' + c.code, province: c.province, bounds: null };
+        input.value = c.name;
+        set(base);
+        const found = await resolve(c.name, c.province);
+        if (chosen && chosen.placeId === base.placeId && found && found.bounds) set({ ...base, bounds: found.bounds });
+      };
+      (async () => {
+        try {
+          if (window.PSGC) {
+            psgcList = await window.PSGC.cities();
+            fillList();
+            return;
+          }
+        } catch (e) { psgcList = null; /* offline or blocked: fall back to searching by name below */ }
+        try {
+          if (!(await googleOn())) return;
+          await window.PawGoogleMaps.load();
+          const { Autocomplete } = await google.maps.importLibrary('places');
+          const ac = new Autocomplete(input, { types: ['(cities)'], componentRestrictions: { country: 'ph' }, fields: ['name', 'place_id', 'geometry'] });
+          ac.addListener('place_changed', () => {
+            const pl = ac.getPlace();
+            if (!pl || !pl.geometry) return;
+            const v = pl.geometry.viewport ? pl.geometry.viewport.toJSON() : null;
+            input.value = pl.name || input.value;
+            set({ name: pl.name || input.value, placeId: pl.place_id || '', bounds: norm(v) });
+          });
+        } catch (e) { /* no suggestions: the lookup below still works */ }
+      })();
+      // keep the box focused while a row is pressed, then pick it
+      panel.addEventListener('mousedown', (e) => e.preventDefault());
+      panel.addEventListener('click', (e) => {
+        const btn = e.target.closest('.fm-city-opt');
+        const c = btn && psgcList && psgcList.find((x) => x.code === btn.dataset.code);
+        if (c) { closePanel(); pickListed(c); }
+      });
+      input.addEventListener('focus', renderPanel);
+      input.addEventListener('click', renderPanel);
+      input.addEventListener('blur', () => setTimeout(closePanel, 200));
+      input.addEventListener('input', () => {
+        renderPanel();
+        const typed = input.value.trim();
+        const listed = psgcList && psgcList.find((c) => inRegion(c) && c.label.toLowerCase() === typed.toLowerCase());
+        if (listed) { pickListed(listed); return; }
+        if (chosen && typed !== chosen.name) set(null);
+      });
+      input.addEventListener('keydown', (e) => { if (e.key === 'Escape') closePanel(); if (e.key === 'Enter') { e.preventDefault(); input.blur(); } });
+      input.addEventListener('blur', async () => {
+        const text = input.value.trim();
+        if (!text || (chosen && chosen.name === text)) return;
+        await new Promise((r) => setTimeout(r, 250));   // let a clicked suggestion land first
+        if (chosen && chosen.name === input.value.trim()) return;
+        // Typed without picking: use it only when exactly one listed city has that name
+        const same = psgcList ? psgcList.filter((x) => inRegion(x) && x.name.toLowerCase() === text.toLowerCase()) : [];
+        if (same.length === 1) { pickListed(same[0]); return; }
+        if (psgcList) return;                            // several share the name (or none): the person must pick one from the list
+        const c = await resolve(text);
+        if (c && input.value.trim() === text) { input.value = c.name; set(c); }
+      });
+      // Choose the region whose cities are offered; the list is ready once the PSGC data has loaded
+      const setRegion = (code) => { regionCode = code || ''; fillList(); };
+      return { current: () => chosen, setRegion, cityFor: (c) => (psgcList && c ? psgcList.find((x) => ('psgc:' + x.code) === c.placeId) || psgcList.find((x) => x.name.toLowerCase() === String(c.name).toLowerCase()) : null), set: (c) => { chosen = c; if (c) input.value = c.name; onChange(c); } };
+    }
+
+    return { resolve, attach, inBounds, norm };
+  })();
+
+  window.FacilityForm = { phone, hours, MapPicker, City, esc };
   if (typeof module !== 'undefined' && module.exports) module.exports = window.FacilityForm;
 })();

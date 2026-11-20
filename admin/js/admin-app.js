@@ -794,7 +794,17 @@ class AdminApp {
       const full = (this.currentAdmin && this.currentAdmin.full_name) || '';
       const first = String(full).trim().split(/\s+/)[0];
       const set = (id, text) => { const el = document.getElementById(id); if (el && el.textContent !== text) el.textContent = text; };
-      set('topbar-greeting-hello', first ? `${part}, ${first}` : part);
+      // Long form on desktop ("Good afternoon, Jayson"), short form on phones ("Hi, Jayson") so the name is never cut off
+      const helloEl = document.getElementById('topbar-greeting-hello');
+      const helloKey = `${part}|${first}`;
+      if (helloEl && helloEl.dataset.key !== helloKey) {
+        helloEl.dataset.key = helloKey;
+        helloEl.textContent = '';
+        const mk = (cls, text) => { const sp = document.createElement('span'); sp.className = cls; sp.textContent = text; return sp; };
+        helloEl.append(mk('gr-long', part), mk('gr-short', 'Hi'));
+        if (first) helloEl.append(mk('gr-comma', ','), document.createTextNode(' '), mk('gr-name', first));
+        helloEl.setAttribute('aria-label', first ? `${part}, ${first}` : part);
+      }
       set('topbar-clock-date', now.toLocaleDateString('en-PH', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }));
       set('topbar-clock-time', now.toLocaleTimeString('en-PH', { hour: 'numeric', minute: '2-digit', second: '2-digit' }));
     };
@@ -927,7 +937,7 @@ class AdminApp {
     // Modal backdrop click to close
     document.getElementById('app-modal-backdrop')?.addEventListener('click', (e) => {
       if (e.target.id === 'app-modal-backdrop') {
-        this.closeModal();
+        this.requestCloseModal();
       }
     });
 
@@ -1192,6 +1202,7 @@ class AdminApp {
 
   // --- Modal API ---
   openModalContent(htmlContent) {
+    this._modalGuard = null;
     const backdrop = document.getElementById('app-modal-backdrop');
     const box = document.getElementById('app-modal-box');
     if (backdrop && box) {
@@ -1237,7 +1248,20 @@ class AdminApp {
     });
   }
 
+  // A dialog can ask to be confirmed before it closes (an unsaved form). fn() resolves true to allow the close.
+  setModalGuard(fn) { this._modalGuard = typeof fn === 'function' ? fn : null; }
+
+  // Closing by backdrop click or Escape: ask the open dialog first when it has a guard
+  async requestCloseModal() {
+    const backdrop = document.getElementById('app-modal-backdrop');
+    if (!backdrop || !backdrop.classList.contains('open')) return false;
+    if (this._modalGuard && !(await this._modalGuard())) return false;
+    this.closeModal();
+    return true;
+  }
+
   closeModal() {
+    this._modalGuard = null;
     const backdrop = document.getElementById('app-modal-backdrop');
     if (backdrop) {
       const wasOpen = backdrop.classList.contains('open');
@@ -1603,7 +1627,7 @@ class AdminApp {
       }
       if (e.key === 'Escape') {
         this.closeCommandPalette();
-        this.closeModal();
+        this.requestCloseModal();
         this.closeDrawer();
       }
     });

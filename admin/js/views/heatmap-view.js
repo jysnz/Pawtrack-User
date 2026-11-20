@@ -368,7 +368,12 @@ window.HeatmapView = {
       let tries = 0;
       const go = () => {
         if (!document.getElementById('hm-root')) return;
-        if (this.gmap || this.mapInstance) return this.flyToIncident(want.lat, want.lng, want.id);
+        if (this.gmap || this.mapInstance) {
+          this.flyToIncident(want.lat, want.lng, want.id);
+          // The page resets its scroll position after the view swaps in, so bring the map into view again once that has settled
+          [150, 500].forEach(ms => setTimeout(() => document.getElementById('heatmap-map-card')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), ms));
+          return;
+        }
         if (++tries < 40) setTimeout(go, 250);
       };
       go();
@@ -397,15 +402,15 @@ window.HeatmapView = {
         <div class="hm-toolbar">
           <div class="hm-field">
             <span class="hm-label">Period</span>
-            <div class="dash-segmented" role="tablist" aria-label="Period">
-              ${seg('range-pill', 'data-range', [['all', 'All time'], ['today', 'Today'], ['7d', '7 days'], ['30d', '30 days']], this.selectedDateRange)}
-            </div>
+            <select id="select-range-filter" class="hm-select" aria-label="Period">
+              ${[['all', 'All time'], ['today', 'Today'], ['7d', 'Last 7 days'], ['30d', 'Last 30 days']].map(([v, l]) => `<option value="${v}" ${this.selectedDateRange === v ? 'selected' : ''}>${l}</option>`).join('')}
+            </select>
           </div>
           <div class="hm-field">
             <span class="hm-label">Animal</span>
-            <div class="dash-segmented" role="tablist" aria-label="Animal">
-              ${seg('animal-pill', 'data-animal', [['all', 'All'], ['dog', 'Dogs'], ['cat', 'Cats'], ['other', 'Other']], this.selectedAnimal)}
-            </div>
+            <select id="select-animal-filter" class="hm-select" aria-label="Animal">
+              ${[['all', 'All animals'], ['dog', 'Dogs'], ['cat', 'Cats'], ['other', 'Other']].map(([v, l]) => `<option value="${v}" ${this.selectedAnimal === v ? 'selected' : ''}>${l}</option>`).join('')}
+            </select>
           </div>
           <div class="hm-field">
             <span class="hm-label">Status</span>
@@ -442,9 +447,9 @@ window.HeatmapView = {
 
             <div class="hm-map-top">
               <div class="hm-map-top-left">
-                <div class="dash-segmented hm-layer" role="tablist" aria-label="Map type">
-                  ${seg('layer-btn', 'data-layer', [['roadmap', 'Map'], ['satellite', 'Satellite'], ['terrain', 'Terrain']], this.selectedLayer)}
-                </div>
+                <select id="select-layer" class="hm-layer-select" aria-label="Map type">
+                  ${[['roadmap', 'Map'], ['satellite', 'Satellite'], ['terrain', 'Terrain']].map(([v, l]) => `<option value="${v}" ${this.selectedLayer === v ? 'selected' : ''}>${l}</option>`).join('')}
+                </select>
                 <div class="dash-segmented hm-layer hm-toggles" aria-label="Map layers">
                   <button class="map-toggle ${this.showHeat ? 'active' : ''}" data-toggle="heat" title="Show or hide the heat glow">Heat</button>
                   <button class="map-toggle ${this.showPins ? 'active' : ''}" data-toggle="pins" title="Show or hide the pins">Pins</button>
@@ -494,9 +499,9 @@ window.HeatmapView = {
     const peak = this.peakWindow(filtered);
 
     // Toolbar state
-    root.querySelectorAll('.range-pill').forEach(b => b.classList.toggle('active', b.dataset.range === this.selectedDateRange));
-    root.querySelectorAll('.animal-pill').forEach(b => b.classList.toggle('active', b.dataset.animal === this.selectedAnimal));
-    root.querySelectorAll('.layer-btn').forEach(b => b.classList.toggle('active', b.dataset.layer === this.selectedLayer));
+    const rg = root.querySelector('#select-range-filter'); if (rg) rg.value = this.selectedDateRange;
+    const an = root.querySelector('#select-animal-filter'); if (an) an.value = this.selectedAnimal;
+    const ly = root.querySelector('#select-layer'); if (ly) ly.value = this.selectedLayer;
     const st = root.querySelector('#select-status-filter'); if (st) st.value = this.selectedStatus;
     const ds = root.querySelector('#select-district-filter'); if (ds) ds.value = this.selectedDistrict;
     const si = root.querySelector('#heatmap-search-input'); if (si && document.activeElement !== si) si.value = this.searchQuery;
@@ -545,17 +550,6 @@ window.HeatmapView = {
 
     root.addEventListener('click', (e) => {
       const t = e.target;
-      const range = t.closest('.range-pill');
-      if (range) { this.selectedDateRange = range.dataset.range; return rerender(); }
-      const animal = t.closest('.animal-pill');
-      if (animal) { this.selectedAnimal = animal.dataset.animal; return rerender(); }
-      const layer = t.closest('.layer-btn');
-      if (layer) {
-        this.selectedLayer = layer.dataset.layer;
-        root.querySelectorAll('.layer-btn').forEach(b => b.classList.toggle('active', b === layer));
-        if (this.gmap) this.gmap.setMapTypeId(this.googleMapType()); else this.initLeafletMap(this.getFilteredIncidents());
-        return;
-      }
       if (t.closest('#btn-reset-heatmap-filters')) {
         Object.assign(this, { selectedDateRange: '30d', selectedAnimal: 'all', selectedStatus: 'all', selectedDistrict: 'all', searchQuery: '', currentPage: 1 });
         if (this.searchLocationMarker && this.mapInstance) { try { this.mapInstance.removeLayer(this.searchLocationMarker); } catch (err) {} this.searchLocationMarker = null; }
@@ -587,6 +581,13 @@ window.HeatmapView = {
     });
 
     root.addEventListener('change', (e) => {
+      if (e.target.id === 'select-layer') {
+        this.selectedLayer = e.target.value;
+        if (this.gmap) this.gmap.setMapTypeId(this.googleMapType()); else this.initLeafletMap(this.getFilteredIncidents());
+        return;
+      }
+      if (e.target.id === 'select-range-filter') { this.selectedDateRange = e.target.value; rerender(); }
+      if (e.target.id === 'select-animal-filter') { this.selectedAnimal = e.target.value; rerender(); }
       if (e.target.id === 'select-status-filter') { this.selectedStatus = e.target.value; rerender(); }
       else if (e.target.id === 'select-district-filter') { this.selectedDistrict = e.target.value; rerender(); }
       else if (e.target.id === 'select-sort') { this.sortBy = e.target.value; this.refresh(); }
@@ -807,11 +808,8 @@ window.HeatmapView = {
           <button class="infowindow-close-btn" onclick="window.HeatmapView.mapInstance.closePopup()">✕</button>
         </div>
         <div class="hm-popup-photo">${this.photoHtml(inc, 'hm-photo-lg')}</div>
-        <div class="infowindow-status-banner">
-          <span class="status-label">Status:</span>
-          <strong class="status-val-lost">${this.esc(inc.status.toUpperCase())}</strong>
-        </div>
         <div class="infowindow-details-list">
+          <div class="infowindow-row"><span class="row-key">Status:</span><span class="row-val"><strong class="status-val-lost">${this.esc(inc.status.toUpperCase())}</strong></span></div>
           <div class="infowindow-row"><span class="row-key">Location:</span><span class="row-val">${this.esc(inc.location || '—')}</span></div>
           <div class="infowindow-row"><span class="row-key">District:</span><span class="row-val">${this.esc(inc.district)}</span></div>
           <div class="infowindow-row"><span class="row-key">Reported:</span><span class="row-val">${this.esc(inc.date)} ${this.esc(inc.time)}</span></div>
@@ -980,12 +978,8 @@ window.HeatmapView = {
             <button class="infowindow-close-btn" onclick="window.HeatmapView.mapInstance.closePopup()">✕</button>
           </div>
 
-          <div class="infowindow-status-banner">
-            <span class="status-label">Status:</span>
-            <strong class="status-val-lost">${this.esc(String(inc.status).toUpperCase())}</strong>
-          </div>
-
           <div class="infowindow-details-list">
+          <div class="infowindow-row"><span class="row-key">Status:</span><span class="row-val"><strong class="status-val-lost">${this.esc(String(inc.status).toUpperCase())}</strong></span></div>
             <div class="infowindow-row">
               <span class="row-key">Location:</span>
               <span class="row-val">${this.esc(inc.location)}</span>
@@ -1197,7 +1191,7 @@ window.HeatmapView = {
       });
 
       // Scroll map into view smoothly
-      document.getElementById('heatmap-map-card')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      document.getElementById('heatmap-map-card')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
   }
 };

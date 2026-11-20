@@ -62,7 +62,7 @@ window.ReportsView = {
     const on = !!this.query.trim() || this.status !== 'all' || this.source !== 'all' || this.animal !== 'all' || this.period !== 'all';
     const pill = (s) => s === 'lost' ? 'status-lost' : s === 'found' ? 'status-safe' : 'status-pending';
     const select = (id, label, cur, opts) => `
-      <div class="hm-field"><label class="hm-label" for="${id}">${label}</label>
+      <div class="hm-field${id === 'rp-sort' ? ' rp-field-full' : ''}"><label class="hm-label" for="${id}">${label}</label>
         <select id="${id}" class="hm-select">${opts.map(([v, l]) => `<option value="${v}" ${cur === v ? 'selected' : ''}>${l}</option>`).join('')}</select></div>`;
 
     // Counts for the status cards follow every filter except the status itself, so they double as quick filters
@@ -109,20 +109,14 @@ window.ReportsView = {
             <label class="hm-label" for="rp-input">Search</label>
             <div class="hm-tbl-search rp-searchbox">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-              <input type="text" id="rp-input" placeholder="Name, breed, place or source  ( / )" value="${this.esc(this.draft)}" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="rp-suggest" aria-autocomplete="list" />
+              <input type="text" id="rp-input" placeholder="Search reports" value="${this.esc(this.draft)}" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="rp-suggest" aria-autocomplete="list" />
               <button type="button" class="rp-clear-x" id="rp-clear-x" aria-label="Clear search" ${this.draft ? '' : 'hidden'}>\u00d7</button>
               <button type="submit" class="btn btn-primary btn-sm">Search</button>
               <div class="rp-suggest" id="rp-suggest" role="listbox" hidden></div>
             </div>
           </form>
-          <div class="hm-field"><span class="hm-label">Status</span>
-            <div class="dash-segmented rp-status-seg" role="group" aria-label="Pet status">
-              ${[['all', 'All', base.length], ['lost', 'Lost', n('lost')], ['sighting', 'Sighting', n('sighting')], ['found', 'Found', n('found')]].map(([v, l, c]) => `<button type="button" class="rp-status ${this.status === v ? 'active' : ''}" data-v="${v}" aria-pressed="${this.status === v}">${l}<span class="rp-status-n">${c}</span></button>`).join('')}
-            </div></div>
-          <div class="hm-field"><span class="hm-label">Animal</span>
-            <div class="dash-segmented" role="group" aria-label="Animal">
-              ${[['all', 'All'], ['dog', 'Dogs'], ['cat', 'Cats'], ['other', 'Other']].map(([v, l]) => `<button type="button" class="rp-animal ${this.animal === v ? 'active' : ''}" data-v="${v}" aria-pressed="${this.animal === v}">${l}</button>`).join('')}
-            </div></div>
+          ${select('rp-status', 'Status', this.status, [['all', `All (${base.length})`], ['lost', `Lost (${n('lost')})`], ['sighting', `Sighting (${n('sighting')})`], ['found', `Found (${n('found')})`]])}
+          ${select('rp-animal', 'Animal', this.animal, [['all', 'All animals'], ['dog', 'Dogs'], ['cat', 'Cats'], ['other', 'Other']])}
           ${select('rp-source', 'Source', this.source, [['all', 'All sources'], ['owner', 'Owner report'], ['community', 'Community report']])}
           ${select('rp-period', 'Reported', this.period, [['all', 'Any time'], ['today', 'Today'], ['7d', 'Last 7 days'], ['30d', 'Last 30 days']])}
           ${select('rp-sort', 'Sort by', this.sortBy, [['date', 'Newest'], ['name', 'Name'], ['location', 'Location'], ['status', 'Status']])}
@@ -138,17 +132,17 @@ window.ReportsView = {
               ${all.length ? 'Try a wider period, or clear the filters.' : 'Missing-pet reports and sightings appear here as soon as they are filed.'}
             </div>` : `
           <div class="data-table-wrapper">
-            <table class="nock-data-table hm-table">
+            <table class="nock-data-table hm-table rp-cards">
               <thead><tr><th>Animal</th><th>Status</th><th>Location</th><th>Reported</th><th>Source</th><th></th></tr></thead>
               <tbody>
                 ${rows.map(inc => `
                   <tr class="incident-table-row rp-row" data-lat="${inc.lat}" data-lng="${inc.lng}" data-id="${this.esc(inc.id)}" title="Show on the heatmap">
-                    <td><div class="animal-cell">${H.photoHtml(inc)}<div class="animal-info"><span class="animal-name">${this.hl(inc.name)}</span><span class="animal-breed">${this.hl(inc.speciesTag)}</span></div></div></td>
-                    <td><span class="status-pill ${pill(inc.status)}">${this.esc(inc.status.toUpperCase())}</span></td>
-                    <td><div class="location-cell"><span class="loc-main">${this.hl(inc.barangay)}</span><span class="loc-sub">${this.hl(inc.district)}${inc.location && inc.location !== inc.barangay ? ' · ' + this.hl(inc.location) : ''}</span></div></td>
-                    <td><div class="date-time-cell"><span class="date-main">${this.esc(inc.date)}</span><span class="time-sub">${this.esc(inc.time)}</span></div></td>
-                    <td><span class="contact-name">${this.hl(inc.contact)}</span></td>
-                    <td style="text-align:right"><button class="btn btn-xs btn-secondary rp-locate" data-lat="${inc.lat}" data-lng="${inc.lng}" data-id="${this.esc(inc.id)}" title="Show on the heatmap">Locate</button></td>
+                    <td class="rp-c-animal"><div class="animal-cell">${H.photoHtml(inc)}<div class="animal-info"><span class="animal-name">${this.hl(inc.name)}</span><span class="animal-breed">${this.hl(inc.speciesTag)}</span></div></div></td>
+                    <td class="rp-c-status"><span class="status-pill ${pill(inc.status)}">${this.esc(inc.status.toUpperCase())}</span></td>
+                    <td class="rp-c-loc" data-label="Location"><div class="location-cell"><span class="loc-main">${this.hl(inc.barangay)}</span><span class="loc-sub">${this.hl(inc.district)}${inc.location && inc.location !== inc.barangay ? ' · ' + this.hl(inc.location) : ''}</span></div></td>
+                    <td class="rp-c-when" data-label="Reported"><div class="date-time-cell"><span class="date-main">${this.esc(inc.date)}</span><span class="time-sub">${this.esc(inc.time)}</span></div></td>
+                    <td class="rp-c-src" data-label="Source"><span class="contact-name">${this.hl(inc.contact)}</span></td>
+                    <td class="rp-c-act" style="text-align:right"><button class="rp-locate" data-lat="${inc.lat}" data-lng="${inc.lng}" data-id="${this.esc(inc.id)}" title="Show on the heatmap"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>Locate</button></td>
                   </tr>`).join('')}
               </tbody>
             </table>
@@ -181,8 +175,8 @@ window.ReportsView = {
     f('#rp-period', v => { this.period = v; });
     f('#rp-sort', v => { this.sortBy = v; });
     container.querySelectorAll('.rp-kpi').forEach(b => b.addEventListener('click', () => { this.status = b.dataset.status; this.page = 1; redraw(); }));
-    container.querySelectorAll('.rp-status').forEach(b => b.addEventListener('click', () => { this.status = b.dataset.v; this.page = 1; redraw(); }));
-    container.querySelectorAll('.rp-animal').forEach(b => b.addEventListener('click', () => { this.animal = b.dataset.v; this.page = 1; redraw(); }));
+    f('#rp-status', v => { this.status = v; });
+    f('#rp-animal', v => { this.animal = v; });
     container.querySelectorAll('.rp-chip').forEach(b => b.addEventListener('click', () => {
       const k = b.dataset.clear;
       if (k === 'query') this.query = this.draft = ''; else this[k] = 'all';

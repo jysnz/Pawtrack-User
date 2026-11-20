@@ -206,12 +206,17 @@ window.ImpoundmentsView = {
       <!-- Table Section -->
       <div class="table-container">
         <div class="table-toolbar">
-          <div class="table-filters">
-            <button class="filter-pill ${this.currentTab === 'active' ? 'active' : ''}" data-tab="active">Active Holding</button>
-            <button class="filter-pill ${this.currentTab === 'closed' ? 'active' : ''}" data-tab="closed">Closed Cases</button>
-            <button class="filter-pill ${this.currentTab === 'all' ? 'active' : ''}" data-tab="all">Full History</button>
+          ${facilityIds.length > 1 ? `<label class="imp-facility-filter"><span class="hm-label">Facility</span>
+            <select id="imp-facility-select" class="hm-select">
+              ${facilityIds.map(id => `<option value="${this.esc(id)}" ${this.facilityFilter === id ? 'selected' : ''}>${this.esc(shelterName(id))}</option>`).join('')}
+            </select></label>` : ''}
+          <div class="table-filters imp-tabs-field">
+            <label class="hm-label" for="imp-tab">Show</label>
+            <select id="imp-tab" class="hm-select">
+              ${[['active', 'Active Holding'], ['closed', 'Closed Cases'], ['all', 'Full History']].map(([v, l]) => `<option value="${v}" ${this.currentTab === v ? 'selected' : ''}>${l}</option>`).join('')}
+            </select>
           </div>
-          <div class="imp-tools" style="display:flex;align-items:center;gap:10px;margin-left:auto;">
+          <div class="imp-tools">
             <form id="imp-search-form" class="imp-search" role="search">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
               <input type="text" id="imp-search" placeholder="Pet, tag, cage or breed  ( / )" value="${this.esc(this.query)}" aria-label="Search impounded pets" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="imp-suggest" aria-autocomplete="list" />
@@ -219,7 +224,6 @@ window.ImpoundmentsView = {
               <button type="submit" class="btn btn-primary btn-sm" id="imp-search-btn">Search</button>
               <div class="rp-suggest" id="imp-suggest" role="listbox" hidden></div>
             </form>
-            <button type="button" class="btn btn-secondary btn-sm" id="imp-export" ${filtered.length ? '' : 'disabled'}>Export CSV</button>
           </div>
           <div class="imp-filterbar">
             ${[
@@ -230,16 +234,17 @@ window.ImpoundmentsView = {
               <div class="hm-field"><label class="hm-label" for="${id}">${label}</label>
                 <select id="${id}" class="hm-select">${opts.map(([v, l]) => `<option value="${v}" ${cur === v ? 'selected' : ''}>${l}</option>`).join('')}</select></div>`).join('')}
             ${filtersOn ? '<button type="button" class="btn btn-secondary btn-sm" id="imp-clear-filters">Clear filters</button>' : ''}
-            <span class="imp-count" aria-live="polite">${filtered.length} ${filtered.length === 1 ? 'result' : 'results'}</span>
+            <div class="imp-resultbar">
+              <span class="imp-count" aria-live="polite">${filtered.length} ${filtered.length === 1 ? 'result' : 'results'}</span>
+              <button type="button" class="btn btn-secondary btn-sm imp-export-btn" id="imp-export" ${filtered.length ? '' : 'disabled'}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/></svg>Export CSV
+              </button>
+            </div>
           </div>
-          ${facilityIds.length > 1 ? `<label class="imp-facility-filter">Facility
-            <select id="imp-facility-select" class="form-control">
-              ${facilityIds.map(id => `<option value="${this.esc(id)}" ${this.facilityFilter === id ? 'selected' : ''}>${this.esc(shelterName(id))}</option>`).join('')}
-            </select></label>` : ''}
         </div>
 
         <div class="data-table-wrapper">
-          <table class="data-table">
+          <table class="data-table imp-table">
             <thead>
               <tr>
                 <th>Pet</th>
@@ -254,7 +259,7 @@ window.ImpoundmentsView = {
             <tbody>
               ${filtered.length === 0 ? `
                 <tr>
-                  <td colspan="7" style="text-align: center; padding: 48px 24px; color: var(--ink-muted);">
+                  <td colspan="7" class="imp-empty" style="text-align: center; padding: 48px 24px; color: var(--ink-muted);">
                     <div style="font-weight: 700; color: var(--ink-primary); font-size: 14px; margin-bottom: 4px;">No animals in holding</div>
                     <div style="font-size: 12px; max-width: 480px; margin: 0 auto; line-height: 1.5; color: var(--ink-muted);">
                       Tap “Scan &amp; intake” when an animal arrives at the facility.
@@ -283,7 +288,7 @@ window.ImpoundmentsView = {
 
                 return `
                   <tr data-impound-id="${imp.id}">
-                    <td>
+                    <td class="imp-c-pet" data-label="Pet">
                       <div class="pet-cell">
                         <img src="${this.esc(/^https:\/\//.test(imp.photoUrl || '') ? imp.photoUrl : 'https://images.unsplash.com/photo-1543466835-00a7907e9de1?auto=format&fit=crop&w=150&q=80')}" class="pet-thumb" alt="" />
                         <div class="pet-meta">
@@ -292,19 +297,19 @@ window.ImpoundmentsView = {
                         </div>
                       </div>
                     </td>
-                    <td>
+                    <td data-label="Facility &amp; cage">
                       <div class="imp-fac">
                         <b>${this.esc(imp.shelterName || 'Municipal Shelter')}</b>
                         <span class="imp-cage"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16M15 4v16"/></svg>${hl(imp.cageNumber || 'No cage yet')}</span>
                       </div>
                     </td>
-                    <td>
+                    <td data-label="Taken in">
                       <div class="imp-when">
                         <b>${new Date(imp.intakeDate).toLocaleDateString()}</b>
                         <span>${new Date(imp.intakeDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                       </div>
                     </td>
-                    <td>
+                    <td data-label="Claim window">
                       ${transferNote}
                       ${outcome ? `
                         <div class="imp-claim">
@@ -325,13 +330,13 @@ window.ImpoundmentsView = {
                         </div>
                       `}
                     </td>
-                    <td>${penaltyCell}</td>
-                    <td>
+                    <td data-label="Penalty">${penaltyCell}</td>
+                    <td data-label="Notes">
                       <div class="imp-note" title="${this.esc(imp.healthCondition || '')}">${this.esc(imp.healthCondition || 'No condition issues noted upon intake.')}</div>
                       <span class="imp-officer"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>${this.esc(imp.intakeOfficer || 'ACO Officer')}</span>
                     </td>
-                    <td style="text-align: right;">
-                      <div style="display: flex; justify-content: flex-end; gap: 6px;">
+                    <td class="imp-c-actions" style="text-align: right;">
+                      <div class="imp-actions" style="display: flex; justify-content: flex-end; gap: 6px;">
                         ${!outcome ? `
                           <button class="btn btn-sm chip-green btn-claim-impound" data-impound-id="${imp.id}" ${ticket && ticket.status === 'unpaid' ? `disabled title="Penalty ticket ${this.esc(ticket.ticketNo)} is unpaid. Record the payment (or waive it) first."` : 'title="Hand the pet back to its owner and close the case"'}>
                             Release to owner
@@ -457,11 +462,9 @@ window.ImpoundmentsView = {
     const store = window.adminStore;
 
     // Tabs
-    container.querySelectorAll('.filter-pill').forEach(pill => {
-      pill.addEventListener('click', (e) => {
-        this.currentTab = e.target.getAttribute('data-tab');
-        this.render(container);
-      });
+    container.querySelector('#imp-tab')?.addEventListener('change', (e) => {
+      this.currentTab = e.target.value;
+      this.render(container);
     });
 
     // Intake modal trigger

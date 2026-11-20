@@ -64,8 +64,11 @@ window.SheltersView = {
         <div class="shm-frow ${s.sub ? 'is-sub' : ''} ${viewingId === s.id ? 'is-viewing' : ''}" data-id="${esc(s.id)}" role="link" tabindex="0" aria-label="Open the pets at ${esc(s.name)}"${viewingId === s.id ? ' aria-current="true"' : ''}>
           <span class="shm-frow-thumb ${photo ? '' : 'is-empty'}">${photo ? `<img src="${esc(photo)}" alt="" loading="lazy" />` : '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 21h18M5 21V7l7-4 7 4v14M9 21v-6h6v6"/></svg>'}</span>
           <div class="shm-frow-main">
-            <b>${esc(s.name)} <em class="${s.sub ? 'is-sub' : ''}">${s.sub ? `Sub of ${esc(s.parentName || 'the main facility')}` : 'Main'}</em></b>
-            <span>${esc(detail || 'No address on file')}</span>
+            ${s.sub ? `<small class="shm-frow-subtag"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 3v8a4 4 0 0 0 4 4h10"/><path d="m15 11 4 4-4 4"/></svg><span class="shm-subtag-text">Sub-facility of <strong>${esc(s.parentName || 'the main facility')}</strong></span></small>` : ''}
+            <b>${esc(s.name)} <em class="${s.sub ? 'is-sub' : ''}">${s.sub ? 'Sub' : 'Main'}</em></b>
+            <span class="shm-frow-addr">${esc(s.address || 'No address on file')}</span>
+            ${s.sub && s.coverage && s.coverage.length ? `<span class="shm-frow-cover"><b>Covers:</b> ${esc(s.coverage.slice(0, 4).join(', '))}${s.coverage.length > 4 ? ` +${s.coverage.length - 4} more` : ''}</span>` : ''}
+            ${s.phone ? `<span class="shm-frow-phone">${esc(window.FacilityForm ? window.FacilityForm.phone.format(s.phone) : s.phone)}</span>` : ''}
           </div>
           <div class="shm-frow-stat">
             <span><b>${s.holding}</b>${cap ? ` of ${cap}` : ''} in holding</span>
@@ -87,8 +90,8 @@ window.SheltersView = {
         <div class="view-header-actions" id="shm-actions">${actions}</div>
       </div>
       <div id="shm-note">${member ? this.subNote(store) : `<div class="shm-note"><b>You are not part of a facility yet.</b> Register your impound facility and you become its manager, or join your colleagues' facility with the invite code your manager shares. Then you can log intakes from Impoundments.</div>`}</div>
-      <div class="nock-card shm-flist" aria-label="Your facilities">
-        ${list.length ? list.map(row).join('') : '<div class="shm-list-empty">Facilities you add will appear here.</div>'}
+      <div class="shm-fgroups" aria-label="Your facilities">
+        ${list.length ? list.reduce((groups, s) => { if (!s.sub || !groups.length) groups.push([]); groups[groups.length - 1].push(s); return groups; }, []).map(g => `<div class="nock-card shm-flist">${g.map(row).join('')}</div>`).join('') : '<div class="nock-card shm-flist"><div class="shm-list-empty">Facilities you add will appear here.</div></div>'}
       </div>`;
 
     container.querySelector('#btn-add-facility')?.addEventListener('click', () => this.openShelterModal(null));
@@ -440,6 +443,8 @@ window.SheltersView = {
       'Animal Welfare Hospital & Sanctuary', 'Spay/Neuter & Animal Welfare Center', 'Private Animal Rescue Sanctuary'
     ];
     const currentType = (initial && initial.type) || types[0];
+    // A type that is not in the list (typed in earlier via "Others") opens in the text field
+    const customType = !types.includes(currentType);
     const val = (key, fallback = '') => esc(initial && initial[key] != null && initial[key] !== '' ? initial[key] : fallback);
 
     const hasPin = !!initial && Number.isFinite(+initial.lat) && Number.isFinite(+initial.lng);
@@ -483,13 +488,28 @@ window.SheltersView = {
           </div>` : ''}
           <div class="form-group">
             <label class="form-label">Facility type</label>
-            <select class="form-control" name="type">
+            <select class="form-control" name="type" id="fm-type" ${customType ? 'hidden disabled' : ''}>
               ${types.map(t => `<option value="${esc(t)}" ${t === currentType ? 'selected' : ''}>${esc(t)}</option>`).join('')}
+              <option value="__other__">Others…</option>
             </select>
+            <div class="fm-address-row" id="fm-type-other-wrap" ${customType ? '' : 'hidden'}>
+              <input type="text" class="form-control" id="fm-type-other" name="typeOther" maxlength="80" value="${customType ? esc(currentType) : ''}" placeholder="Type the facility type" autocomplete="off" ${customType ? 'required' : 'disabled'} />
+              <button type="button" class="btn btn-secondary" id="fm-type-back">Back to list</button>
+            </div>
+          </div>
+          <div class="form-group" id="fm-region-wrap">
+            <label class="form-label" for="fm-region">Region *</label>
+            <select class="form-control" id="fm-region" disabled><option value="">Loading regions…</option></select>
           </div>
           <div class="form-group">
-            <label class="form-label">City / municipality *</label>
-            <input type="text" class="form-control" name="city" value="${val('city')}" placeholder="e.g. Quezon City" required />
+            <label class="form-label" for="fm-city">City / municipality *</label>
+            <input type="text" class="form-control" id="fm-city" name="city" value="${val('city')}" placeholder="Search for a city" autocomplete="off" required />
+            <div class="fm-hint" id="fm-city-hint"></div>
+          </div>
+          <div class="form-group form-full" id="fm-coverage-wrap" hidden>
+            <label class="form-label">Barangays covered * <span class="fm-sub">The areas inside the main facility's city that this sub-facility serves</span></label>
+            <div class="fm-cov" id="fm-cov"></div>
+            <div class="fm-hint" id="fm-cov-hint" aria-live="polite"></div>
           </div>
 
           <div class="form-group form-full">
@@ -501,7 +521,10 @@ window.SheltersView = {
           </div>
           <div class="form-group form-full">
             <label class="form-label">Pin the facility on the map * <span class="fm-sub">Click the map or drag the pin to the exact spot</span></label>
-            <div id="fm-map" class="fm-map"><div class="shm-fallback">Loading map…</div></div>
+            <div class="fm-map-box is-locked" id="fm-map-box">
+              <div id="fm-map" class="fm-map"><div class="shm-fallback">Loading map…</div></div>
+              <div class="fm-map-lock" id="fm-map-lock"><span>Choose the city first</span></div>
+            </div>
             <div class="fm-pin-status" id="fm-pin-status" aria-live="polite"></div>
             <div class="fm-hint" id="fm-map-hint" hidden></div>
           </div>
@@ -583,77 +606,323 @@ window.SheltersView = {
     const hoursCtl = FF.hours.bind(modal.querySelector('#fm-hours'));
 
     let picker = null;
+    // ----- City: the chosen city limits the map and the pin -----
+    const cityHint = modal.querySelector('#fm-city-hint');
+    const mapBox = modal.querySelector('#fm-map-box');
+    const covWrap = modal.querySelector('#fm-coverage-wrap');
+    const covEl = modal.querySelector('#fm-cov');
+    const covHint = modal.querySelector('#fm-cov-hint');
+    const subNow = () => ((chooseType || retype) ? !!typeBox.checked : (isEdit ? !!initial.parentId : asSub));
+    const covSel = new Set(initial && Array.isArray(initial.coverage) ? initial.coverage : []);
+    let cityInfo = initial && initial.city ? { name: initial.city, placeId: initial.cityPlaceId || '', bounds: initial.cityBounds || null } : null;
+    const outsideCity = (pin) => !!(cityInfo && cityInfo.bounds && pin && !FF.City.inBounds(pin, cityInfo.bounds));
+    const parentFacility = () => {
+      const f = form.elements.parentId;
+      const id = (f && f.value) || opts.parentId || (mains[0] && mains[0].id);
+      return store.getShelters().find(x => x.id === id) || null;
+    };
+
+    // Barangays: tick the ones this sub-facility covers (typed by hand when the list cannot be loaded)
+    let covToken = 0;
+    const covValue = () => {
+      const t = covEl.querySelector('#fm-cov-text');
+      return t ? [...new Set(t.value.split(/[,\n]/).map(x => x.trim()).filter(Boolean))] : [...covSel];
+    };
+    // Outline the ticked barangays on the map (looked up one at a time, remembered afterwards)
+    const MAX_DRAWN = 30;
+    const shapeCache = new Map();
+    let drawToken = 0;
+    let drawTimer = null;
+    const drawAreas = () => {
+      clearTimeout(drawTimer);
+      drawTimer = setTimeout(async () => {
+        const token = ++drawToken;
+        if (!picker || !picker.setAreas) return;
+        if (!cityInfo || !subNow()) { picker.setAreas(null); return; }
+        const all = covValue();
+        const names = all.slice(0, MAX_DRAWN);
+        const city = cityInfo;
+        const keyOf = (n) => city.name + '|' + n;
+        const have = () => names.map(n => shapeCache.get(keyOf(n))).filter(Boolean);
+        if (!names.length) { picker.setAreas(null); return; }
+        picker.setAreas(have(), false);
+        for (const n of names) {
+          if (shapeCache.has(keyOf(n)) || !window.PSGC) continue;
+          covHint.textContent = `Outlining ${n} on the map…`;
+          const f = await window.PSGC.shapeFor(n, city.name, city.bounds);
+          if (token !== drawToken || !modal.isConnected) return;
+          shapeCache.set(keyOf(n), f || null);
+          picker.setAreas(have(), false);
+        }
+        picker.setAreas(have(), true);
+        const missed = names.filter(n => !shapeCache.get(keyOf(n))).length;
+        covHint.textContent = `${all.length} ${all.length === 1 ? 'barangay' : 'barangays'} selected`
+          + (over(all) ? `. The map shows the first ${MAX_DRAWN}.` : '')
+          + (missed ? `. ${missed} could not be outlined on the map.` : '');
+      }, 350);
+    };
+    const over = (all) => all.length > MAX_DRAWN;
+    const renderCoverage = (list) => {
+      if (!list) {
+        covEl.innerHTML = `<textarea class="form-control" id="fm-cov-text" rows="2" placeholder="Type the barangays, separated by commas">${esc([...covSel].join(', '))}</textarea>`;
+        covHint.textContent = 'We could not load the barangay list for this city, so type the names.';
+        covEl.querySelector('#fm-cov-text').addEventListener('change', drawAreas);
+        drawAreas();
+        return;
+      }
+      const names = [...new Set([...list, ...covSel])];
+      // A searchable dropdown: type in the box to filter, tick barangays, chips show what is chosen
+      covEl.innerHTML = `<div class="fm-dd" id="fm-dd">
+          <div class="fm-dd-field">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+            <input type="text" id="fm-cov-q" placeholder="Search or choose barangays" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="fm-dd-panel" aria-label="Search barangays" />
+            <button type="button" class="fm-dd-toggle" id="fm-dd-toggle" aria-label="Show the barangay list" tabindex="-1"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button>
+          </div>
+          <div class="fm-dd-panel" id="fm-dd-panel" role="listbox" aria-multiselectable="true" hidden>
+            <div class="fm-dd-actions"><button type="button" class="fm-dd-link" id="fm-cov-all">Select all shown</button><button type="button" class="fm-dd-link" id="fm-cov-none">Clear</button></div>
+            <div class="fm-cov-list">${names.map(n => `<label class="fm-cov-item"><input type="checkbox" value="${esc(n)}" ${covSel.has(n) ? 'checked' : ''} /><span>${esc(n)}</span></label>`).join('')}<div class="fm-dd-empty" hidden>No barangay matches</div></div>
+          </div>
+        </div>
+        <div class="fm-chips" id="fm-chips" aria-label="Chosen barangays"></div>`;
+      const dd = covEl.querySelector('#fm-dd');
+      const q = covEl.querySelector('#fm-cov-q');
+      const panel = covEl.querySelector('#fm-dd-panel');
+      const items = [...covEl.querySelectorAll('.fm-cov-item')];
+      const empty = covEl.querySelector('.fm-dd-empty');
+      const chips = covEl.querySelector('#fm-chips');
+      const setOpen = (open) => { panel.hidden = !open; q.setAttribute('aria-expanded', String(open)); dd.classList.toggle('is-open', open); };
+      const filter = () => {
+        const term = q.value.trim().toLowerCase();
+        let shown = 0;
+        items.forEach(li => { const hit = !term || li.textContent.toLowerCase().includes(term); li.hidden = !hit; if (hit) shown++; });
+        empty.hidden = shown > 0;
+      };
+      const renderChips = () => {
+        chips.innerHTML = [...covSel].map(n => `<span class="fm-chip">${esc(n)}<button type="button" data-rm="${esc(n)}" aria-label="Remove ${esc(n)}">&times;</button></span>`).join('');
+      };
+      const count = () => {
+        covHint.textContent = covSel.size ? `${covSel.size} of ${names.length} barangays selected` : 'Select at least one barangay.';
+        renderChips();
+        drawAreas();
+      };
+      q.addEventListener('focus', () => setOpen(true));
+      q.addEventListener('input', () => { setOpen(true); filter(); });
+      q.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') { setOpen(false); e.stopPropagation(); }
+        // Enter picks the first match so a barangay can be added without the mouse
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          const first = items.find(li => !li.hidden);
+          if (first) { const box = first.firstElementChild; box.checked = !box.checked; box.checked ? covSel.add(box.value) : covSel.delete(box.value); count(); }
+        }
+      });
+      covEl.querySelector('#fm-dd-toggle').addEventListener('click', () => { setOpen(panel.hidden); if (!panel.hidden) q.focus(); });
+      panel.addEventListener('change', (e) => {
+        if (e.target.matches('input[type=checkbox]')) { e.target.checked ? covSel.add(e.target.value) : covSel.delete(e.target.value); count(); }
+      });
+      chips.addEventListener('click', (e) => {
+        const rm = e.target.closest('[data-rm]');
+        if (!rm) return;
+        covSel.delete(rm.dataset.rm);
+        const box = items.map(li => li.firstElementChild).find(b => b.value === rm.dataset.rm);
+        if (box) box.checked = false;
+        count();
+      });
+      covEl.querySelector('#fm-cov-all').addEventListener('click', () => { items.filter(li => !li.hidden).forEach(li => { li.firstElementChild.checked = true; covSel.add(li.firstElementChild.value); }); count(); });
+      covEl.querySelector('#fm-cov-none').addEventListener('click', () => { items.forEach(li => { li.firstElementChild.checked = false; }); covSel.clear(); count(); });
+      // Click anywhere else to close the list
+      const away = (e) => { if (!dd.isConnected) { document.removeEventListener('mousedown', away); return; } if (!dd.contains(e.target)) setOpen(false); };
+      document.addEventListener('mousedown', away);
+      count();
+    };
+    const refreshCoverage = () => {
+      covWrap.hidden = !subNow();
+      if (covWrap.hidden) return;
+      if (!cityInfo) { covEl.innerHTML = '<div class="fm-hint">Choose the main facility first: its city decides the barangay list.</div>'; covHint.textContent = ''; return; }
+      const token = ++covToken;
+      covEl.innerHTML = '<div class="fm-hint">Loading barangays…</div>';
+      covHint.textContent = '';
+      const code = /^psgc:/.test(cityInfo.placeId || '') ? cityInfo.placeId.slice(5) : '';
+      const lookup = !window.PSGC ? Promise.resolve(null) : code ? window.PSGC.barangaysByCode(code) : window.PSGC.barangaysFor(cityInfo.name);
+      lookup.then((list) => { if (token === covToken && modal.isConnected) renderCoverage(list); });
+    };
+
+    const applyCity = (c) => {
+      const changed = (c && c.name) !== (cityInfo && cityInfo.name);
+      cityInfo = c && c.name ? c : null;
+      mapBox.classList.toggle('is-locked', !cityInfo);
+      cityHint.textContent = cityInfo
+        ? (cityInfo.bounds ? `The map and the pin are limited to ${cityInfo.name}${cityInfo.province ? ', ' + cityInfo.province : ''}.` : `We could not find the limits of ${cityInfo.name}, so the map is not limited.`)
+        : (subNow() ? 'A sub-facility is in its main facility\'s city.' : 'Pick a city from the list. The map will be limited to it.');
+      if (picker && picker.setBounds) picker.setBounds(cityInfo && cityInfo.bounds);
+      if (changed && !subNow() && picker && picker.setAreas) picker.setAreas(null);
+      // A different city (or none, after the region changed) means the old pin and address no longer apply
+      if (changed && picker && picker.getPin && picker.getPin()) {
+        picker.clearPin();
+        pinTouched = false;
+        setStatus(null);
+        addressInput.value = '';
+        addressAuto = false;
+        lastLookup = '';
+        if (errMsg.startsWith('The pin is outside')) showError('');
+      }
+      const pin = picker && picker.getPin();
+      if (cityInfo && pin && outsideCity(pin)) showError(`The pin is outside ${cityInfo.name}. Click inside the city to move it.`, mapBox);
+      else if (errMsg.startsWith('The pin is outside')) showError('');
+      if (changed) refreshCoverage();
+    };
+    const cityCtl = FF.City.attach(cityInput, applyCity);
+
+    // Region first: the city list only offers the cities of the chosen region. A sub-facility takes its main
+    // facility's city, so it skips the region. If the region list can't load, the city box works as before.
+    const regionSel = modal.querySelector('#fm-region');
+    const regionWrap = modal.querySelector('#fm-region-wrap');
+    let regionsFailed = false;
+    const syncCityLock = () => {
+      const locked = !regionsFailed && !subNow() && !regionSel.value;
+      cityInput.disabled = locked;
+      cityInput.placeholder = locked ? 'Choose a region first' : 'Search for a city';
+      regionWrap.hidden = regionsFailed || subNow();
+    };
+    regionSel.addEventListener('change', () => {
+      cityCtl.setRegion(regionSel.value);
+      cityInput.value = ''; cityCtl.set(null);
+      syncCityLock();
+      if (regionSel.value) cityInput.focus();
+    });
+    if (window.PSGC) {
+      Promise.all([window.PSGC.regions(), window.PSGC.cities()]).then(([regions, cities]) => {
+        if (!modal.isConnected) return;
+        regionSel.innerHTML = '<option value="">Select a region</option>' + regions.map(r => `<option value="${esc(r.code)}">${esc(r.label)}</option>`).join('');
+        regionSel.disabled = false;
+        const own = cityInfo && (cities.find(c => cityInfo.placeId === 'psgc:' + c.code) || cities.find(c => c.name.toLowerCase() === String(cityInfo.name).toLowerCase()));
+        if (own && own.regionCode) { regionSel.value = own.regionCode; cityCtl.setRegion(own.regionCode); }
+        syncCityLock();
+      }).catch(() => { regionsFailed = true; syncCityLock(); });
+    } else { regionsFailed = true; }
+    // A sub-facility is always in its main facility's city
+    const syncParentCity = () => {
+      const sub = subNow();
+      cityInput.readOnly = sub;
+      cityInput.classList.toggle('is-readonly', sub);
+      syncCityLock();
+      if (!sub) { refreshCoverage(); return; }
+      const parent = parentFacility();
+      if (!parent || !parent.city) { cityInput.value = ''; cityCtl.set(null); refreshCoverage(); return; }
+      cityCtl.set({ name: parent.city, placeId: parent.cityPlaceId || '', bounds: parent.cityBounds || null });
+      if (!parent.cityBounds) FF.City.resolve(parent.city).then(c => { if (c && modal.isConnected && cityInfo && cityInfo.name === parent.city) cityCtl.set({ ...c, name: parent.city }); });
+      refreshCoverage();
+    };
+    typeBox?.addEventListener('change', syncParentCity);
+    form.elements.parentId?.addEventListener('change', syncParentCity);
+    if (cityInfo && !cityInfo.bounds && !subNow()) FF.City.resolve(cityInfo.name).then(c => { if (c && modal.isConnected && cityInfo && cityInfo.name === initial.city) cityCtl.set({ ...c, name: initial.city }); });
+
     let pinTouched = hasPin;                 // the person (or a saved pin) decided where it goes: typing the address must not move it
     let addressAuto = false;                 // the address text was filled in from the pin, so a new pin may replace it
     let lastLookup = (initial && initial.address) || '';
     let locating = false;
 
-    const showError = (msg) => {
-      errorEl.textContent = msg;
-      errorEl.hidden = !msg;
-      if (msg) errorEl.scrollIntoView({ block: 'nearest' });
+    // An error goes right under the field it is about (pass that field as `field`); without one it shows at the bottom
+    let errMsg = '';
+    const showError = (msg, field) => {
+      errMsg = msg || '';
+      modal.querySelectorAll('.fm-inline-error').forEach(n => n.remove());
+      errorEl.textContent = '';
+      errorEl.hidden = true;
+      if (!msg) return;
+      const group = field && field.closest ? field.closest('.form-group') : null;
+      let box = errorEl;
+      if (group) {
+        box = document.createElement('div');
+        box.className = 'fm-error fm-inline-error';
+        box.setAttribute('role', 'alert');
+        group.appendChild(box);
+      }
+      box.textContent = msg;
+      box.hidden = false;
+      box.scrollIntoView({ block: 'nearest' });
     };
-    const setStatus = (pin, note) => {
-      statusEl.classList.toggle('is-set', !!pin);
-      statusEl.textContent = pin
-        ? `Pin set at ${pin.lat.toFixed(5)}, ${pin.lng.toFixed(5)}${note ? ' · ' + note : ''}`
-        : 'No pin yet. Click the map, or type the address and press "Find on map".';
-    };
+    const hoursEl = modal.querySelector('#fm-hours');
+    // The pin position is shown by the pin itself; no "Pin set at …" line under the map
+    const setStatus = (pin) => { statusEl.classList.toggle('is-set', !!pin); statusEl.textContent = ''; statusEl.hidden = true; };
     setStatus(hasPin ? { lat: +initial.lat, lng: +initial.lng } : null);
+
+    // Start-up for the city rules (after showError exists)
+    applyCity(cityInfo);
+    syncParentCity();
 
     const closeDialog = () => {
       if (picker) picker.destroy();
       window.adminApp.closeModal();
     };
-    modal.querySelector('#shelter-close-btn')?.addEventListener('click', closeDialog);
-    modal.querySelector('#shelter-cancel-btn')?.addEventListener('click', closeDialog);
+    // Closing without saving asks first (X, Cancel, clicking outside and Escape); saving closes straight away
+    const confirmClose = () => window.adminApp.confirmDialog({
+      title: 'Close without saving?',
+      message: isEdit ? 'Your changes to this facility will be lost.' : 'The details you entered for this facility will be lost.',
+      confirmLabel: 'Discard and close',
+      cancelLabel: 'Keep editing',
+      danger: true
+    });
+    if (window.adminApp.setModalGuard) window.adminApp.setModalGuard(confirmClose);
+    const askClose = async () => { if (!window.adminApp.confirmDialog || await confirmClose()) closeDialog(); };
+    modal.querySelector('#shelter-close-btn')?.addEventListener('click', askClose);
+    modal.querySelector('#shelter-cancel-btn')?.addEventListener('click', askClose);
 
     // The pin was moved by hand: name the place under it when the address is empty or was filled in earlier
     const onPick = async (pos) => {
       pinTouched = true;
       showError('');
       setStatus(pos);
+      if (outsideCity(pos)) { showError(`That spot is outside ${cityInfo.name}. Click inside the city.`, mapBox); return; }
       if (!picker || !picker.canGeocode) return;
       const place = await picker.reverse(pos);
       if (!place) return;
       let filled = false;
       if (!addressInput.value.trim() || addressAuto) { addressInput.value = place.address; addressAuto = true; lastLookup = place.address; filled = true; }
-      if (!cityInput.value.trim() && place.city) cityInput.value = place.city;
       if (filled) setStatus(pos, 'address filled in from the pin, edit it if it is not exact');
     };
 
     // Type the address, then place the pin from it
-    const locate = async () => {
+    // checkOnly: the pin was placed by hand, so only check that the address is in the city; do not move the pin
+    const locate = async (checkOnly = false) => {
       const text = addressInput.value.trim();
       if (!text || locating || !picker || !picker.canGeocode) { if (!text) addressInput.focus(); return; }
+      if (!cityInfo) { showError('Choose the city first, then find the address.', cityInput); cityInput.focus(); return; }
       locating = true;
       locateBtn.disabled = true;
       locateBtn.textContent = 'Finding…';
-      const city = cityInput.value.trim();
-      const found = await picker.geocode(`${text}${city && !text.toLowerCase().includes(city.toLowerCase()) ? ', ' + city : ''}, Philippines`);
+      const found = await picker.geocode(`${text}, Philippines`);
       locating = false;
       locateBtn.disabled = false;
       locateBtn.textContent = 'Find on map';
+      // The map box can be missing or too loose, so also compare the city/town OpenStreetMap names for the address
+      const wanted = window.PSGC ? window.PSGC.norm(cityInfo.name) : '';
+      const wrongPlace = !!(found && wanted && found.places && found.places.length && !found.places.some(p => window.PSGC.norm(p) === wanted));
+      if (found && (outsideCity(found) || wrongPlace)) {
+        showError(`That address is not inside ${cityInfo.name}. Check it, or click the map inside the city.`, addressInput);
+        return;
+      }
       if (!found) {
-        showError('We could not find that address. Check the spelling, or click the map to place the pin yourself.');
+        showError('We could not find that address. Check the spelling, or click the map to place the pin yourself.', addressInput);
         return;
       }
       showError('');
       lastLookup = text;
+      if (checkOnly) return;
       addressAuto = false;
       pinTouched = false;
       picker.setPin({ lat: found.lat, lng: found.lng }, 17);
-      if (!city && found.city) cityInput.value = found.city;
       setStatus({ lat: found.lat, lng: found.lng }, 'from the address, drag it if it is not exact');
     };
 
-    locateBtn.addEventListener('click', locate);
+    locateBtn.addEventListener('click', () => locate());
     addressInput.addEventListener('input', () => { addressAuto = false; });
     addressInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); locate(); } });
-    // Leaving the field with a new address places the pin for them, unless they already placed it themselves
+    // Leaving the field with a new address places the pin for them. If they already placed the pin themselves it
+    // stays where it is, but the address is still checked against the city.
     addressInput.addEventListener('blur', () => {
       const text = addressInput.value.trim();
-      if (picker && picker.canGeocode && !pinTouched && text && text !== lastLookup) locate();
+      if (picker && picker.canGeocode && text && text !== lastLookup) locate(pinTouched);
     });
 
     FF.MapPicker.create(modal.querySelector('#fm-map'), {
@@ -668,20 +937,40 @@ window.SheltersView = {
       }
     }).then((p) => {
       picker = p;
-      if (!modal.isConnected) p.destroy();
+      if (!modal.isConnected) { p.destroy(); return; }
+      if (cityInfo && cityInfo.bounds && p.setBounds) p.setBounds(cityInfo.bounds);
+      if (subNow() && covValue().length) drawAreas();
     });
+
+    // Facility type: "Others…" swaps the dropdown for a text field; "Back to list" swaps it back
+    const typeSel = modal.querySelector('#fm-type');
+    const typeOtherWrap = modal.querySelector('#fm-type-other-wrap');
+    const typeOther = modal.querySelector('#fm-type-other');
+    const showTypeText = on => {
+      typeSel.hidden = on; typeSel.disabled = on;
+      typeOtherWrap.hidden = !on; typeOther.disabled = !on; typeOther.required = on;
+      if (on) { typeOther.focus(); }
+      else { if (typeSel.value === '__other__') typeSel.value = types.includes(currentType) ? currentType : types[0]; typeSel.focus(); }
+    };
+    typeSel.addEventListener('change', () => { if (typeSel.value === '__other__') showTypeText(true); });
+    modal.querySelector('#fm-type-back').addEventListener('click', () => showTypeText(false));
 
     saveBtn?.addEventListener('click', () => {
       showError('');
       if (!form.checkValidity()) { form.reportValidity(); return; }
+      if (!typeOther.disabled && !typeOther.value.trim()) { showError('Type the facility type, or go back to the list.', typeOther); typeOther.focus(); return; }
       const hoursError = hoursCtl.validate();
-      if (hoursError) { showError(hoursError); return; }
+      if (hoursError) { showError(hoursError, hoursEl); return; }
       const isSubNow = chooseType ? !!typeBox.checked : asSub;
-      if (retype && typeBox.checked && !parentSel.value) { showError('Choose the main facility this sub-facility belongs to.'); parentSel.focus(); return; }
-      if (chooseType && isSubNow && !parentSel.value) { showError('Choose the main facility this sub-facility belongs to.'); parentSel.focus(); return; }
+      if (retype && typeBox.checked && !parentSel.value) { showError('Choose the main facility this sub-facility belongs to.', parentSel); parentSel.focus(); return; }
+      if (chooseType && isSubNow && !parentSel.value) { showError('Choose the main facility this sub-facility belongs to.', parentSel); parentSel.focus(); return; }
+      if (!subNow() && !regionsFailed && !regionSel.value) { showError('Choose the region first, then pick the city.', regionSel); regionSel.focus(); return; }
+      if (!cityInfo) { showError('Pick the facility\'s city from the list first.', cityInput); cityInput.focus(); return; }
+      if (subNow() && !covValue().length) { showError('Choose at least one barangay this sub-facility covers.', covEl); covEl.scrollIntoView({ block: 'center' }); return; }
       const pin = picker && picker.getPin();
+      if (pin && outsideCity(pin)) { showError(`The pin is outside ${cityInfo.name}. Move it inside the city.`, mapBox); return; }
       if (!pin) {
-        showError('Place the pin on the map: click the facility\'s exact location, or type its address and press "Find on map".');
+        showError('Place the pin on the map: click the facility\'s exact location, or type its address and press "Find on map".', mapBox);
         return;
       }
 
@@ -699,8 +988,11 @@ window.SheltersView = {
       const shelterData = {
         id: initial ? initial.id : 'sh-' + Date.now(),
         name: formData.get('name'),
-        type: formData.get('type') || types[0],
-        city: formData.get('city') || '',
+        type: (typeOther.disabled ? formData.get('type') : String(formData.get('typeOther') || '').trim()) || types[0],
+        city: cityInfo.name,
+        cityPlaceId: cityInfo.placeId || '',
+        cityBounds: cityInfo.bounds || null,
+        coverage: subNow() ? covValue() : undefined,
         address: String(formData.get('address') || '').trim(),
         phone: FF.phone.toStored(FF.phone.digits(formData.get('phone'))),
         email: formData.get('email'),

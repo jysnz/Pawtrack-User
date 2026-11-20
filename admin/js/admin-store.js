@@ -496,7 +496,10 @@ class AdminStore {
       capacity: s.capacity != null ? s.capacity : (extras.capacity || 50),
       officerInCharge: s.officer_in_charge || extras.officerInCharge || '',
       city: s.city || extras.city || '',
-      type: s.facility_type || extras.type || ''
+      type: s.facility_type || extras.type || '',
+      cityPlaceId: s.city_place_id || '',
+      cityBounds: s.city_bounds || null,
+      coverage: Array.isArray(s.coverage_barangays) ? s.coverage_barangays : []
     };
   }
 
@@ -1074,8 +1077,11 @@ class AdminStore {
       capacity: parseInt(shelterData.capacity, 10) || 50,
       officer_in_charge: shelterData.officerInCharge || null,
       city: shelterData.city || null,
-      facility_type: shelterData.type || null
+      facility_type: shelterData.type || null,
+      city_place_id: shelterData.cityPlaceId || null,
+      city_bounds: shelterData.cityBounds || null
     };
+    if (asSub || (!isNew && Array.isArray(shelterData.coverage))) row.coverage_barangays = Array.isArray(shelterData.coverage) ? shelterData.coverage : [];
 
     if (isNew) {
       if (asSub) {

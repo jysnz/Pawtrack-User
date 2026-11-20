@@ -395,7 +395,10 @@ class Store {
       capacity: s.capacity != null ? s.capacity : 50,
       officerInCharge: s.officer_in_charge || '',
       city: s.city || '',
-      type: s.facility_type || ''
+      type: s.facility_type || '',
+      cityPlaceId: s.city_place_id || '',
+      cityBounds: s.city_bounds || null,
+      coverage: Array.isArray(s.coverage_barangays) ? s.coverage_barangays : []
     };
   }
 

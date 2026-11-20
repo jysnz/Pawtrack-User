@@ -33,15 +33,24 @@ window.FacilityPhoto = { fieldHtml: () => '<div id="fp-root"></div>', bind: () =
 window.FacilityForm = {
   phone: { digits: (v) => String(v || ''), toStored: (v) => v, bind() {} },
   hours: { parse: () => null, defaultModel: () => ({}), fieldHtml: () => '', bind: () => ({ value: () => 'Mon-Fri 9-5', validate: () => null }) },
-  MapPicker: { create: async () => ({ canGeocode: false, getPin: () => ({ lat: 14.6, lng: 121 }), destroy() {} }) }
+  MapPicker: { create: async () => ({ canGeocode: false, getPin: () => pin, setBounds(b) { boundsSet.push(b); }, destroy() {} }) },
+  City: {
+    inBounds: (p, b) => !b || !p || (p.lat >= b.south && p.lat <= b.north && p.lng >= b.west && p.lng <= b.east),
+    resolve: async () => null,
+    attach: (input, onChange) => { cityCtl = { set: (c) => onChange(c) }; return cityCtl; }
+  }
 };
+let pin = { lat: 14.6, lng: 121 };
+let cityCtl = null;
+const boundsSet = [];
+const QC = { name: 'Quezon City', placeId: 'p1', bounds: { north: 14.8, south: 14.55, east: 121.15, west: 121.0 } };
 
-const mains = [{ id: 'M1', name: 'Main One' }, { id: 'M2', name: 'Main Two' }];
+const mains = [{ id: 'M1', name: 'Main One', city: 'Quezon City', cityBounds: { north: 14.8, south: 14.55, east: 121.15, west: 121.0 } }, { id: 'M2', name: 'Main Two', city: 'Quezon City', cityBounds: { north: 14.8, south: 14.55, east: 121.15, west: 121.0 } }];
 const saved = [];
 let nextId = 'NEW';
 window.adminStore = {
   isFacilityManager: () => true, isMainFacility: () => true, hasFacility: () => true, getMainFacilities: () => mains,
-  getManagedShelterIds: () => ['M1', 'M2'], penaltyReady: false,
+  getManagedShelterIds: () => ['M1', 'M2'], getShelters: () => mains, penaltyReady: false,
   saveShelter: (data, cb) => { saved.push(data); cb(nextId); }
 };
 require(path.join(__dirname, '../js/views/shelters-view.js'));
@@ -65,9 +74,27 @@ const resetDom = () => { Object.keys(registry).forEach(k => delete registry[k]);
   const set = (k, v) => { mkEl('f:' + k).value = v; };
   set('name', 'New Place'); set('address', '1 Road'); set('city', 'QC'); set('phone', '9171234567'); set('capacity', '20');
 
+  // No city picked yet: nothing is saved
+  mkEl('#shelter-save-btn').click();
+  await new Promise(r => setTimeout(r, 10));
+  check('without a chosen city nothing is saved', saved.length === 0 && !closed);
+  check('the map is locked until a city is chosen', /fm-map-box is-locked/.test(shownHtml));
+
+  // Choosing a city limits the map to it
+  cityCtl.set(QC);
+  check('choosing a city limits the map to its bounds', boundsSet.length && boundsSet[boundsSet.length - 1] === QC.bounds);
+
+  // A pin outside the city is refused
+  pin = { lat: 10.3, lng: 123.9 };
+  mkEl('#shelter-save-btn').click();
+  await new Promise(r => setTimeout(r, 10));
+  check('a pin outside the city is not saved', saved.length === 0 && !closed && /outside Quezon City/.test(mkEl('#fm-error').textContent), mkEl('#fm-error').textContent);
+  pin = { lat: 14.6, lng: 121 };
+
   // Unticked: saved as a main facility
   mkEl('#shelter-save-btn').click();
   await new Promise(r => setTimeout(r, 10));
+  check('the city and its bounds are saved with the facility', saved[0] && saved[0].city === 'Quezon City' && saved[0].cityBounds === QC.bounds && saved[0].cityPlaceId === 'p1', JSON.stringify(saved[0]));
   check('unticked, it is saved as a main facility', saved[0] && saved[0].asMain === true && saved[0].asSub === false && saved[0].parentId === undefined, JSON.stringify(saved[0]));
   check('the dialog closes and reports the new facility', closed && created === 'NEW');
 
@@ -76,6 +103,7 @@ const resetDom = () => { Object.keys(registry).forEach(k => delete registry[k]);
   V.openShelterModal(null, { chooseType: true, onCreated: (id) => { created = id; } });
   await new Promise(r => setTimeout(r, 10));
   set('name', 'New Sub'); set('address', '2 Road'); set('city', 'QC');
+  cityCtl.set(QC);
   const box = mkEl('f:isSub'); box.checked = true; box.change();
   check('ticking the box shows the main facility prompt and makes it required', mkEl('#fm-parent-wrap').hidden === false && mkEl('#fm-parent').required === true);
   check('...and the title and button now say sub-facility', mkEl('#fm-title').textContent === 'Add a sub-facility' && mkEl('#shelter-save-btn').textContent === 'Add sub-facility', mkEl('#fm-title').textContent + ' / ' + mkEl('#shelter-save-btn').textContent);
@@ -87,12 +115,20 @@ const resetDom = () => { Object.keys(registry).forEach(k => delete registry[k]);
   await new Promise(r => setTimeout(r, 10));
   check('without choosing the main facility, nothing is saved', saved.length === before && !closed);
 
-  // Choose it: saved as a sub-facility of that main facility
+  // Choose it: the city comes from the main facility, and the barangays covered are required
   mkEl('f:parentId').value = 'M2'; mkEl('#fm-parent').value = 'M2';
+  mkEl('f:parentId').change();
+  check('a sub-facility takes its city from the main facility and the city box is read-only', mkEl('f:city').readOnly === true && mkEl('#fm-coverage-wrap').hidden === false);
+  const beforeCov = saved.length;
+  mkEl('#shelter-save-btn').click();
+  await new Promise(r => setTimeout(r, 10));
+  check('without any barangay nothing is saved', saved.length === beforeCov && !closed);
+  mkEl('q:#fm-cov-text').value = 'Bgy One, Bgy Two, Bgy One';
   mkEl('#shelter-save-btn').click();
   await new Promise(r => setTimeout(r, 10));
   const sub = saved[saved.length - 1];
   check('with a main facility chosen, it is saved as a sub-facility of it', saved.length === before + 1 && sub.asSub === true && sub.asMain === false && sub.parentId === 'M2', JSON.stringify({ asSub: sub && sub.asSub, asMain: sub && sub.asMain, parentId: sub && sub.parentId, name: sub && sub.name }));
+  check('the barangays covered are saved (no duplicates)', JSON.stringify(sub.coverage) === JSON.stringify(['Bgy One', 'Bgy Two']), JSON.stringify(sub.coverage));
 
   // Unticking again goes back to main
   box.checked = false; box.change();

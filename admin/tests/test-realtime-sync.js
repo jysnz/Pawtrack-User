@@ -85,7 +85,7 @@ const AdminStore = require(path.join(__dirname, '../js/admin-store.js'));
   // The page
   const app = fs.readFileSync(path.join(__dirname, '../js/admin-app.js'), 'utf8');
   const html = fs.readFileSync(path.join(__dirname, '../index.html'), 'utf8');
-  check('the top bar has a status indicator that follows the store', /id="live-sync-indicator"/.test(html) && /onStatus\(\(\) => this\.updateSyncIndicator\(\)\)/.test(app) && /Offline, retrying/.test(app));
+  check('the app keeps following the store status (indicator removed from the top bar)', /onStatus\(\(\) => this\.updateSyncIndicator\(\)\)/.test(app) && /Offline, retrying/.test(app));
   check('the migration enables Realtime for the tables', /supabase_realtime/.test(fs.readFileSync(path.join(__dirname, '../../supabase/migrations/20261124_realtime_admin.sql'), 'utf8')));
 
   console.log(failed ? `\n${failed} check(s) FAILED` : '\nAll checks passed');
