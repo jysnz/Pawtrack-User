@@ -72,12 +72,12 @@
 .vax-field label { font-size: 0.76rem; font-weight: 700; }
 .vax-opt { font-weight: 500; color: var(--text-dim); }
 .vax-hint { font-size: 0.74rem; color: var(--text-dim); }
-.vax-field input[type="file"] { font-size: 0.82rem; }
-.vax-field input, .vax-field textarea { width: 100%; padding: 10px 12px; font: inherit; font-size: 0.95rem; border-radius: var(--radius-md); border: 1px solid var(--border-glass); background: var(--bg-main); color: var(--text-main); }
-.vax-field input:focus, .vax-field textarea:focus { outline: none; border-color: var(--border-focus); box-shadow: 0 0 0 3px var(--primary-light); }
+.vax-field input:not([type="file"]), .vax-field textarea { width: 100%; padding: 10px 12px; font: inherit; font-size: 0.95rem; border-radius: var(--radius-md); border: 1px solid var(--border-glass); background: var(--bg-main); color: var(--text-main); }
+.vax-field input:not([type="file"]):focus, .vax-field textarea:focus { outline: none; border-color: var(--border-focus); box-shadow: 0 0 0 3px var(--primary-light); }
 .vax-field textarea { resize: vertical; }
 .vax-error { display: none; font-size: 0.74rem; font-weight: 600; color: var(--danger); }
-.vax-field.has-error input { border-color: var(--danger); }
+.vax-field.has-error input:not([type="file"]), .vax-field.has-error textarea { border-color: var(--danger); }
+.vax-field.has-error .vax-drop { border-color: var(--danger); }
 .vax-field.has-error .vax-error { display: block; }
 .vax-msg { padding: 9px 11px; border-radius: var(--radius-md); background: var(--danger-light); border: 1px solid var(--danger); font-size: 0.82rem; font-weight: 600; }
 .vax-msg[hidden] { display: none; }
@@ -534,3 +534,28 @@
   #report-pet-modal.report-page .report-form-column textarea.form-control,
   #report-pet-modal.report-page .report-card textarea.form-control { field-sizing: content; height: auto; max-height: 60vh; }
 }
+
+
+/* Vaccination document picker */
+.vax-drop { position: relative; border: 1.5px dashed var(--border-glass); border-radius: var(--radius-md); background: var(--bg-main); transition: border-color .15s, background .15s; }
+.vax-drop:hover, .vax-drop.is-over { border-color: var(--primary); background: var(--primary-light); }
+.vax-drop.has-file { border-style: solid; border-color: var(--border-subtle); background: var(--bg-main); }
+.vax-drop-input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
+.vax-drop.has-file .vax-drop-input { pointer-events: none; }
+.vax-drop-empty { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 18px 16px; text-align: center; pointer-events: none; }
+.vax-drop-icon { display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; margin-bottom: 2px; border-radius: 50%; background: var(--primary-light); color: var(--primary); }
+.vax-drop-icon svg { width: 20px; height: 20px; }
+.vax-drop-text { font-size: 0.88rem; color: var(--text-main); }
+.vax-drop-text b { color: var(--primary); }
+.vax-drop-sub { max-width: 30em; font-size: 0.74rem; line-height: 1.4; color: var(--text-dim); }
+.vax-drop-file { display: flex; align-items: center; gap: 12px; padding: 10px 12px; }
+.vax-drop-file[hidden], .vax-drop-empty[hidden] { display: none; }
+.vax-drop-thumb { display: inline-flex; align-items: center; justify-content: center; flex: none; width: 44px; height: 44px; overflow: hidden; border-radius: 10px; background: var(--primary-light); color: var(--primary); }
+.vax-drop-thumb img { width: 100%; height: 100%; object-fit: cover; }
+.vax-drop-thumb svg { width: 22px; height: 22px; }
+.vax-drop-meta { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1; }
+.vax-drop-meta b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.86rem; color: var(--text-main); }
+.vax-drop-meta span { font-size: 0.74rem; color: var(--text-dim); }
+.vax-drop-remove { position: relative; z-index: 1; display: inline-flex; align-items: center; justify-content: center; flex: none; width: 32px; height: 32px; padding: 0; border: 1px solid var(--border-subtle); border-radius: 50%; background: var(--bg-surface); color: var(--text-muted); cursor: pointer; }
+.vax-drop-remove:hover { border-color: var(--danger); color: var(--danger); }
+.vax-drop-remove svg { width: 16px; height: 16px; }

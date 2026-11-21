@@ -105,7 +105,7 @@ class NfcLinkFlow {
     const startBtn = document.getElementById('nfc-link-start');
     if (startBtn) { startBtn.textContent = start; startBtn.disabled = !start; startBtn.style.display = start ? '' : 'none'; }
     const skipBtn = document.getElementById('nfc-link-skip');
-    if (skipBtn) skipBtn.style.display = demo ? '' : 'none';
+    if (skipBtn) skipBtn.style.display = demo && !(this.draft && this.draft.existingPetId) ? '' : 'none';
     const backBtn = document.getElementById('nfc-link-back');
     if (backBtn) backBtn.style.display = back ? '' : 'none';
     const backText = backBtn && backBtn.querySelector('span');
@@ -138,7 +138,7 @@ class NfcLinkFlow {
     this.busy = false;
     this.linking = false;
     document.getElementById('nfc-link-modal')?.classList.remove('active');
-    if (!this.done) {
+    if (!this.done && !(this.draft && this.draft.existingPetId)) {
       const regModal = document.getElementById('register-pet-modal');
       if (regModal) { regModal.style.display = ''; regModal.classList.add('active'); }
     }
@@ -534,10 +534,10 @@ class NfcLinkFlow {
         nfcSerial: serial || null,
         nfcUrl: saved.url,
         microchipNo: '',
-        status: 'safe',
+        status: draft.status || 'safe',
         photoUrl: saved.photoUrl || draft.photoUrl,
         owner: draft.owner,
-        registeredDate: new Date().toISOString().split('T')[0]
+        registeredDate: draft.registeredDate || new Date().toISOString().split('T')[0]
       });
 
       this.onLinked(pet, saved, simulated, current ? current.name : '');
@@ -558,6 +558,18 @@ class NfcLinkFlow {
     if (!user) return { offline: true };
 
     const draft = this.draft;
+    // A pet that is already registered only gets its tag: nothing else about it changes
+    if (draft.existingPetId) {
+      const { data: rows, error: updateError } = await client.from('registered_pets')
+        .update({ nfc_tag: uid || null, nfc_serial: serial || null })
+        .eq('id', draft.existingPetId).eq('owner_id', user.id).select('id');
+      if (updateError) {
+        if (updateError.code === '23505') return { conflict: /serial/i.test(updateError.message) ? 'serial' : 'tag' };
+        throw new Error(updateError.message);
+      }
+      if (!rows || !rows.length) throw new Error('This pet could not be found in your account.');
+      return { dbId: draft.existingPetId, photoUrl: draft.photoUrl || null };
+    }
     const photoUrl = await this.uploadPhoto(client, uid || 'untagged', draft.photoUrl);
     const { data, error } = await client.from('registered_pets').insert({
       owner_id: user.id,
@@ -632,7 +644,7 @@ class NfcLinkFlow {
     this.resumeUid = null;
     this.reassignFrom = null;
     // The AI writes the description in the background: registration does not wait for it
-    if (window.petAI) window.petAI.writeInBackground(pet, this.draft);
+    if (window.petAI && !this.draft.existingPetId) window.petAI.writeInBackground(pet, this.draft);
     // The scan session keeps running until Done is pressed, so tapping the tag again does not open the website
     const tagged = !!saved.uid;
     this.setState('done', tagged ? this.t('nfc.done', 'Tag linked to {name}', { name: pet.name }) : this.t('nfc.doneNoTag', '{name} is registered', { name: pet.name }),
@@ -646,10 +658,12 @@ class NfcLinkFlow {
     if (navigator.vibrate) navigator.vibrate([40, 60, 40]);
 
     // Registration is complete: clear the form behind this modal
-    const form = document.getElementById('register-pet-form');
-    if (form) { form.reset(); delete form.dataset.prefillNfc; }
-    if (window.pawApp && window.pawApp.clearPhotoUpload) window.pawApp.clearPhotoUpload();
-    document.getElementById('register-pet-modal')?.classList.remove('active');
+    if (!this.draft.existingPetId) {
+      const form = document.getElementById('register-pet-form');
+      if (form) { form.reset(); delete form.dataset.prefillNfc; }
+      if (window.pawApp && window.pawApp.clearPhotoUpload) window.pawApp.clearPhotoUpload();
+      document.getElementById('register-pet-modal')?.classList.remove('active');
+    }
 
     if (window.notifManager) {
       const note = saved.offline
@@ -657,7 +671,8 @@ class NfcLinkFlow {
         : (simulated ? ' (demo scan, nothing was written to a tag)' : '');
       const swapped = replacedName ? ` ${replacedName} no longer uses this tag.` : '';
       const tagText = saved.uid ? ` with tag ${saved.uid}` : ' without an NFC tag';
-      window.notifManager.showToast(`${pet.name} is registered${tagText}.${swapped}${note}`, saved.offline ? 'warning' : 'success', 6000);
+      const message = this.draft.existingPetId ? `Tag ${saved.uid} is linked to ${pet.name}.` : `${pet.name} is registered${tagText}.`;
+      window.notifManager.showToast(`${message}${swapped}${note}`, saved.offline ? 'warning' : 'success', 6000);
     }
   }
 }

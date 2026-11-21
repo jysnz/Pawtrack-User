@@ -921,6 +921,19 @@ class AdminApp {
     // Hash routing
     window.addEventListener('hashchange', () => this.handleRoute());
 
+    // The logo takes you back to the first page, the Dashboard
+    const brandHome = document.getElementById('admin-brand-home');
+    if (brandHome) {
+      const goHome = () => {
+        if (window.location.hash === '#activation') window.scrollTo({ top: 0 });
+        else window.location.hash = '#activation';
+      };
+      brandHome.addEventListener('click', goHome);
+      brandHome.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); goHome(); }
+      });
+    }
+
     // Navigation item clicks (items are divs, so make them keyboard-reachable like links)
     document.querySelectorAll('.nav-item').forEach(item => {
       item.setAttribute('role', 'link');

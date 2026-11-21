@@ -14,7 +14,7 @@ const classes = new Set();
 const pushed = [];
 let focused = null;
 global.window = global;
-global.location = { hash: '#violations', href: 'http://localhost/#violations' };
+global.location = { hash: '#fines', href: 'http://localhost/#fines' };
 global.history = { state: null, pushState(s) { this.state = s; pushed.push(s); }, back() { this.state = null; handlers.popstate.forEach((f) => f({ state: null })); } };
 global.addEventListener = (t, f) => { (handlers[t] = handlers[t] || []).push(f); };
 function el(tag) {
@@ -107,12 +107,13 @@ check('an unknown violation opens nothing', !document.getElementById('vl-sheet-w
 const root = path.join(__dirname, '..');
 const index = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
 const app = fs.readFileSync(path.join(root, 'js/app.js'), 'utf8');
-check('the sidebar has a Violations link', /href="#violations"[^>]*data-view="violations"/.test(index));
+check('the sidebar Violations tab is the owners own violations', /href="#violations"[^>]*data-view="violations"/.test(index) && /violations: window\.myViolationsView/.test(fs.readFileSync(path.join(root, 'js/app.js'), 'utf8')));
+check('the full violations list moved to Settings', /data-goto="fines"/.test(fs.readFileSync(path.join(root, 'js/views/settings-view.js'), 'utf8')) && /fines: window\.violationsView/.test(fs.readFileSync(path.join(root, 'js/app.js'), 'utf8')));
 check('the stylesheet is linked', index.includes('css/violations.css'));
 check('the data loads before the page, and both before the app',
   index.indexOf('js/violations-data.js') > -1 && index.indexOf('js/violations-data.js') < index.indexOf('js/views/violations-view.js') && index.indexOf('js/views/violations-view.js') < index.indexOf('js/app.js'));
-check('the router knows the page', /violations: window\.violationsView/.test(app));
-check('signed-out visitors can open it, like the facility list', /view === 'violations'/.test(app));
+check('the router knows the page', /fines: window\.violationsView/.test(app));
+check('signed-out visitors can open it, like the facility list', /view === 'fines'/.test(app));
 
 console.log(failed ? `\n${failed} check(s) FAILED` : '\nAll checks passed');
 process.exit(failed ? 1 : 0);

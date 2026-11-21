@@ -14,10 +14,9 @@
 .vl-search input::-webkit-search-cancel-button { display: none; }
 .vl-select { position: relative; display: flex; align-items: center; gap: 10px; }
 .vl-select-label { font-size: 0.72rem; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--text-dim); }
-.vl-select select { flex: 1; min-width: 0; appearance: none; -webkit-appearance: none; min-height: 44px; padding: 0 38px 0 14px; border: 1px solid var(--border-subtle); border-radius: var(--radius-md); background: var(--bg-surface); color: var(--text-main); font: 600 14px var(--font-body); cursor: pointer; }
+.vl-select select { flex: 1; min-width: 0; appearance: none; -webkit-appearance: none; min-height: 44px; padding: 0 38px 0 14px; border: 1px solid var(--border-subtle); border-radius: var(--radius-md); background: var(--bg-surface) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8' fill='none' stroke='%238a6f5f' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M1 1.5l5 5 5-5'/%3E%3C/svg%3E") no-repeat right 16px center; color: var(--text-main); font: 600 14px var(--font-body); cursor: pointer; }
 .vl-select select:hover { border-color: var(--primary); }
 .vl-select select:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-light); }
-.vl-select::after { content: ""; position: absolute; right: 16px; top: 50%; width: 7px; height: 7px; margin-top: -6px; border-right: 2px solid var(--text-dim); border-bottom: 2px solid var(--text-dim); transform: rotate(45deg); pointer-events: none; }
 .vl-count { font-size: 12px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--text-dim); }
 
 /* One violation per row */
@@ -43,7 +42,8 @@ body.vl-sheet-open { overflow: hidden; }
 .vl-sheet { width: 100%; max-width: 480px; max-height: calc(100dvh - 32px); overflow-y: auto; overscroll-behavior: contain; padding: 20px 22px 22px; border: 1px solid var(--border-glass); border-radius: var(--radius-xl); background: var(--bg-surface); color: var(--text-main); box-shadow: var(--shadow-lg); animation: vl-rise .18s ease-out; }
 .vl-sheet-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
 .vl-ref { padding: 3px 10px; border-radius: var(--radius-full); background: var(--primary-light); color: var(--primary); font-size: 0.72rem; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; }
-.vl-sheet-close { width: 36px; height: 36px; padding: 0; border: 1px solid var(--border-subtle); border-radius: 50%; background: var(--bg-surface-elevated); color: var(--text-muted); font-size: 22px; line-height: 1; cursor: pointer; }
+.vl-sheet-close { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; width: 36px; height: 36px; padding: 0; border: 1px solid var(--border-subtle); border-radius: 50%; background: var(--bg-surface-elevated); color: var(--text-muted); font-size: 22px; line-height: 1; cursor: pointer; }
+.vl-sheet-close svg { display: block; }
 .vl-sheet-close:hover { border-color: var(--primary); color: var(--text-main); }
 .vl-sheet-title { margin: 0 0 6px; font-family: var(--font-heading); font-size: 1.3rem; line-height: 1.25; color: var(--text-main); }
 .vl-sheet-sub { margin: 0 0 16px; font-size: 0.84rem; line-height: 1.55; color: var(--text-muted); }
@@ -79,3 +79,35 @@ body.vl-sheet-open { overflow: hidden; }
   .vl-sheet { max-width: none; max-height: 88dvh; border-radius: 20px 20px 0 0; padding-bottom: calc(22px + env(safe-area-inset-bottom, 0px)); animation-name: vl-slide; }
 }
 @media (prefers-reduced-motion: reduce) { .vl-row, .vl-row-go { transition: none; } .vl-sheet, .vl-sheet-wrap { animation: none; } }
+
+/* Back link on the violations and fines page (opened from Settings) */
+.vl-back { display: inline-flex; align-items: center; gap: 4px; margin-bottom: 8px; font-size: 0.82rem; font-weight: 700; color: var(--primary); text-decoration: none; }
+.vl-back:hover { text-decoration: underline; }
+
+/* My violations */
+.mv-section { margin-top: 20px; }
+.mv-heading { display: flex; align-items: center; gap: 8px; margin: 0 0 10px; font-family: var(--font-heading); font-size: 1.05rem; color: var(--text-main); }
+.mv-count { padding: 1px 9px; border-radius: var(--radius-full); background: var(--danger-light); color: var(--danger); font: 700 0.75rem var(--font-body); }
+.mv-total { margin-bottom: 12px; font-size: 0.86rem; color: var(--text-muted); }
+.mv-total b { margin-left: 6px; font-size: 1rem; color: var(--text-main); }
+.mv-list { display: grid; gap: 12px; }
+.mv-card { padding: 14px 16px; border: 1px solid var(--border-subtle); border-left: 3px solid var(--danger); border-radius: var(--radius-md); background: var(--bg-surface); }
+.mv-card-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
+.mv-date { font-size: 0.78rem; color: var(--text-dim); }
+.mv-name { margin: 0 0 4px; font-family: var(--font-heading); font-size: 1.02rem; color: var(--text-main); }
+.mv-reason { margin: 0 0 10px; font-size: 0.84rem; line-height: 1.5; color: var(--text-muted); }
+.mv-meta { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.mv-offense { font-size: 0.74rem; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--text-dim); }
+.mv-fine { font-size: 1.1rem; color: var(--danger); }
+.mv-foot { margin: 14px 0 0; font-size: 0.8rem; color: var(--text-dim); }
+.mv-pending { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; padding: 12px 14px; border: 1px solid var(--border-subtle); border-radius: var(--radius-md); background: var(--bg-surface-elevated); }
+.mv-pending.is-urgent { border-color: var(--danger); }
+.mv-pending-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.mv-pending-text span { font-size: 0.8rem; color: var(--text-muted); }
+
+/* Link-a-tag row on a pet's detail, and the reminder buttons in the notification list */
+.pet-link-row { border-color: var(--primary); }
+.notif-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 2px 0 6px; }
+.notif-dismiss-btn { padding: 6px 14px; border: 1px solid var(--border-subtle); border-radius: 8px; background: transparent; color: var(--text-muted); font: inherit; font-size: 0.78rem; font-weight: 700; cursor: pointer; }
+.notif-dismiss-btn:hover { border-color: var(--primary); color: var(--text-main); }
+.notif-actions .notif-verify-btn { margin: 0; }

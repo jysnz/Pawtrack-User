@@ -295,6 +295,14 @@ class PetsView {
       </div>
       ${pet.description ? `<p class="pet-detail-desc">${this.esc(pet.description)}</p>` : ''}
       ${this.statusActionHtml(pet)}
+      ${pet.nfc_tag ? '' : `
+      <div class="pet-pass-row pet-link-row">
+        <div class="pet-pass-text">
+          <strong><i data-lucide="nfc"></i> No NFC tag yet</strong>
+          <span>Link a tag to ${this.esc(pet.name)}'s collar so a finder can reach you. Pets without one can be fined under Section 35.</span>
+        </div>
+        <button type="button" class="btn btn-primary btn-sm" onclick="window.nfcReminders && window.nfcReminders.linkNow('${this.esc(pet.id)}')"><i data-lucide="nfc"></i> Link NFC tag</button>
+      </div>`}
       ${pet.nfc_tag ? `
       <div class="pet-pass-row">
         <div class="pet-pass-text">
@@ -328,30 +336,43 @@ class PetsView {
               <span class="vax-error">Pick a date that is not in the future.</span>
             </div>
             <div class="vax-field" id="vax-due-field">
-              <label for="vax-due">Next due <span class="vax-opt">(optional)</span></label>
+              <label for="vax-due">Next due *</label>
               <input id="vax-due" type="date" />
-              <span class="vax-error">Next due must be after the date given.</span>
+              <span class="vax-error" id="vax-due-error">Pick the next due date, on or after the date given.</span>
             </div>
           </div>
           <div class="vax-row">
-            <div class="vax-field">
-              <label for="vax-vet">Veterinarian <span class="vax-opt">(optional)</span></label>
+            <div class="vax-field" id="vax-vet-field">
+              <label for="vax-vet">Veterinarian *</label>
               <input id="vax-vet" maxlength="120" placeholder="e.g. Dr. Reyes" />
+              <span class="vax-error">Enter the veterinarian's name.</span>
             </div>
-            <div class="vax-field">
-              <label for="vax-clinic">Clinic <span class="vax-opt">(optional)</span></label>
+            <div class="vax-field" id="vax-clinic-field">
+              <label for="vax-clinic">Clinic *</label>
               <input id="vax-clinic" maxlength="160" placeholder="e.g. Happy Paws Vet" />
+              <span class="vax-error">Enter the clinic.</span>
             </div>
           </div>
-          <div class="vax-field">
+          <div class="vax-field" id="vax-notes-field">
             <label for="vax-notes">Notes <span class="vax-opt">(optional)</span></label>
             <textarea id="vax-notes" maxlength="1000" rows="2" placeholder="Batch number, reactions, reminders"></textarea>
           </div>
           <div class="vax-field" id="vax-doc-field">
-            <label for="vax-doc">Vaccination document <span class="vax-opt">(photo or PDF, up to 8 MB)</span></label>
-            <input id="vax-doc" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" />
+            <label for="vax-doc">Vaccination document *</label>
+            <div class="vax-drop" id="vax-drop">
+              <input id="vax-doc" class="vax-drop-input" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" />
+              <div class="vax-drop-empty" id="vax-drop-empty">
+                <span class="vax-drop-icon"><i data-lucide="upload-cloud"></i></span>
+                <span class="vax-drop-text"><b>Choose a file</b> or drag it here</span>
+                <span class="vax-drop-sub">Photo or PDF of the vaccination card or vet certificate &middot; JPG, PNG, WebP, PDF &middot; up to 8 MB</span>
+              </div>
+              <div class="vax-drop-file" id="vax-drop-file" hidden>
+                <span class="vax-drop-thumb" id="vax-drop-thumb"></span>
+                <span class="vax-drop-meta"><b id="vax-drop-name"></b><span id="vax-drop-size"></span></span>
+                <button type="button" class="vax-drop-remove" id="vax-drop-remove" aria-label="Remove file" title="Remove file"><i data-lucide="x"></i></button>
+              </div>
+            </div>
             <span class="vax-error" id="vax-doc-error">Choose a JPG, PNG, WebP or PDF file under 8 MB.</span>
-            <span class="vax-hint">Attach the vaccination card or vet certificate so it is kept safely with this record.</span>
           </div>
           <button type="submit" class="btn btn-primary" id="vax-submit"><i data-lucide="plus"></i> Add vaccination</button>
         </form>`}
@@ -359,7 +380,52 @@ class PetsView {
 
     const form = body.querySelector('#vax-form');
     if (form) form.addEventListener('submit', (e) => { e.preventDefault(); this.addVaccination(pet.id); });
+    this.bindDropzone(body);
     if (window.lucide) window.lucide.createIcons({ root: body });
+  }
+
+  // The document picker: a drop zone that shows the chosen file (a thumbnail for a photo) with a remove button
+  bindDropzone(root) {
+    const drop = root.querySelector('#vax-drop');
+    const input = root.querySelector('#vax-doc');
+    if (!drop || !input) return;
+    const empty = root.querySelector('#vax-drop-empty');
+    const card = root.querySelector('#vax-drop-file');
+    const thumb = root.querySelector('#vax-drop-thumb');
+    let previewUrl = '';
+
+    const size = (n) => (n >= 1048576 ? (n / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(n / 1024)) + ' KB');
+    const show = () => {
+      if (previewUrl) { URL.revokeObjectURL(previewUrl); previewUrl = ''; }
+      const file = input.files && input.files[0];
+      drop.classList.toggle('has-file', !!file);
+      empty.hidden = !!file;
+      card.hidden = !file;
+      root.querySelector('#vax-doc-field')?.classList.remove('has-error');
+      if (!file) return;
+      root.querySelector('#vax-drop-name').textContent = file.name;
+      root.querySelector('#vax-drop-size').textContent = size(file.size);
+      if (/^image\//.test(file.type)) {
+        previewUrl = URL.createObjectURL(file);
+        thumb.innerHTML = `<img src="${previewUrl}" alt="" />`;
+      } else {
+        thumb.innerHTML = '<i data-lucide="file-text"></i>';
+        if (window.lucide) window.lucide.createIcons({ root: thumb });
+      }
+    };
+    input.addEventListener('change', show);
+    root.querySelector('#vax-drop-remove').addEventListener('click', (e) => {
+      e.preventDefault();
+      input.value = '';
+      show();
+    });
+    ['dragenter', 'dragover'].forEach((t) => drop.addEventListener(t, (e) => { e.preventDefault(); drop.classList.add('is-over'); }));
+    ['dragleave', 'drop'].forEach((t) => drop.addEventListener(t, () => drop.classList.remove('is-over')));
+    drop.addEventListener('drop', (e) => {
+      e.preventDefault();
+      const files = e.dataTransfer && e.dataTransfer.files;
+      if (files && files.length) { input.files = files; show(); }
+    });
   }
 
   // Report as missing (while safe) or mark as found (while missing)
@@ -527,14 +593,18 @@ class PetsView {
     const due = val('vax-due');
     const todayIso = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
 
-    const nameOk = name.length > 0;
-    const givenOk = !!given && given <= todayIso;
-    const dueOk = !due || (givenOk && due >= given);
-    document.getElementById('vax-name-field').classList.toggle('has-error', !nameOk);
-    document.getElementById('vax-given-field').classList.toggle('has-error', !givenOk);
-    document.getElementById('vax-due-field').classList.toggle('has-error', !dueOk);
-    if (!nameOk || !givenOk || !dueOk) {
-      document.getElementById(!nameOk ? 'vax-name' : (!givenOk ? 'vax-given' : 'vax-due')).focus();
+    // Every field is required, checked top to bottom; the first one that fails gets the focus
+    const checks = [
+      ['vax-name', name.length > 0],
+      ['vax-given', !!given && given <= todayIso],
+      ['vax-due', !!due && !!given && due >= given],
+      ['vax-vet', val('vax-vet').length > 0],
+      ['vax-clinic', val('vax-clinic').length > 0]
+    ];
+    checks.forEach(([id, ok]) => document.getElementById(id + '-field')?.classList.toggle('has-error', !ok));
+    const failed = checks.find(([, ok]) => !ok);
+    if (failed) {
+      document.getElementById(failed[0])?.focus();
       return;
     }
 
@@ -551,16 +621,14 @@ class PetsView {
       }
       file = check.file;
     }
-    docField.classList.remove('has-error');
-
-    // Prompt once for a document; a second tap on the button saves without one
-    if (!file && !this.skipDocPrompt) {
-      this.skipDocPrompt = true;
-      this.setMsg('Please add the vaccination document (card or vet certificate) so it stays on record. Tap "Add vaccination" again to save without one.');
+    // The document is required: the vaccination card or vet certificate is the proof of the record
+    if (!file) {
+      if (docError) docError.textContent = 'Please add the vaccination card or vet certificate (JPG, PNG, WebP or PDF, up to 8 MB).';
+      docField.classList.add('has-error');
       document.getElementById('vax-doc')?.focus();
       return;
     }
-    this.skipDocPrompt = false;
+    docField.classList.remove('has-error');
 
     const client = this.client();
     const btn = document.getElementById('vax-submit');

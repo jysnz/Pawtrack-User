@@ -161,6 +161,19 @@ class SettingsView {
 
         <section class="glass-card settings-card">
           <div class="settings-card-head">
+            <div class="settings-card-icon"><i data-lucide="gavel"></i></div>
+            <div class="settings-card-head-text">
+              <h2>Rules and fines</h2>
+              <p>What pet owners can be fined for in Quezon City.</p>
+            </div>
+          </div>
+          <button type="button" class="settings-link-row" data-goto="fines">
+            <i data-lucide="file-warning"></i><span>Violations and fines</span><i data-lucide="chevron-right"></i>
+          </button>
+        </section>
+
+        <section class="glass-card settings-card">
+          <div class="settings-card-head">
             <div class="settings-card-icon"><i data-lucide="scale"></i></div>
             <div class="settings-card-head-text">
               <h2>${t('settings.legal', 'Legal')}</h2>
@@ -186,6 +199,10 @@ class SettingsView {
   }
 
   attach(container, user) {
+    container.querySelectorAll('[data-goto]').forEach((btn) => {
+      btn.addEventListener('click', () => { window.location.hash = '#' + btn.dataset.goto; });
+    });
+
     // Name
     const nameForm = container.querySelector('#settings-name-form');
     const firstInput = container.querySelector('#settings-first-input');

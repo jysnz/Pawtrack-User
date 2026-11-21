@@ -275,6 +275,9 @@ class Store {
       }
 
       this.syncStatus = 'connected';
+      // Pets without an NFC tag: remind the owner, and record the violation once the 7 days are up.
+      // Only run from a successful pets load, so a failed request can never look like "no tag".
+      if (signedIn && !pets.error && window.nfcReminders) window.nfcReminders.check({ authoritative: true });
       // Follow-up reminders for reunions that are still open (24h, then 72h); checked at most once an hour
       if (signedIn && (!this._remindersAt || Date.now() - this._remindersAt > 3600000)) {
         this._remindersAt = Date.now();
@@ -335,6 +338,7 @@ class Store {
       ageMonths: p.age_months,
       community: p.community || '',
       registeredDate: p.registered_on,
+      createdAt: p.created_at || '',
       owner: { name: p.owner_name || '', phone: p.owner_phone || '', email: p.owner_email || '' },
       ownerId: p.owner_id,
       ownerPhone: p.owner_phone || '',
@@ -748,6 +752,16 @@ class Store {
     list.unshift({ ...notif, id: notif.id || 'notif-' + Date.now(), timestamp: new Date().toISOString(), read: false });
     localStorage.setItem(STORAGE_KEYS.LOCAL_NOTIFICATIONS, JSON.stringify(list.slice(0, 50)));
     this.notify('notification_added');
+  }
+
+  // Removes a device-only alert (see addNotification)
+  removeLocalNotification(id) {
+    let list;
+    try { list = JSON.parse(localStorage.getItem(STORAGE_KEYS.LOCAL_NOTIFICATIONS)) || []; } catch { list = []; }
+    const next = list.filter(n => String(n.id) !== String(id));
+    if (next.length === list.length) return;
+    localStorage.setItem(STORAGE_KEYS.LOCAL_NOTIFICATIONS, JSON.stringify(next));
+    this.notify('notification_removed');
   }
 
   markNotificationRead(notifId) {

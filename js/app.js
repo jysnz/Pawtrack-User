@@ -26,7 +26,8 @@ class App {
       sightings: window.sightingsView,
       found: window.foundView,
       impound: window.impoundView,
-      violations: window.violationsView,
+      violations: window.myViolationsView,
+      fines: window.violationsView,
       report: window.reportPageView,
       settings: window.settingsView
     };
@@ -83,8 +84,8 @@ class App {
 
   // Pages a signed-out visitor may open: the missing pets map, and Found a Pet for finders without an account
   isGuestView(view) {
-    // The facility list and the animals they hold are public, and so are the violations and their fines
-    return view === 'owner' || view === 'found' || view === 'impound' || view === 'violations';
+    // The facility list and the animals they hold are public, and so are the violations and their fines (a person's own violations are not)
+    return view === 'owner' || view === 'found' || view === 'impound' || view === 'fines';
   }
 
   setGuestMode(enabled) {
@@ -136,7 +137,8 @@ class App {
       backupPhone: (sameUser && cached.backupPhone) || '',
       verified: true,
       emailVerified: true,
-      authenticatedAt: new Date().toISOString()
+      // Kept from the cached profile: a new timestamp on every re-announced session made the profile "change" and redrew the page
+      authenticatedAt: (sameUser && cached.authenticatedAt) || new Date().toISOString()
     };
   }
 
@@ -756,6 +758,7 @@ class App {
     });
 
     const completeSignIn = (guardian, user) => {
+      this._resolvedUserId = user.id;
       window.pawStore.setGoogleUser(this.toGuardianProfile({
         id: guardian.id,
         name: guardian.full_name,
@@ -1620,7 +1623,10 @@ class App {
 
     this.supabase.auth.onAuthStateChange((event, newSession) => {
       session = newSession;
+      if (!newSession) this._resolvedUserId = null;
       if (event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') return;
+      // Coming back to the tab makes Supabase announce the same session again: nothing changed, so leave the page alone
+      if (event === 'SIGNED_IN' && newSession && newSession.user && newSession.user.id === this._resolvedUserId && window.pawStore.getGoogleUser()) return;
 
       // Signed out without the guardian asking (logOut clears the cached profile first): the session expired
       const hadProfile = !!(window.pawStore.getGoogleUser() || {}).name;
@@ -1981,7 +1987,8 @@ class App {
     this.currentView = hash;
 
     document.querySelectorAll('.role-tab-btn').forEach(btn => {
-      if (btn.dataset.view === hash) {
+      // The violations and fines reference is opened from Settings, so Settings stays highlighted
+      if (btn.dataset.view === (hash === 'fines' ? 'settings' : hash)) {
         btn.classList.add('active');
       } else {
         btn.classList.remove('active');
@@ -2063,6 +2070,15 @@ class App {
     window.addEventListener('hashchange', () => setOpen(false));
     sidebar?.querySelectorAll('.role-tab-btn, .brand-logo').forEach(link => {
       link.addEventListener('click', () => setOpen(false));
+    });
+    // The logo (sidebar and mobile header) goes to the first page. When already there the hash does not change,
+    // so close anything open on it (a pet's detail) and show the page again from the top.
+    document.querySelectorAll('.brand-logo').forEach(link => {
+      link.addEventListener('click', () => {
+        if (window.location.hash !== '#pets' && window.location.hash !== '') return;
+        if (window.petsView && typeof window.petsView.close === 'function' && window.petsView.openPetId) window.petsView.close();
+        window.scrollTo({ top: 0 });
+      });
     });
   }
 

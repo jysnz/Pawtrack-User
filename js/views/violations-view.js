@@ -21,7 +21,7 @@ class ViolationsView {
     });
     // Leaving the page closes it too
     window.addEventListener('hashchange', () => {
-      if (window.location.hash !== '#violations') this.closeSheet(false);
+      if (window.location.hash !== '#fines') this.closeSheet(false);
     });
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape' && this.openId) this.closeSheet(true);
@@ -80,6 +80,7 @@ class ViolationsView {
       <div class="vl-page">
         <div class="view-header">
           <div class="view-title-group">
+            <a href="#settings" class="vl-back"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6"/></svg> Settings</a>
             <h1>Violations</h1>
             <div class="view-subtitle">What pet owners can be fined for under the Quezon City Veterinary Code (SP-2505, S-2016) and SP-2990, S-2020. Tap a violation to see its fine and details.</div>
           </div>
@@ -132,7 +133,7 @@ class ViolationsView {
       <div class="vl-sheet" role="dialog" aria-modal="true" aria-labelledby="vl-sheet-title">
         <div class="vl-sheet-top">
           <span class="vl-ref">${this.esc(p.ref)}</span>
-          <button type="button" class="vl-sheet-close" id="vl-sheet-close" aria-label="Close">&times;</button>
+          <button type="button" class="vl-sheet-close" id="vl-sheet-close" aria-label="Close"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M2 2l10 10M12 2L2 12"/></svg></button>
         </div>
         <h2 class="vl-sheet-title" id="vl-sheet-title">${this.esc(r.name)}</h2>
         <p class="vl-sheet-sub">${r.listed ? `Under ${this.esc(p.ref)}: ${this.esc(p.title)}` : this.esc(p.ref)}<br>Ordinance ${this.esc(p.ordinance)}${p.ordinance === 'SP-2505, S-2016' ? ' (Quezon City Veterinary Code)' : ''}</p>
