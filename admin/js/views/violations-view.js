@@ -1,167 +1,106 @@
 /**
  * PawTrack Admin: Violations
- * The provisions a person can be directed to the City Veterinary Department for, with the fine for each.
- * Source: the notice of violation (Ordinance SP-2505, S-2016, the Quezon City Veterinary Code, and SP-2990, S-2020).
- * A reference list: nothing here is stored or issued from this page.
+ * One row per violation (Ordinance SP-2505, S-2016 and SP-2990, S-2020), with the fine on the row.
+ * Tap a row for the full detail: the section, how the fine works for every offense, and the other violations under it.
+ * The open violation is in the address (#violations/<id>), so Back closes it and a link opens it.
+ * The data is shared with the owner app (../js/violations-data.js). A reference list: nothing here is stored or issued.
  */
 window.ViolationsView = {
   query: '',
   filter: 'all', // 'all' | 'ladder' | 'flat' | 'none'
 
-  // Each provision: what it covers, the specific violations under it, and its penalty.
-  //   ladder  fine rises with each offense (amounts for the 1st, 2nd and 3rd offense)
-  //   flat    one fine for every offense, with extras such as confiscation
-  //   none    the notice states no fine for it
-  provisions: [
-    {
-      id: 's35', ref: 'Section 35', ordinance: 'SP-2505, S-2016',
-      title: 'Registration of companion dogs & cats',
-      violations: ['Unregistered / no microchips'],
-      penalty: { kind: 'ladder', steps: [1000, 1500, 2000] }
-    },
-    {
-      id: 's37', ref: 'Section 37', ordinance: 'SP-2505, S-2016',
-      title: 'Regulation of pet animals',
-      violations: ['Keeping of animals according to space requirement'],
-      penalty: { kind: 'flat', amount: 2000, extras: ['Confiscation of excess animals with no sufficient space requirement'] }
-    },
-    {
-      id: 's38', ref: 'Section 38', ordinance: 'SP-2505, S-2016',
-      title: 'Special permit for the keeping of animals',
-      violations: ['No special permit'],
-      penalty: { kind: 'flat', amount: 2000, extras: ['Confiscation of animals'] }
-    },
-    {
-      id: 's40', ref: 'Section 40', ordinance: 'SP-2505, S-2016',
-      title: 'Prohibited acts',
-      violations: [
-        'Harboring dogs with symptoms of rabies',
-        'Allowing a dog to assault or attack any person',
-        'Removal of dog tag / microchip',
-        'Transfer of dog tag / microchip to another animal'
-      ],
-      penalty: { kind: 'flat', amount: 2000, extras: ['Confiscation of animals'] }
-    },
-    {
-      id: 's53', ref: 'Section 53', ordinance: 'SP-2505, S-2016',
-      title: 'Responsibilities of animal owners, possessors and keepers',
-      violations: [
-        'Unleashed',
-        'Refuse to shoulder animal bite victims',
-        'Defecation on public and private property',
-        'Unvaccinated'
-      ],
-      penalty: { kind: 'ladder', steps: [1000, 1500, 2000] }
-    },
-    {
-      id: 's65', ref: 'Section 65', ordinance: 'SP-2505, S-2016',
-      title: 'Animal show, exhibition in circus',
-      violations: ['No permit'],
-      penalty: { kind: 'none' }
-    },
-    {
-      id: 'sp2990', ref: 'SP-2990, S-2020', ordinance: 'SP-2990, S-2020',
-      title: 'Violation of Ordinance SP-2990, S-2020',
-      violations: ['Prohibiting backyard piggeries and poultry farms'],
-      penalty: { kind: 'ladder', steps: [2000, 3000, 5000] }
-    },
-    {
-      id: 's69', ref: 'Section 69', ordinance: 'SP-2505, S-2016',
-      title: 'Opposing, resisting, and intervening with authorities',
-      violations: [],
-      penalty: { kind: 'none' },
-      note: 'Written in by hand on the notice, with no specific violations or fine listed.'
-    }
-  ],
+  data() { return window.PawViolations; },
 
   esc(v) {
     return String(v == null ? '' : v).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   },
 
-  peso(n) { return '₱' + Number(n).toLocaleString('en-PH'); },
-
-  // Words a person might search for in a provision, beyond its visible text
-  haystack(p) {
-    const pen = p.penalty;
-    const words = [p.ref, p.ordinance, p.title, ...p.violations, p.note || ''];
-    if (pen.kind === 'ladder') words.push('fine offense', ...pen.steps.map(String));
-    if (pen.kind === 'flat') words.push('fine', String(pen.amount), ...(pen.extras || []));
-    if (pen.kind === 'none') words.push('no fine stated');
-    return words.join(' ').toLowerCase();
+  // The violation named in the address, if any
+  openRow() {
+    const raw = (window.adminApp && window.adminApp.routeParam) || '';
+    let id = raw;
+    try { id = decodeURIComponent(raw); } catch (e) { /* keep as is */ }
+    return id ? this.data().byId(id) : null;
   },
 
-  visible() {
-    const q = this.query.trim().toLowerCase();
-    return this.provisions.filter(p =>
-      (this.filter === 'all' || p.penalty.kind === this.filter) &&
-      (!q || q.split(/\s+/).every(w => this.haystack(p).includes(w))));
-  },
+  visible() { return this.data().filter(this.query, this.filter); },
 
   renderPenalty(p) {
+    const D = this.data();
     const pen = p.penalty;
     if (pen.kind === 'ladder') {
-      const names = ['1st offense', '2nd offense', '3rd offense'];
-      return `
-        <div class="vio-penalty">
-          <div class="vio-penalty-label">Fine per offense</div>
-          <div class="vio-ladder">
-            ${pen.steps.map((amt, i) => `
-              <div class="vio-step">
-                <span class="vio-step-name">${names[i]}</span>
-                <b class="vio-step-amt">${this.peso(amt)}</b>
-              </div>`).join('')}
-          </div>
-        </div>`;
+      return `<div class="vio-ladder">${pen.steps.map((amt, i) => `
+        <div class="vio-step"><span class="vio-step-name">${D.OFFENSES[i]}</span><b class="vio-step-amt">${D.peso(amt)}</b></div>`).join('')}</div>`;
     }
     if (pen.kind === 'flat') {
-      return `
-        <div class="vio-penalty">
-          <div class="vio-penalty-label">Fine</div>
-          <div class="vio-flat">
-            <b class="vio-step-amt">${this.peso(pen.amount)}</b>
-            ${(pen.extras || []).map(x => `<span class="vio-tag">${this.esc(x)}</span>`).join('')}
-          </div>
-        </div>`;
+      return `<div class="vio-flat"><b class="vio-step-amt">${D.peso(pen.amount)}</b>${(pen.extras || []).map(x => `<span class="vio-tag">${this.esc(x)}</span>`).join('')}</div>`;
     }
-    return `
-      <div class="vio-penalty vio-penalty-none">
-        <div class="vio-penalty-label">Fine</div>
-        <div class="vio-none">Not stated on the notice</div>
-      </div>`;
+    return '<div class="vio-none">Not stated on the notice</div>';
   },
 
-  renderCard(p) {
+  renderRow(r) {
+    const D = this.data();
+    const kind = r.provision.penalty.kind;
     return `
-      <article class="vio-card" id="vio-${this.esc(p.id)}">
-        <header class="vio-card-head">
-          <span class="vio-ref">${this.esc(p.ref)}</span>
-          <h2 class="vio-title">${this.esc(p.title)}</h2>
-        </header>
-        ${p.violations.length ? `<ul class="vio-list">${p.violations.map(v => `<li>${this.esc(v)}</li>`).join('')}</ul>` : ''}
-        ${p.note ? `<p class="vio-note">${this.esc(p.note)}</p>` : ''}
-        ${this.renderPenalty(p)}
-      </article>`;
+      <a class="vio-row" href="#violations/${encodeURIComponent(r.id)}" data-id="${this.esc(r.id)}">
+        <span class="vio-row-main">
+          <span class="vio-row-name">${this.esc(r.name)}</span>
+          <span class="vio-row-sub"><b>${this.esc(r.provision.ref)}</b> &middot; ${this.esc(r.provision.title)}</span>
+        </span>
+        <span class="vio-row-fine vio-fine-${kind}">${this.esc(D.fineLabel(r.provision))}</span>
+        <svg class="vio-row-go" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 18 15 12 9 6"/></svg>
+      </a>`;
+  },
+
+  renderSheet(r) {
+    const D = this.data();
+    const p = r.provision;
+    const others = D.siblings(r);
+    return `
+      <div class="vio-sheet-wrap" id="vio-sheet-wrap">
+        <div class="vio-sheet" role="dialog" aria-modal="true" aria-labelledby="vio-sheet-title">
+          <div class="vio-sheet-top">
+            <span class="vio-ref">${this.esc(p.ref)}</span>
+            <button type="button" class="vio-sheet-close" id="vio-sheet-close" aria-label="Close">&times;</button>
+          </div>
+          <h2 class="vio-sheet-title" id="vio-sheet-title">${this.esc(r.name)}</h2>
+          <p class="vio-sheet-sub">${r.listed ? `Under ${this.esc(p.ref)}: ${this.esc(p.title)}` : this.esc(p.ref)}<br>Ordinance ${this.esc(p.ordinance)}${p.ordinance === 'SP-2505, S-2016' ? ' (Quezon City Veterinary Code)' : ''}</p>
+          <div class="vio-penalty">
+            <div class="vio-penalty-label">${p.penalty.kind === 'ladder' ? 'Fine per offense' : 'Fine'}</div>
+            ${this.renderPenalty(p)}
+            <p class="vio-penalty-note">${this.esc(D.fineExplained(p))}</p>
+          </div>
+          ${p.note ? `<p class="vio-note">${this.esc(p.note)}</p>` : ''}
+          ${others.length ? `
+            <div class="vio-also">
+              <div class="vio-penalty-label">Also under ${this.esc(p.ref)}</div>
+              <ul>${others.map(o => `<li><a href="#violations/${encodeURIComponent(o.id)}">${this.esc(o.name)}</a></li>`).join('')}</ul>
+            </div>` : ''}
+          <p class="vio-sheet-foot">A person who violates this is directed to report to the City Veterinary Department for appropriate action.</p>
+        </div>
+      </div>`;
   },
 
   renderList() {
     const list = this.visible();
-    const total = this.provisions.length;
-    const status = list.length === total ? `${total} provisions` : `${list.length} of ${total} provisions`;
+    const total = this.data().rows.length;
+    const status = list.length === total ? `${total} violations` : `${list.length} of ${total} violations`;
     return `
-      <div class="vio-count" id="vio-count" aria-live="polite">${status}</div>
+      <div class="vio-count" aria-live="polite">${status}</div>
       ${list.length
-        ? `<div class="vio-grid">${list.map(p => this.renderCard(p)).join('')}</div>`
-        : `<div class="vio-empty">No provision matches &ldquo;${this.esc(this.query)}&rdquo;. Try a section number, a fine or a word like &ldquo;leash&rdquo;.</div>`}`;
+        ? `<div class="vio-rows">${list.map(r => this.renderRow(r)).join('')}</div>`
+        : `<div class="vio-empty">No violation matches &ldquo;${this.esc(this.query)}&rdquo;. Try a section number, a fine or a word like &ldquo;leash&rdquo;.</div>`}`;
   },
 
   render(container) {
     const filters = [['all', 'All'], ['ladder', 'Fine rises per offense'], ['flat', 'One fine'], ['none', 'No fine stated']];
+    const open = this.openRow();
     container.innerHTML = `
       <div class="view-header">
         <div class="view-header-titles">
           <h1>Violations</h1>
           <div class="subtitle">
-            <span>Provisions of the Quezon City Veterinary Code (SP-2505, S-2016) and SP-2990, S-2020, with the fine for each</span>
+            <span>Quezon City Veterinary Code (SP-2505, S-2016) and SP-2990, S-2020. Tap a violation for its fine and details.</span>
           </div>
         </div>
       </div>
@@ -182,6 +121,7 @@ window.ViolationsView = {
       </div>
 
       <div id="vio-results">${this.renderList()}</div>
+      ${open ? this.renderSheet(open) : ''}
     `;
 
     const results = container.querySelector('#vio-results');
@@ -197,5 +137,25 @@ window.ViolationsView = {
       });
       refresh();
     }));
+
+    // The detail sheet: close with the button, a tap outside it, or Esc; focus goes in, and back to the row on close
+    const wrap = container.querySelector('#vio-sheet-wrap');
+    if (wrap) {
+      this._returnTo = open.id;
+      const close = () => { window.location.hash = '#violations'; };
+      wrap.addEventListener('click', (e) => { if (e.target === wrap) close(); });
+      const x = wrap.querySelector('#vio-sheet-close');
+      if (x) { x.addEventListener('click', close); x.focus({ preventScroll: true }); }
+    } else if (this._returnTo) {
+      const back = container.querySelector(`.vio-row[data-id="${this._returnTo}"]`);
+      this._returnTo = null;
+      if (back) back.focus({ preventScroll: true });
+    }
+    if (!this._escBound && typeof document !== 'undefined') {
+      this._escBound = true;
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && document.getElementById('vio-sheet-wrap')) window.location.hash = '#violations';
+      });
+    }
   }
 };

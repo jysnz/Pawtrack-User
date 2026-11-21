@@ -112,6 +112,7 @@ require('../js/views/impoundments-view.js');
 require('../js/views/breakdown-view.js');
 require('../js/views/shelters-view.js');
 require('../js/views/notifs-view.js');
+require('../../js/violations-data.js');
 require('../js/views/violations-view.js');
 require('../js/views/settings-view.js');
 

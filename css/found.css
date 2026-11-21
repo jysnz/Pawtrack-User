@@ -15,6 +15,9 @@
 .found-stepper li.is-done .found-dot { background: var(--primary); border-color: var(--primary); color: var(--text-inverse, #fff); }
 
 /* Layout: one column, each step on its own row (mode, progress, photo, then results and the alert form) */
+/* The page is its own stacking context: the place search (z-index 1100), the map layers and the map's helper label sit at
+   z-index 1000+, which would otherwise paint over the sticky app header (z-index 100) as the page scrolls under it */
+.found-stack, .found-flow { position: relative; z-index: 0; isolation: isolate; }
 .found-stack { display: grid; gap: 16px; width: 100%; }
 .found-row { display: grid; gap: 16px; min-width: 0; }
 .found-stack > .found-stepper { margin: 0; }

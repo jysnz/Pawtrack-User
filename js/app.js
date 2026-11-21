@@ -26,6 +26,7 @@ class App {
       sightings: window.sightingsView,
       found: window.foundView,
       impound: window.impoundView,
+      violations: window.violationsView,
       report: window.reportPageView,
       settings: window.settingsView
     };
@@ -82,8 +83,8 @@ class App {
 
   // Pages a signed-out visitor may open: the missing pets map, and Found a Pet for finders without an account
   isGuestView(view) {
-    // The facility list and the animals they hold are public, so signed-out visitors can open them too
-    return view === 'owner' || view === 'found' || view === 'impound';
+    // The facility list and the animals they hold are public, and so are the violations and their fines
+    return view === 'owner' || view === 'found' || view === 'impound' || view === 'violations';
   }
 
   setGuestMode(enabled) {
