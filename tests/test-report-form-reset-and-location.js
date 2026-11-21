@@ -159,6 +159,12 @@ const errorOf = (t) => t.parent.box && t.parent.box.parts.strong.textContent;
   check('the fit runs when a page opens, a field appears, the window resizes and fonts load',
     /manager\.scheduleFit\(\)/.test(src) && /this\.scheduleFit\(\);\s*\n/.test(src) && /addEventListener\('resize', \(\) => this\.scheduleFit\(\)\)/.test(src) && /document\.fonts\.ready\.then/.test(src));
 
+  check('text areas are measured again whenever a web font finishes loading, not only when the first batch is ready',
+    /document\.fonts\.addEventListener\('loadingdone', \(\) => this\.scheduleFit\(\)\)/.test(src));
+  check('and after the phone is rotated', /addEventListener\('orientationchange'/.test(src));
+  check('browsers that support it size text areas natively (field-sizing: content), so nothing can fall out of date',
+    /@supports \(field-sizing: content\) \{[\s\S]*?textarea\.form-control[\s\S]*?field-sizing: content;/.test(pets));
+
   global.setTimeout = realSetTimeout;
   console.log(failed ? `\n${failed} check(s) FAILED` : '\nAll checks passed');
   process.exit(failed ? 1 : 0);

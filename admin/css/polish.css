@@ -2432,11 +2432,12 @@ a:focus-visible, select:focus-visible, input:focus-visible, textarea:focus-visib
 .vio-search svg { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--ink-muted); pointer-events: none; }
 .vio-search input { width: 100%; height: 36px; padding: 0 12px 0 34px; border: 1px solid var(--border-main); border-radius: 10px; background: var(--bg-card); color: var(--ink-primary); font: inherit; font-size: 13px; }
 .vio-search input:focus { outline: none; border-color: var(--brand-terracotta); box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand-terracotta) 18%, transparent); }
-.vio-chips { display: flex; flex-wrap: wrap; gap: 6px; }
-.vio-chip { height: 30px; padding: 0 12px; border: 1px solid var(--border-main); border-radius: 999px; background: var(--bg-card); color: var(--ink-secondary); font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; transition: border-color .15s ease, color .15s ease, background-color .15s ease; }
-.vio-chip:hover { border-color: var(--brand-terracotta); color: var(--ink-primary); }
-.vio-chip.is-active { background: var(--brand-terracotta); border-color: var(--brand-terracotta); color: #fff; }
-.vio-chip:focus-visible { outline: 2px solid var(--brand-terracotta); outline-offset: 2px; }
+.vio-select { position: relative; display: inline-flex; align-items: center; gap: 8px; }
+.vio-select-label { font-size: 11px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--ink-muted); }
+.vio-select select { appearance: none; -webkit-appearance: none; height: 36px; min-width: 190px; padding: 0 34px 0 12px; border: 1px solid var(--border-main); border-radius: 10px; background: var(--bg-card); color: var(--ink-primary); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+.vio-select select:hover { border-color: var(--brand-terracotta); }
+.vio-select select:focus { outline: none; border-color: var(--brand-terracotta); box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand-terracotta) 18%, transparent); }
+.vio-select::after { content: ""; position: absolute; right: 14px; top: 50%; width: 6px; height: 6px; margin-top: -5px; border-right: 2px solid var(--ink-muted); border-bottom: 2px solid var(--ink-muted); transform: rotate(45deg); pointer-events: none; }
 .vio-count { margin: 0 0 10px; font-size: 11px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--ink-muted); }
 
 .vio-rows { display: flex; flex-direction: column; border: 1px solid var(--border-main); border-radius: 12px; background: var(--bg-card); overflow: hidden; }
@@ -2492,13 +2493,13 @@ a:focus-visible, select:focus-visible, input:focus-visible, textarea:focus-visib
 
 @media (max-width: 640px) {
   .vio-search { max-width: none; flex-basis: 100%; }
-  .vio-chips { flex-wrap: nowrap; overflow-x: auto; margin: 0 -2px; padding: 0 2px 4px; scrollbar-width: none; }
-  .vio-chip { flex: none; }
-  .vio-row { gap: 10px; padding: 12px; flex-wrap: wrap; }
+  .vio-select { flex: 1 1 100%; }
+  .vio-select select { flex: 1; min-width: 0; }
+      .vio-row { gap: 10px; padding: 12px; flex-wrap: wrap; }
   .vio-row-main { flex-basis: calc(100% - 30px); }
   .vio-row-fine { order: 3; }
   .vio-row-go { margin-left: auto; order: 2; align-self: flex-start; margin-top: 4px; }
   .vio-sheet-wrap { align-items: flex-end; padding: 0; }
   .vio-sheet { max-width: none; max-height: 88vh; border-radius: 18px 18px 0 0; padding-bottom: calc(22px + env(safe-area-inset-bottom, 0px)); animation-name: vio-slide; }
 }
-@media (prefers-reduced-motion: reduce) { .vio-chip, .vio-row, .vio-row-go { transition: none; } .vio-sheet, .vio-sheet-wrap { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .vio-row, .vio-row-go { transition: none; } .vio-sheet, .vio-sheet-wrap { animation: none; } }

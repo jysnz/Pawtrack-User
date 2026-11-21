@@ -147,7 +147,13 @@ class ReportManager {
     // Text areas follow their content and the screen width
     document.addEventListener('input', (e) => { if (e.target && e.target.matches && e.target.matches('#report-pet-modal textarea')) this.scheduleFit(); });
     window.addEventListener('resize', () => this.scheduleFit());
-    if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => this.scheduleFit());
+    // Web fonts change how the text wraps, and on a slow phone connection they can arrive well after the page is drawn:
+    // measure again every time one finishes loading, not only when the first batch is ready
+    if (document.fonts) {
+      if (document.fonts.ready) document.fonts.ready.then(() => this.scheduleFit());
+      if (document.fonts.addEventListener) document.fonts.addEventListener('loadingdone', () => this.scheduleFit());
+    }
+    window.addEventListener('orientationchange', () => setTimeout(() => this.scheduleFit(), 250));
 
     // Attach global click handler to dismiss location suggestions
     document.addEventListener('click', (e) => {
@@ -2802,7 +2808,8 @@ class ReportPageView {
     window.scrollTo(0, 0);
     setTimeout(() => manager.initPinMap(), 60);
     manager.scheduleFit();
-    setTimeout(() => manager.scheduleFit(), 300); // after the page's fonts and layout settle
+    // after the page's fonts and layout settle (fonts that load later are caught by the document.fonts listener)
+    [300, 1200, 3000].forEach((ms) => setTimeout(() => manager.scheduleFit(), ms));
   }
 
   park() {

@@ -74,6 +74,17 @@ window.adminApp.routeParam = 'nope'; V.render(container);
 check('an unknown id in the address opens nothing', !/vio-sheet-wrap/.test(container.innerHTML));
 window.adminApp.routeParam = '';
 
+
+// ---- the fine dropdown ----
+V.filter = 'all'; V.render(container);
+const optsA = [...container.innerHTML.matchAll(/<option value="([^"]+)"( selected)?>([^<]+)<\/option>/g)].map((m) => [m[1], m[3], !!m[2]]);
+check('the dropdown offers All, Fine rises per offense, One fine and No fine stated', JSON.stringify(optsA.map((o) => o[1])) === JSON.stringify(['All', 'Fine rises per offense', 'One fine', 'No fine stated']), JSON.stringify(optsA));
+check('it is a select the page listens to', /<select id="vio-filter"/.test(container.innerHTML) && optsA[0][2]);
+V.filter = 'none'; V.render(container);
+check('the chosen option stays selected when the page redraws', /<option value="none" selected>No fine stated<\/option>/.test(container.innerHTML));
+check('and the list follows it', (V.renderList().match(/class="vio-row"/g) || []).length === 2);
+V.filter = 'all';
+
 // ---- wiring ----
 const index = fs.readFileSync(path.join(__dirname, '../index.html'), 'utf8');
 const app = fs.readFileSync(path.join(__dirname, '../js/admin-app.js'), 'utf8');

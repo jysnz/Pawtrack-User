@@ -115,9 +115,12 @@ window.ViolationsView = {
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
           <input type="search" id="vio-search" placeholder="Search a section, violation or fine" value="${this.esc(this.query)}" autocomplete="off" aria-label="Search violations" />
         </div>
-        <div class="vio-chips" role="group" aria-label="Filter by penalty">
-          ${filters.map(([k, label]) => `<button type="button" class="vio-chip${this.filter === k ? ' is-active' : ''}" data-filter="${k}" aria-pressed="${this.filter === k}">${label}</button>`).join('')}
-        </div>
+        <label class="vio-select">
+          <span class="vio-select-label">Fine</span>
+          <select id="vio-filter" aria-label="Filter by fine">
+            ${filters.map(([k, label]) => `<option value="${k}"${this.filter === k ? ' selected' : ''}>${label}</option>`).join('')}
+          </select>
+        </label>
       </div>
 
       <div id="vio-results">${this.renderList()}</div>
@@ -128,15 +131,8 @@ window.ViolationsView = {
     const refresh = () => { if (results) results.innerHTML = this.renderList(); };
     const input = container.querySelector('#vio-search');
     if (input) input.addEventListener('input', () => { this.query = input.value; refresh(); });
-    container.querySelectorAll('.vio-chip').forEach(btn => btn.addEventListener('click', () => {
-      this.filter = btn.dataset.filter;
-      container.querySelectorAll('.vio-chip').forEach(b => {
-        const on = b === btn;
-        b.classList.toggle('is-active', on);
-        b.setAttribute('aria-pressed', String(on));
-      });
-      refresh();
-    }));
+    const filterSelect = container.querySelector('#vio-filter');
+    if (filterSelect) filterSelect.addEventListener('change', () => { this.filter = filterSelect.value; refresh(); });
 
     // The detail sheet: close with the button, a tap outside it, or Esc; focus goes in, and back to the row on close
     const wrap = container.querySelector('#vio-sheet-wrap');

@@ -12,11 +12,12 @@
 .vl-search input { flex: 1; min-width: 0; min-height: 0; padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; outline: 0; color: var(--text-main); font: 500 14px var(--font-body); }
 .vl-search input::placeholder { color: var(--text-dim); }
 .vl-search input::-webkit-search-cancel-button { display: none; }
-.vl-pills { display: flex; flex-wrap: wrap; gap: 8px; }
-.vl-pill { min-height: 38px; padding: 0 14px; border: 1px solid var(--border-subtle); border-radius: var(--radius-full); background: var(--bg-surface); color: var(--text-muted); font: 600 13px var(--font-body); cursor: pointer; transition: background-color .15s, border-color .15s, color .15s; }
-.vl-pill:hover { border-color: var(--primary); color: var(--text-main); }
-.vl-pill.is-on { background: var(--primary); border-color: var(--primary); color: var(--text-inverse); }
-.vl-pill:focus-visible, .vl-row:focus-visible, .vl-also-btn:focus-visible, .vl-sheet-close:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.vl-select { position: relative; display: flex; align-items: center; gap: 10px; }
+.vl-select-label { font-size: 0.72rem; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--text-dim); }
+.vl-select select { flex: 1; min-width: 0; appearance: none; -webkit-appearance: none; min-height: 44px; padding: 0 38px 0 14px; border: 1px solid var(--border-subtle); border-radius: var(--radius-md); background: var(--bg-surface); color: var(--text-main); font: 600 14px var(--font-body); cursor: pointer; }
+.vl-select select:hover { border-color: var(--primary); }
+.vl-select select:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-light); }
+.vl-select::after { content: ""; position: absolute; right: 16px; top: 50%; width: 7px; height: 7px; margin-top: -6px; border-right: 2px solid var(--text-dim); border-bottom: 2px solid var(--text-dim); transform: rotate(45deg); pointer-events: none; }
 .vl-count { font-size: 12px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--text-dim); }
 
 /* One violation per row */
@@ -68,15 +69,13 @@ body.vl-sheet-open { overflow: hidden; }
 @keyframes vl-rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
 @keyframes vl-slide { from { transform: translateY(100%); } to { transform: none; } }
 
-@media (min-width: 700px) { .vl-toolbar { flex-direction: row; align-items: center; } .vl-search { flex: 0 1 360px; } }
+@media (min-width: 700px) { .vl-toolbar { flex-direction: row; align-items: center; gap: 14px; } .vl-search { flex: 0 1 360px; } .vl-select { flex: 0 0 auto; } .vl-select select { flex: none; min-width: 210px; } }
 @media (max-width: 640px) {
-  .vl-pills { flex-wrap: nowrap; overflow-x: auto; margin: 0 -2px; padding: 0 2px 4px; }
-  .vl-pill { flex: none; }
-  .vl-row { flex-wrap: wrap; gap: 10px; padding: 12px; }
+      .vl-row { flex-wrap: wrap; gap: 10px; padding: 12px; }
   .vl-row-main { flex-basis: calc(100% - 30px); }
   .vl-row-fine { order: 3; }
   .vl-row-go { order: 2; margin-left: auto; align-self: flex-start; margin-top: 4px; }
   .vl-sheet-wrap { align-items: flex-end; padding: 0; }
   .vl-sheet { max-width: none; max-height: 88dvh; border-radius: 20px 20px 0 0; padding-bottom: calc(22px + env(safe-area-inset-bottom, 0px)); animation-name: vl-slide; }
 }
-@media (prefers-reduced-motion: reduce) { .vl-row, .vl-row-go, .vl-pill { transition: none; } .vl-sheet, .vl-sheet-wrap { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .vl-row, .vl-row-go { transition: none; } .vl-sheet, .vl-sheet-wrap { animation: none; } }

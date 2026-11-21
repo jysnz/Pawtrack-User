@@ -46,7 +46,7 @@ check('the page registers itself for the router', V && typeof V.render === 'func
 const page = { innerHTML: '', querySelector: () => null, querySelectorAll: () => [] };
 V.render(page);
 const html = page.innerHTML;
-check('a heading, the notice, a search box and filters', /<h1>Violations<\/h1>/.test(html) && /vl-notice/.test(html) && /id="vl-search"/.test(html) && (html.match(/class="vl-pill( is-on)?"/g) || []).length === 4);
+check('a heading, the notice, a search box and a fine dropdown', /<h1>Violations<\/h1>/.test(html) && /vl-notice/.test(html) && /id="vl-search"/.test(html) && /<select id="vl-filter"/.test(html));
 check('every violation is its own row (14)', (html.match(/class="vl-row"/g) || []).length === 14, (html.match(/class="vl-row"/g) || []).length);
 check('a row shows the violation, its section and its fine', /Unleashed/.test(html) && /Section 53/.test(html) && /₱1,000 – ₱2,000/.test(html));
 check('rows are buttons that open a dialog', /<button type="button" class="vl-row" data-id="s53-1" aria-haspopup="dialog">/.test(html));
@@ -54,6 +54,19 @@ V.query = 'leash'; check('search narrows the rows', (V.listHtml().match(/class="
 V.query = ''; V.filter = 'none'; check('the filter narrows the rows', (V.listHtml().match(/class="vl-row"/g) || []).length === 2);
 V.filter = 'all'; V.query = '<script>x</script>'; check('what is typed is escaped', !/<script>x/.test(V.listHtml()));
 V.query = '';
+
+
+// ---- the fine dropdown ----
+const opts = [...html.matchAll(/<option value="([^"]+)"( selected)?>([^<]+)<\/option>/g)].map((m) => [m[1], m[3], !!m[2]]);
+check('the dropdown offers All, Fine rises per offense, One fine and No fine stated', JSON.stringify(opts.map((o) => o[1])) === JSON.stringify(['All', 'Fine rises per offense', 'One fine', 'No fine stated']), JSON.stringify(opts));
+check('All is selected to start with', opts.length === 4 && opts[0][2] && !opts.slice(1).some((o) => o[2]));
+for (const [value, rows] of [['ladder', 6], ['flat', 6], ['none', 2], ['all', 14]]) {
+  V.filter = value;
+  check(`choosing "${value}" lists ${rows} rows`, (V.listHtml().match(/class="vl-row"/g) || []).length === rows);
+}
+V.filter = 'flat'; V.render(page);
+check('the chosen option stays selected when the page redraws', /<option value="flat" selected>One fine<\/option>/.test(page.innerHTML));
+V.filter = 'all';
 
 // ---- tapping a row ----
 check('no sheet until a row is tapped', !document.getElementById('vl-sheet-wrap') && !classes.has('vl-sheet-open'));

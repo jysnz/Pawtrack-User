@@ -526,3 +526,11 @@
   #report-pet-modal.report-page .report-form-column textarea.form-control,
   #report-pet-modal.report-page .report-card textarea.form-control { min-height: 7.5rem; }
 }
+
+/* Where the browser supports it (Chrome and Android Chrome 123+, Safari 26+), text areas size themselves to their placeholder
+   and their text, whatever font, text size or width the phone has: nothing to measure, nothing that can fall out of date.
+   Other browsers use reportManager.fitReportTextareas() above. */
+@supports (field-sizing: content) {
+  #report-pet-modal.report-page .report-form-column textarea.form-control,
+  #report-pet-modal.report-page .report-card textarea.form-control { field-sizing: content; height: auto; max-height: 60vh; }
+}

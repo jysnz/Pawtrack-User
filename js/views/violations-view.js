@@ -95,9 +95,12 @@ class ViolationsView {
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
             <input type="search" id="vl-search" placeholder="Search a section, violation or fine" value="${this.esc(this.query)}" autocomplete="off" aria-label="Search violations" />
           </label>
-          <div class="vl-pills" role="group" aria-label="Filter by penalty">
-            ${filters.map(([k, label]) => `<button type="button" class="vl-pill${this.filter === k ? ' is-on' : ''}" data-filter="${k}" aria-pressed="${this.filter === k}">${label}</button>`).join('')}
-          </div>
+          <label class="vl-select">
+            <span class="vl-select-label">Fine</span>
+            <select id="vl-filter" aria-label="Filter by fine">
+              ${filters.map(([k, label]) => `<option value="${k}"${this.filter === k ? ' selected' : ''}>${label}</option>`).join('')}
+            </select>
+          </label>
         </div>
 
         <div id="vl-results">${this.listHtml()}</div>
@@ -111,15 +114,8 @@ class ViolationsView {
     const refresh = () => { if (results) results.innerHTML = this.listHtml(); };
     const input = this.container.querySelector('#vl-search');
     if (input) input.addEventListener('input', () => { this.query = input.value; refresh(); });
-    this.container.querySelectorAll('.vl-pill').forEach((btn) => btn.addEventListener('click', () => {
-      this.filter = btn.dataset.filter;
-      this.container.querySelectorAll('.vl-pill').forEach((b) => {
-        const on = b === btn;
-        b.classList.toggle('is-on', on);
-        b.setAttribute('aria-pressed', String(on));
-      });
-      refresh();
-    }));
+    const filterSelect = this.container.querySelector('#vl-filter');
+    if (filterSelect) filterSelect.addEventListener('change', () => { this.filter = filterSelect.value; refresh(); });
     // One handler for every row, so rows redrawn by a search or filter still work
     if (results) results.addEventListener('click', (e) => {
       const row = e.target.closest('.vl-row');
