@@ -1038,7 +1038,7 @@ class AdminApp {
     // browser's Back button steps through pages and opened details like any other website
     const fullHash = window.location.hash || '#activation';
     const [rawHash, ...detail] = fullHash.replace('#', '').split('/');
-    const validRoutes = ['activation', 'breakdown', 'heatmap', 'reports', 'impoundments', 'shelters', 'notifs', 'settings'];
+    const validRoutes = ['activation', 'breakdown', 'heatmap', 'reports', 'impoundments', 'shelters', 'notifs', 'violations', 'settings'];
     // The Shelter Terminal was merged into Impoundments: keep old bookmarks working
     if (rawHash === 'terminal') { window.location.replace('#impoundments'); return; }
     this.currentRoute = validRoutes.includes(rawHash) ? rawHash : 'activation';
@@ -1114,6 +1114,9 @@ class AdminApp {
           break;
         case 'notifs':
           if (window.NotifsView) window.NotifsView.render(container);
+          break;
+        case 'violations':
+          if (window.ViolationsView) window.ViolationsView.render(container);
           break;
         case 'settings':
           if (window.SettingsView) window.SettingsView.render(container);
@@ -1708,6 +1711,7 @@ class AdminApp {
       { label: 'Scan Tag & Log Intake (Impoundments)', route: 'impoundments', cat: 'Navigation' },
       { label: 'Facilities: Add and Manage', route: 'shelters', cat: 'Navigation' },
       { label: 'Dispatch Emergency Broadcast', route: 'notifs', cat: 'Navigation' },
+      { label: 'Violations: ordinance provisions and fines', route: 'violations', cat: 'Navigation' },
       { label: 'Municipal Settings & JSON Backup', route: 'settings', cat: 'Navigation' },
       { label: 'Scan & intake a pet', action: 'intake', cat: 'Actions' },
     ];

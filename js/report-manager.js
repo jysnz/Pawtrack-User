@@ -144,6 +144,11 @@ class ReportManager {
     this.sightingSuggestions = [];
     this.selectedSightingSuggestionIndex = -1;
 
+    // Text areas follow their content and the screen width
+    document.addEventListener('input', (e) => { if (e.target && e.target.matches && e.target.matches('#report-pet-modal textarea')) this.scheduleFit(); });
+    window.addEventListener('resize', () => this.scheduleFit());
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => this.scheduleFit());
+
     // Attach global click handler to dismiss location suggestions
     document.addEventListener('click', (e) => {
       const wrap = document.getElementById('report-location-search-wrap');
@@ -165,6 +170,40 @@ class ReportManager {
     if (here && here !== 'report') this.returnHash = here;
     if (here === 'report') window.reportPageView.render(document.getElementById('app-viewport'));
     else window.location.hash = 'report';
+  }
+
+  // Sizes the report page's text areas to their placeholder and to what has been typed, so a long placeholder or a
+  // long caption is never cut off on a narrow phone. Hidden ones are measured again when they are shown.
+  fitReportTextareas() {
+    const page = document.getElementById('report-pet-modal');
+    if (!page) return;
+    page.querySelectorAll('textarea.form-control').forEach((t) => {
+      if (!t.clientWidth) return;
+      const cs = getComputedStyle(t);
+      const border = (parseFloat(cs.borderTopWidth) || 0) + (parseFloat(cs.borderBottomWidth) || 0);
+      // A hidden copy with the same width, type and padding, holding the placeholder (shown in italics)
+      const probe = document.createElement('div');
+      probe.setAttribute('aria-hidden', 'true');
+      probe.style.cssText = [
+        'position:absolute', 'left:-9999px', 'top:0', 'visibility:hidden', 'pointer-events:none',
+        'box-sizing:border-box', 'white-space:pre-wrap', 'overflow-wrap:break-word',
+        `width:${t.clientWidth}px`, `font-family:${cs.fontFamily}`, `font-size:${cs.fontSize}`, 'font-weight:400', 'font-style:italic',
+        `letter-spacing:${cs.letterSpacing}`, `line-height:${cs.lineHeight}`,
+        `padding:${cs.paddingTop} ${cs.paddingRight} ${cs.paddingBottom} ${cs.paddingLeft}`
+      ].join(';');
+      probe.textContent = t.placeholder || ' ';
+      document.body.appendChild(probe);
+      const forPlaceholder = Math.ceil(probe.getBoundingClientRect().height + border) + 4;
+      probe.remove();
+      t.style.minHeight = `${Math.max(forPlaceholder, 84)}px`;
+      t.style.height = 'auto';
+      if (t.scrollHeight > t.clientHeight) t.style.height = `${t.scrollHeight + border}px`; // grows with what is typed
+    });
+  }
+
+  scheduleFit() {
+    if (this._fitFrame) cancelAnimationFrame(this._fitFrame);
+    this._fitFrame = requestAnimationFrame(() => { this._fitFrame = 0; this.fitReportTextareas(); });
   }
 
   // A new report starts blank: nothing typed, picked or pinned for the previous report is carried over
@@ -658,6 +697,7 @@ class ReportManager {
     const registeredPick = !!chosen || isUnregistered; // registered or "Another pet"
     const descWrap = document.getElementById('report-missing-desc-wrap');
     if (descWrap) descWrap.style.display = registeredPick ? '' : 'none';
+    this.scheduleFit();
     if (conditionWrap) {
       conditionWrap.style.display = registeredPick ? '' : 'none';
       const hint = conditionWrap.querySelector('small');
@@ -2761,6 +2801,8 @@ class ReportPageView {
     if (window.lucide) window.lucide.createIcons({ root: page });
     window.scrollTo(0, 0);
     setTimeout(() => manager.initPinMap(), 60);
+    manager.scheduleFit();
+    setTimeout(() => manager.scheduleFit(), 300); // after the page's fonts and layout settle
   }
 
   park() {

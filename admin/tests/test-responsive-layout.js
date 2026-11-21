@@ -112,6 +112,7 @@ require('../js/views/impoundments-view.js');
 require('../js/views/breakdown-view.js');
 require('../js/views/shelters-view.js');
 require('../js/views/notifs-view.js');
+require('../js/views/violations-view.js');
 require('../js/views/settings-view.js');
 
 const views = [
@@ -121,6 +122,7 @@ const views = [
   { name: 'BreakdownView', view: window.BreakdownView },
   { name: 'SheltersView', view: window.SheltersView },
   { name: 'NotifsView', view: window.NotifsView },
+  { name: 'ViolationsView', view: window.ViolationsView },
   { name: 'SettingsView', view: window.SettingsView }
 ];
 

@@ -130,6 +130,35 @@ const errorOf = (t) => t.parent.box && t.parent.box.parts.strong.textContent;
   check('phones get a lighter placeholder still', /@media \(max-width: 768px\) \{\s*\/\*[^*]*\*\/\s*#report-pet-modal\.report-page \.form-control::placeholder/.test(pets));
   check('the location error box is styled', /\.use-location-error \{/.test(components));
 
+  // ---- phone layout: the page cannot paint over the app header, and text areas fit their placeholder ----
+  check('the report page is its own stacking context, so map layers (z-index up to 1100) stay under the header (z-index 100)',
+    /#report-pet-modal\.report-page \{[^}]*position: relative;[^}]*z-index: 0;[^}]*isolation: isolate;/.test(pets));
+  check('the old position: static rule that let the map escape is gone', !/#report-pet-modal\.report-page \{[^}]*position: static/.test(pets));
+  check('phones get a taller floor for the text areas', /@media \(max-width: 640px\) \{\s*#report-pet-modal\.report-page \.report-form-column textarea\.form-control[\s\S]*?min-height: 7\.5rem/.test(pets));
+
+  const fitSrc = src.slice(src.indexOf('  fitReportTextareas() {'), src.indexOf('  scheduleFit() {'));
+  const Fit = new Function(`return class F {\n${fitSrc}\n}`)();
+  const made = [];
+  const area = (placeholder, width, scroll) => ({
+    placeholder, clientWidth: width, clientHeight: 82, scrollHeight: scroll, style: {},
+    _need: placeholder.length > 60 ? 100 : 60 // pretend the placeholder wraps to more lines when it is long
+  });
+  const areas = [area('x'.repeat(96), 292, 82), area('short', 292, 82), area('x'.repeat(96), 0, 0), area('typed', 292, 220)];
+  global.document = {
+    getElementById: (id) => (id === 'report-pet-modal' ? { querySelectorAll: () => areas } : null),
+    createElement: () => { const el = { style: {}, setAttribute() {}, remove() {}, getBoundingClientRect() { return { height: el.textContent.length > 60 ? 96 : 56 }; } }; made.push(el); return el; },
+    body: { appendChild() {} }
+  };
+  global.getComputedStyle = () => ({ borderTopWidth: '1px', borderBottomWidth: '1px', fontFamily: 'Outfit', fontSize: '14.4px', letterSpacing: 'normal', lineHeight: '1.45', paddingTop: '9px', paddingRight: '12px', paddingBottom: '9px', paddingLeft: '12px' });
+  new Fit().fitReportTextareas();
+  check('a long placeholder gets a box tall enough for it (placeholder + borders + a little room)', parseInt(areas[0].style.minHeight, 10) >= 96 + 2, areas[0].style.minHeight);
+  check('a short placeholder still keeps the 84px floor', areas[1].style.minHeight === '84px', areas[1].style.minHeight);
+  check('a hidden text area is left alone until it is shown', areas[2].style.minHeight === undefined);
+  check('typing past the box makes it grow with the text', areas[3].style.height === `${220 + 2}px`, areas[3].style.height);
+  check('the measuring copy uses the same width and italic type as the placeholder', made[0] && /width:292px/.test(made[0].style.cssText) && /font-style:italic/.test(made[0].style.cssText));
+  check('the fit runs when a page opens, a field appears, the window resizes and fonts load',
+    /manager\.scheduleFit\(\)/.test(src) && /this\.scheduleFit\(\);\s*\n/.test(src) && /addEventListener\('resize', \(\) => this\.scheduleFit\(\)\)/.test(src) && /document\.fonts\.ready\.then/.test(src));
+
   global.setTimeout = realSetTimeout;
   console.log(failed ? `\n${failed} check(s) FAILED` : '\nAll checks passed');
   process.exit(failed ? 1 : 0);
