@@ -2503,3 +2503,29 @@ a:focus-visible, select:focus-visible, input:focus-visible, textarea:focus-visib
   .vio-sheet { max-width: none; max-height: 88vh; border-radius: 18px 18px 0 0; padding-bottom: calc(22px + env(safe-area-inset-bottom, 0px)); animation-name: vio-slide; }
 }
 @media (prefers-reduced-motion: reduce) { .vio-row, .vio-row-go { transition: none; } .vio-sheet, .vio-sheet-wrap { animation: none; } }
+
+/* Recording a violation against a person */
+.vio-section-title { margin: 28px 0 10px; font-size: 15px; font-weight: 700; color: var(--ink-primary); }
+.vio-issued-row { cursor: default; }
+.vio-record { display: flex; flex-direction: column; gap: 12px; }
+.vio-field { display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; font-weight: 600; color: var(--ink-secondary); }
+.vio-field input, .vio-field select, .vio-field textarea { padding: 9px 11px; border: 1px solid var(--border-main); border-radius: 8px; background: var(--bg-card); color: var(--ink-primary); font: inherit; font-weight: 400; }
+.vio-people { display: flex; flex-direction: column; gap: 4px; max-height: 180px; overflow-y: auto; }
+.vio-person { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; padding: 8px 11px; border: 1px solid var(--border-main); border-radius: 8px; background: var(--bg-card); color: var(--ink-primary); font: inherit; text-align: left; cursor: pointer; }
+.vio-person small, .vio-picked small { color: var(--ink-secondary); }
+.vio-person:hover { border-color: var(--brand-terracotta); }
+.vio-picked { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 12px; border: 1px solid var(--brand-terracotta); border-radius: 8px; background: var(--bg-card); color: var(--ink-primary); font-size: 13px; }
+.vio-rec-error { margin: 0; color: #c0392b; font-size: 12.5px; font-weight: 600; }
+.vio-rec-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.vio-picked[hidden], .vio-field[hidden], .vio-rec-error[hidden] { display: none; }
+.vio-record > * { flex-shrink: 0; }
+.vio-people { min-height: 0; }
+.vio-person { overflow-wrap: anywhere; }
+.vio-picked > span { min-width: 0; overflow-wrap: anywhere; }
+.vio-picked > button { flex: none; }
+.vio-avatar { position: relative; flex: none; display: grid; place-items: center; width: 36px; height: 36px; border-radius: 50%; overflow: hidden; color: #fff; font-size: 14px; font-weight: 700; }
+.vio-avatar img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.vio-person { flex-direction: row; align-items: center; gap: 10px; }
+.vio-person-text, .vio-picked-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1; overflow-wrap: anywhere; }
+.vio-picked { gap: 10px; }
+.vio-picked > .vio-picked-text { display: block; }

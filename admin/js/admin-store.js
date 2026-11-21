@@ -984,6 +984,51 @@ class AdminStore {
     return this.saveShelter({ ...shelterData, asSub: true }, onDone);
   }
 
+  // ----- Violations an admin records against a person (see supabase/migrations/20261131_issued_violations.sql) -----
+  async findGuardians(query) {
+    const q = String(query || '').trim();
+    if (q.length < 2) return [];
+    const res = await this.rpc('Could not look up people', 'find_guardians', { p_query: q });
+    return res.ok ? (res.data || []) : [];
+  }
+
+  // row: one entry of PawViolations.rows. The database works out the offense number and the fine from the ladder.
+  async issueViolation({ ownerId, ownerName, row, reason, petName }) {
+    const pen = row.provision.penalty;
+    const ladder = pen.kind === 'ladder' ? pen.steps : pen.kind === 'flat' ? [pen.amount] : [];
+    const args = {
+      p_owner: ownerId, p_rule_id: row.id, p_rule_name: row.name, p_section: row.provision.ref,
+      p_ladder: ladder, p_reason: reason, p_pet_name: petName || null
+    };
+    // The facility is sent once the database has the newer issue_violation (supabase/migrations/20261132); until then without it
+    const facility = this.getActiveFacilityId();
+    let res = facility && this.violationFacilityReady !== false
+      ? await this.rpc('Could not record the violation', 'issue_violation', { ...args, p_shelter: facility }, true)
+      : { ok: false, missingFn: true };
+    if (!res.ok && (res.missingFn || /could not find the function|schema cache/i.test(res.message || ''))) {
+      this.violationFacilityReady = false;
+      res = await this.rpc('Could not record the violation', 'issue_violation', args);
+    }
+    if (!res.ok) return null;
+    this.logAction('Violation Issued', `${row.provision.ref}: ${row.name} recorded against ${ownerName || ownerId}`);
+    // The email (through Brevo, in the facility's name) is best effort: the violation and the in-app alert are already saved
+    let emailed = false;
+    try {
+      const sb = await this.waitForClient(5000);
+      const out = sb && await sb.functions.invoke('notify-violation', { body: { violation_id: res.data.id } });
+      emailed = !!(out && out.data && out.data.sent);
+    } catch (e) { console.warn('[AdminStore] violation email:', e && e.message); }
+    return { ...res.data, emailed };
+  }
+
+  async listViolations() {
+    const sb = await this.waitForClient(5000);
+    if (!sb) return { rows: [], missing: false };
+    const { data, error } = await sb.from('violations').select('*').order('created_at', { ascending: false }).limit(200);
+    if (error) return { rows: [], missing: true };
+    return { rows: data || [], missing: false };
+  }
+
   // ----- Penalty tickets: owners of missing pets pay a penalty to the main facility -----
   getTickets() {
     try {
@@ -1027,11 +1072,11 @@ class AdminStore {
   }
 
   // Runs a database function; resolves { ok, data }. Errors are shown once as a toast.
-  async rpc(what, name, args) {
+  async rpc(what, name, args, quiet) {
     const sb = await this.waitForClient(5000);
     if (!sb) { this.dbError(what, { message: 'no connection to the database' }); return { ok: false, data: null }; }
     const { data, error } = await sb.rpc(name, args || {});
-    if (error) { this.dbError(what, error); return { ok: false, data: null }; }
+    if (error) { if (!quiet) this.dbError(what, error); return { ok: false, data: null, message: error.message }; }
     return { ok: true, data };
   }
 

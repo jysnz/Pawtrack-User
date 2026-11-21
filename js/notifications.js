@@ -210,12 +210,12 @@ class NotificationManager {
             ${this.actorAvatarHtml(n, isRead) || `<span class="notif-avatar-icon notif-system-logo${isRead ? ' is-read' : ''}" title="PawTrack"><img src="images/pawtrack-logo.svg" alt="PawTrack" /></span>`}
             <div style="flex:1; min-width:0; overflow:hidden;">
               <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:6px;">
-                <strong class="notif-title-text" style="font-size:0.82rem; color:${titleColor}; word-break:break-word; overflow-wrap:anywhere;">${n.title}</strong>
+                <strong class="notif-title-text" style="font-size:0.82rem; color:${titleColor}; word-break:break-word; overflow-wrap:anywhere;">${this.escHtml(n.title)}</strong>
                 ${!isRead 
                   ? `<span style="font-size:0.6rem; font-weight:700; background:${badgeBg}; color:#ffffff; border-radius:99px; padding:1px 6px; flex-shrink:0; letter-spacing:0.02em;">${badgeText}</span>` 
                   : `<span class="notif-read-check-icon" title="Read" style="font-size:0.65rem; color:var(--text-dim, #94a3b8); display:inline-flex; align-items:center; gap:2px; opacity:0.75;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg></span>`}
               </div>
-              <p class="notif-msg-text" style="font-size:0.76rem; color:${isRead ? 'var(--text-dim, #94a3b8)' : 'var(--text-muted)'}; margin:4px 0 6px; line-height:1.4; word-break:break-word; overflow-wrap:anywhere;">${n.message}</p>
+              <p class="notif-msg-text" style="font-size:0.76rem; color:${isRead ? 'var(--text-dim, #94a3b8)' : 'var(--text-muted)'}; margin:4px 0 6px; line-height:1.4; word-break:break-word; overflow-wrap:anywhere;">${this.escHtml(n.message)}</p>
               ${n.type === 'nfc_reminder' ? `<div class="notif-actions"><button type="button" class="notif-verify-btn" onclick="event.stopPropagation(); window.nfcReminders.linkNow('${n.petId}')">Link NFC tag</button><button type="button" class="notif-dismiss-btn" onclick="event.stopPropagation(); window.nfcReminders.dismiss('${n.petId}')">Dismiss</button></div>` : ''}
               ${/^POSSIBLE SIGHTING/i.test(n.title || '') && n.type === 'sighting_verification' ? `<button type="button" class="notif-verify-btn" onclick="event.stopPropagation(); window.notifManager.handleNotifClick('${n.id}')" title="Open the Verify Sighting dialog"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg> Verify</button>` : ''}
               
@@ -234,6 +234,10 @@ class NotificationManager {
 
   // The photo of whoever commented, reacted or reported a sighting, with a small badge for the kind of alert.
   // Without a photo it shows their initial; an alert with no person on it keeps the plain letter icon.
+  escHtml(v) {
+    return String(v == null ? '' : v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  }
+
   actorAvatarHtml(n, isRead) {
     const name = String(n.actorName || '').trim();
     const photo = /^https:\/\//.test(n.actorAvatar || '') ? n.actorAvatar : '';
@@ -274,8 +278,13 @@ class NotificationManager {
 
     if (notif.type === 'nfc_reminder' && window.nfcReminders) {
       window.nfcReminders.linkNow(notif.petId);
-    } else if (notif.type === 'nfc_violation') {
-      window.location.hash = '#violations';
+    } else if (notif.type === 'nfc_violation' || /^VIOLATION:/i.test(notif.title || '')) {
+      // Open My violations with the one this alert is about highlighted
+      const mv = window.myViolationsView;
+      const local = /^nfcv-/.test(String(notif.id));
+      const target = local ? { id: String(notif.id).slice(5) } : { title: notif.title, ts: notif.timestamp };
+      if (window.location.hash === '#violations') { if (mv) mv.focusViolation(target); }
+      else { if (mv) mv.target = target; window.location.hash = '#violations'; }
     } else if (notif.caseId) {
       this.openReunionCase(notif.caseId);
     } else if (notif.postId && (notif.type === 'comment' || notif.type === 'reply' || notif.type === 'like')) {

@@ -111,3 +111,22 @@ body.vl-sheet-open { overflow: hidden; }
 .notif-dismiss-btn { padding: 6px 14px; border: 1px solid var(--border-subtle); border-radius: 8px; background: transparent; color: var(--text-muted); font: inherit; font-size: 0.78rem; font-weight: 700; cursor: pointer; }
 .notif-dismiss-btn:hover { border-color: var(--primary); color: var(--text-main); }
 .notif-actions .notif-verify-btn { margin: 0; }
+
+/* A violation card opens its details; the sheet tells the person where to go */
+.mv-card-tap { position: relative; cursor: pointer; transition: border-color .15s ease, transform .1s ease; }
+.mv-card-tap:hover { border-color: var(--primary); }
+.mv-card-tap:active { transform: scale(0.99); }
+.mv-card-tap:focus-visible { outline: 3px solid var(--border-focus, rgba(234, 157, 30, 0.6)); outline-offset: 2px; }
+.mv-name, .mv-reason { overflow-wrap: anywhere; }
+.mv-tap-hint { display: block; margin-top: 10px; font-size: 0.76rem; font-weight: 700; color: var(--primary); }
+.mv-info-row { display: flex; gap: 12px; padding: 6px 0; font-size: 0.86rem; line-height: 1.5; color: var(--text-main); }
+.mv-info-row > span { flex: none; width: 92px; font-size: 0.7rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--text-dim); padding-top: 2px; }
+.mv-info-row > div { min-width: 0; overflow-wrap: anywhere; white-space: pre-line; }
+.mv-info-row a { color: var(--primary); font-weight: 600; text-decoration: none; }
+.mv-go { margin-top: 14px; padding: 14px 16px; border: 1px solid var(--primary); border-radius: var(--radius-md); background: var(--primary-light); }
+.mv-go-title { font-family: var(--font-heading); font-size: 1rem; font-weight: 700; color: var(--text-main); overflow-wrap: anywhere; }
+.mv-go p { margin: 6px 0 8px; font-size: 0.84rem; line-height: 1.5; color: var(--text-muted); }
+.mv-go-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+@keyframes mv-flash { 0%, 60% { box-shadow: 0 0 0 3px var(--primary), 0 0 24px rgba(234, 157, 30, .45); background: var(--primary-light); } 100% { box-shadow: 0 0 0 0 transparent; } }
+.mv-card.mv-flash { animation: mv-flash 3.5s ease-out; }
+@media (prefers-reduced-motion: reduce) { .mv-card.mv-flash { animation: none; box-shadow: 0 0 0 3px var(--primary); } }

@@ -99,7 +99,7 @@ global.pawStore = {
 // Test 3: Rendering in Others tab (Default)
 notifMgr.renderNotifDropdown();
 const listElem = document.getElementById('notif-dropdown-list');
-assert.ok(listElem.innerHTML.includes('GOOD SAMARITAN FOUND YOUR PET: "BUSTER TEST" !'), 'Good Samaritan notice is rendered in Others tab');
+assert.ok(listElem.innerHTML.includes('GOOD SAMARITAN FOUND YOUR PET: &quot;BUSTER TEST&quot; !'), 'Good Samaritan notice is rendered in Others tab');
 assert.ok(listElem.innerHTML.includes('Sighting Pinned'), 'Community sighting is rendered in Others tab');
 assert.ok(!listElem.innerHTML.includes('Official Impound Notice'), 'Impound notice is NOT rendered in Others tab');
 assert.ok(!listElem.innerHTML.includes('View Finder Info'), 'View Finder Info button is NOT present in notification items');
