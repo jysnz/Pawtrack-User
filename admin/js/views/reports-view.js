@@ -48,9 +48,26 @@ window.ReportsView = {
     window.location.hash = '#heatmap';
   },
 
+  // #reports/<id> (an alert, a link): show that report. Filters are cleared and the page that holds it is opened;
+  // the row is then scrolled into view and highlighted. Applied once per link, and only once the report has loaded.
+  applyDeepLink(all) {
+    const raw = (window.adminApp && window.adminApp.routeParam) || '';
+    let id = '';
+    try { id = decodeURIComponent(raw); } catch (e) { id = raw; }
+    if (!id) { this._linked = ''; return; }
+    if (this._linked === id) return;
+    if (!all.some(i => i.id === id)) return;
+    this._linked = id;
+    Object.assign(this, { query: '', draft: '', status: 'all', source: 'all', animal: 'all', period: 'all', sortBy: 'date' });
+    const at = this.filtered(all).findIndex(i => i.id === id);
+    this.page = at < 0 ? 1 : Math.floor(at / this.pageSize) + 1;
+    this._focusId = id;
+  },
+
   render(container) {
     const H = window.HeatmapView;
     const all = H ? H.buildIncidents() : [];
+    this.applyDeepLink(all);
     const list = this.filtered(all);
     const total = list.length;
     const totalPages = Math.max(Math.ceil(total / this.pageSize), 1);
@@ -136,7 +153,7 @@ window.ReportsView = {
               <thead><tr><th>Animal</th><th>Status</th><th>Location</th><th>Reported</th><th>Source</th><th></th></tr></thead>
               <tbody>
                 ${rows.map(inc => `
-                  <tr class="incident-table-row rp-row" data-lat="${inc.lat}" data-lng="${inc.lng}" data-id="${this.esc(inc.id)}" title="Show on the heatmap">
+                  <tr class="incident-table-row rp-row${inc.id === this._focusId ? ' rp-row-focus' : ''}" data-lat="${inc.lat}" data-lng="${inc.lng}" data-id="${this.esc(inc.id)}" title="Show on the heatmap">
                     <td class="rp-c-animal"><div class="animal-cell">${H.photoHtml(inc)}<div class="animal-info"><span class="animal-name">${this.hl(inc.name)}</span><span class="animal-breed">${this.hl(inc.speciesTag)}</span></div></div></td>
                     <td class="rp-c-status"><span class="status-pill ${pill(inc.status)}">${this.esc(inc.status.toUpperCase())}</span></td>
                     <td class="rp-c-loc" data-label="Location"><div class="location-cell"><span class="loc-main">${this.hl(inc.barangay)}</span><span class="loc-sub">${this.hl(inc.district)}${inc.location && inc.location !== inc.barangay ? ' · ' + this.hl(inc.location) : ''}</span></div></td>
@@ -194,6 +211,11 @@ window.ReportsView = {
       const n = parseInt(b.dataset.page, 10);
       if (n >= 1) { this.page = n; redraw(); }
     }));
+    if (this._focusId) {
+      const row = [...container.querySelectorAll('.rp-row')].find(r => r.dataset.id === this._focusId);
+      this._focusId = null;
+      if (row) requestAnimationFrame(() => row.scrollIntoView({ block: 'center', behavior: 'smooth' }));
+    }
     container.querySelectorAll('.rp-locate').forEach(b => b.addEventListener('click', () => this.locate(parseFloat(b.dataset.lat), parseFloat(b.dataset.lng), b.dataset.id)));
   }
 };

@@ -30,6 +30,7 @@ class AdminApp {
       this.updateSidebarBadges();
       this.updateSyncIndicator();
       this.notifyIncomingTransfers();
+      this.notifyRoutedReports();
       this.updateFacilityLabel();
     });
 
@@ -52,6 +53,31 @@ class AdminApp {
     fresh.forEach(id => seen.add(id));
     try { sessionStorage.setItem('pawtrack_seen_incoming', JSON.stringify([...seen])); } catch (e) { /* ignore */ }
     this.showToast(`${fresh.length} ${fresh.length === 1 ? 'pet is' : 'pets are'} arriving from a sub-facility. Open Impoundments to confirm.`, 'warning', 6000);
+  }
+
+  // Tell the facility when a pet is reported missing in its area (once per report; only reports from the last day)
+  notifyRoutedReports() {
+    const store = window.adminStore;
+    if (!store || !store.hasSynced || typeof store.getRoutedReports !== 'function') return;
+    const KEY = 'pawtrack_seen_routed_reports';
+    let seen = this._seenRouted;
+    if (!seen) {
+      try { seen = new Set(JSON.parse(localStorage.getItem(KEY) || '[]')); } catch (e) { seen = new Set(); }
+      this._seenRouted = seen;
+    }
+    const DAY = 24 * 3600 * 1000;
+    const fresh = store.getRoutedReports().filter(c => !seen.has(c.id));
+    if (!fresh.length) return;
+    fresh.forEach(c => seen.add(c.id));
+    try { localStorage.setItem(KEY, JSON.stringify([...seen].slice(-200))); } catch (e) { /* ignore */ }
+    const recent = fresh.filter(c => Date.now() - new Date(c.createdAt).getTime() <= DAY);
+    if (!recent.length) return;
+    const first = recent[0];
+    const place = [first.lastSeenBarangay, first.lastSeenCity].filter(Boolean).join(', ') || first.location || 'your area';
+    const msg = recent.length === 1
+      ? `${first.petName || 'A pet'} was reported missing in ${place}. Open Alerts for details.`
+      : `${recent.length} pets were reported missing in your area. Open Alerts for details.`;
+    this.showToast(msg, 'warning', 7000);
   }
 
   // The sidebar chip shows the facility this account works at, and keeps up as the data syncs
@@ -947,6 +973,13 @@ class AdminApp {
     });
   }
 
+  // Unread notifications plus open missing reports routed to this account's facilities
+  alertCount(notifs) {
+    const store = window.adminStore;
+    const routed = store && typeof store.getRoutedReports === 'function' ? store.getRoutedReports().length : 0;
+    return (notifs || []).filter(n => !n.read).length + routed;
+  }
+
   initSeenTracking() {
     const store = window.adminStore;
     const pets = store.getPets ? store.getPets() : [];
@@ -955,7 +988,7 @@ class AdminApp {
     const notifs = store.getNotifications ? store.getNotifications() : [];
 
     const activeImpounds = impoundments.filter(i => i.status === 'active_impounded').length;
-    const unreadNotifs = notifs.filter(n => !n.read).length;
+    const unreadNotifs = this.alertCount(notifs);
 
     let saved = null;
     try {
@@ -990,7 +1023,7 @@ class AdminApp {
       this.seenCounts.impoundments = impoundments.filter(i => i.status === 'active_impounded').length;
     } else if (route === 'notifs') {
       const notifs = store.getNotifications ? store.getNotifications() : [];
-      this.seenCounts.notifs = notifs.filter(n => !n.read).length;
+      this.seenCounts.notifs = this.alertCount(notifs);
     }
 
     try {
@@ -1115,7 +1148,7 @@ class AdminApp {
     const notifs = store.getNotifications ? store.getNotifications() : [];
 
     const activeImpounds = impoundments.filter(i => i.status === 'active_impounded').length;
-    const unreadNotifs = notifs.filter(n => !n.read).length;
+    const unreadNotifs = this.alertCount(notifs);
 
     if (this._rebaseOnSync && store.hasSynced) {
       this._rebaseOnSync = false;

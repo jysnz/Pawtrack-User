@@ -491,3 +491,27 @@
 
 .pets-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: -0.75rem 0 16px; }
 .pets-toolbar .btn { height: 34px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; white-space: nowrap; }
+
+/* Report page: a placeholder must never be mistaken for a value that was filled in for you.
+   Placeholders are lighter and italic; anything typed (or filled from the pin) is full colour and upright. */
+#report-pet-modal.report-page .form-control::placeholder,
+#report-pet-modal.report-page .report-location-search-input::placeholder {
+  color: color-mix(in srgb, var(--text-muted) 58%, transparent);
+  font-style: italic;
+  font-weight: 400;
+  opacity: 1; /* Firefox dims placeholders on its own, which would stack with the colour above */
+}
+#report-pet-modal.report-page input.form-control:not(:placeholder-shown),
+#report-pet-modal.report-page textarea.form-control:not(:placeholder-shown),
+#report-pet-modal.report-page .report-location-search-input:not(:placeholder-shown) {
+  color: var(--text-main);
+  font-style: normal;
+  font-weight: 500;
+}
+@media (max-width: 768px) {
+  /* Phones render placeholders close to the value colour: go a step lighter (still readable) on top of the italics */
+  #report-pet-modal.report-page .form-control::placeholder,
+  #report-pet-modal.report-page .report-location-search-input::placeholder {
+    color: color-mix(in srgb, var(--text-muted) 50%, transparent);
+  }
+}

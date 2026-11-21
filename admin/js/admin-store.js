@@ -409,6 +409,11 @@ class AdminStore {
       status: open ? (seen.length || r.status === 'sighted' ? 'sighted' : 'missing') : 'reunited',
       location: r.last_seen_location,
       coords: [r.lat, r.lng],
+      // Where the database routed the report (null until the routing migration is applied, or when PawTrack handles it)
+      routedShelterId: r.routed_shelter_id || null,
+      routedVia: r.routed_via || null,
+      lastSeenBarangay: r.last_seen_barangay || '',
+      lastSeenCity: r.last_seen_city || '',
       createdAt: r.created_at,
       lastUpdated: r.updated_at || r.created_at,
       timeline
@@ -702,6 +707,13 @@ class AdminStore {
     } catch {
       return [];
     }
+  }
+
+  // Open missing reports routed to this account's facilities (a main facility also gets its sub-facilities')
+  getRoutedReports() {
+    const ids = this.getMyFacilityIds();
+    if (!ids.length) return [];
+    return this.getCases().filter(c => c.routedShelterId && ids.includes(c.routedShelterId) && c.status !== 'reunited');
   }
 
   // --- Impoundments API ---

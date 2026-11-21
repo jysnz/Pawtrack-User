@@ -9198,6 +9198,24 @@ div.owner-summary-stat:hover {
   animation: auth-spin 1.2s linear infinite;
 }
 
+/* Why "Use my current location" did not work: stays until the next attempt */
+.use-location-error {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-top: 8px;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--danger) 55%, transparent);
+  border-left-width: 4px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--danger) 10%, transparent);
+  font-size: 0.8rem;
+  line-height: 1.45;
+  color: var(--text-main);
+}
+.use-location-error strong { font-size: 0.84rem; color: var(--danger); }
+.use-location-error small { font-size: 0.74rem; color: var(--text-muted); }
+
 /* Visually hidden checkboxes: the global `input` rule makes inputs 100% wide and 42px tall, so a hidden
    checkbox was a huge invisible box. Focusing it scrolled the modal to a blank spot (it "went white").
    Keep it 1px and anchored to its own label. */

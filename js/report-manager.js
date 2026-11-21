@@ -167,11 +167,34 @@ class ReportManager {
     else window.location.hash = 'report';
   }
 
+  // A new report starts blank: nothing typed, picked or pinned for the previous report is carried over
+  resetReportForm() {
+    const form = document.getElementById('report-pet-form');
+    if (form) form.reset();
+    this.clearFieldErrors();
+    this.setLocationError(document.getElementById('report-use-location-btn'), null);
+    const clearBtn = document.getElementById('report-search-clear-btn');
+    if (clearBtn) clearBtn.style.display = 'none';
+    this.hideSuggestions();
+    document.querySelectorAll('.report-zone-chip.active').forEach((c) => c.classList.remove('active'));
+    this.pinnedLat = 14.6500;
+    this.pinnedLng = 121.0400;
+    this.pinnedLocationName = 'Quezon City, Metro Manila';
+    const badge = document.getElementById('report-pinned-coords-badge');
+    if (badge) badge.textContent = `${this.pinnedLat.toFixed(5)}, ${this.pinnedLng.toFixed(5)}`;
+    // The map may still be on screen from the last report: put its pin back on the starting spot
+    if (this.map && this.marker) {
+      this.marker.setLatLng([this.pinnedLat, this.pinnedLng]);
+      this.map.setView([this.pinnedLat, this.pinnedLng], 13);
+    }
+  }
+
   prepareForm(type = 'missing', petId = null, prefill = {}) {
     type = 'missing'; // this form only reports missing pets; there is no found-pet tab any more
     this.currentType = type;
     this.formReady = true;
     this.pinChosen = false; // set once the owner places the pin (map tap, drag, search pick or current location)
+    this.resetReportForm();
     document.querySelectorAll('input[name="report-whose"]').forEach((r) => { r.checked = false; });
 
     // Every new report starts with an empty post caption, not the last one that was sent
@@ -919,20 +942,76 @@ class ReportManager {
     this.useMyLocation('report');
   }
 
+  // Shows (or, with no title, removes) a message under the "Use my current location" button. Unlike a toast it stays
+  // until the next attempt, so the reason is still there when the person looks back at the form.
+  setLocationError(btn, title, detail) {
+    if (!btn || !btn.parentElement) return;
+    let box = btn.parentElement.querySelector(':scope > .use-location-error');
+    if (!title) { if (box) box.remove(); return; }
+    if (!box) {
+      box = document.createElement('div');
+      box.className = 'use-location-error';
+      box.setAttribute('role', 'alert');
+      box.innerHTML = '<strong></strong><span></span><small>You can still tap the map to place the pin yourself.</small>';
+      btn.insertAdjacentElement('afterend', box);
+    }
+    box.querySelector('strong').textContent = title;
+    box.querySelector('span').textContent = detail || '';
+  }
+
+  // What went wrong with a location request, in words a person can act on
+  locationProblem(code) {
+    if (code === 'insecure') return { title: 'Location needs a secure page', detail: 'Your browser only shares location on https pages. Open PawTrack from its https address and try again.' };
+    if (code === 'unsupported') return { title: 'This browser cannot share its location', detail: 'Try another browser, or place the pin on the map.' };
+    if (code === 1) return { title: 'Location access is blocked', detail: 'Allow location for this site: tap the lock icon in the address bar, open Permissions (or Site settings), set Location to Allow, then tap the button again. Also check that Location is on in your phone settings.' };
+    if (code === 3) return { title: 'Your location is taking too long', detail: 'Your phone could not get a position in time. Move near a window or outdoors, check your connection, then try again.' };
+    return { title: 'Your phone could not find your location', detail: 'Turn on Location (GPS) in your phone settings, check your connection, then try again.' };
+  }
+
+  // One position request that always answers: the browser sometimes never calls back (a dismissed prompt, a stalled GPS)
+  askPosition(options, watchdogMs) {
+    return new Promise((resolve, reject) => {
+      let done = false;
+      const timer = setTimeout(() => { if (!done) { done = true; reject({ code: 3 }); } }, watchdogMs);
+      navigator.geolocation.getCurrentPosition(
+        (pos) => { if (!done) { done = true; clearTimeout(timer); resolve(pos); } },
+        (err) => { if (!done) { done = true; clearTimeout(timer); reject(err || { code: 2 }); } },
+        options
+      );
+    });
+  }
+
+  // Precise GPS first; when that times out or is unavailable (common indoors) fall back to a coarse, faster fix
+  // from Wi-Fi or the network, so "it did not locate me" only happens when it truly cannot. A blocked permission is final.
+  async getMyPosition() {
+    try {
+      return await this.askPosition({ enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }, 13000);
+    } catch (err) {
+      if (err && err.code === 1) throw err;
+      return this.askPosition({ enableHighAccuracy: false, timeout: 15000, maximumAge: 120000 }, 18000);
+    }
+  }
+
   // Pin the reporter's GPS position: 'report' (found/missing report) or 'sighting' (sighting form)
-  useMyLocation(target) {
+  async useMyLocation(target) {
     const isSighting = target === 'sighting';
     const btn = document.getElementById(isSighting ? 'sighting-use-location-btn' : 'report-use-location-btn');
     const toast = (msg, kind) => { if (window.notifManager) window.notifManager.showToast(msg, kind, 5000); };
+    const fail = (code) => {
+      const p = this.locationProblem(code);
+      this.setLocationError(btn, p.title, p.detail);
+      toast(`${p.title}. Tap the map to place the pin instead.`, 'warning');
+    };
 
-    if (!navigator.geolocation) {
-      toast('Your browser cannot share its location. Tap the map to place the pin instead.', 'warning');
-      return;
-    }
-    if (!window.isSecureContext) {
-      toast('Location needs a secure (HTTPS) connection. Tap the map to place the pin instead.', 'warning');
-      return;
-    }
+    this.setLocationError(btn, null);
+    if (!navigator.geolocation) return fail('unsupported');
+    if (!window.isSecureContext) return fail('insecure');
+
+    // Already blocked for this site: say so now, the browser will not ask again
+    try {
+      const state = navigator.permissions && (await navigator.permissions.query({ name: 'geolocation' }));
+      if (state && state.state === 'denied') return fail(1);
+    } catch (e) { /* Permissions API not available for location: just try */ }
 
     const setBusy = (busy) => {
       if (!btn) return;
@@ -943,26 +1022,20 @@ class ReportManager {
     };
 
     setBusy(true);
-    navigator.geolocation.getCurrentPosition(
-      async (pos) => {
-        const { latitude, longitude, accuracy } = pos.coords;
-        const name = (await this.reverseGeocode(latitude, longitude)) || 'My current location';
-        if (isSighting) this.jumpToSightingLocation(latitude, longitude, name);
-        else this.jumpToLocation(latitude, longitude, name);
-        setBusy(false);
-        toast(`Pin placed at your location (accurate to about ${Math.max(1, Math.round(accuracy))} m).`, 'success');
-      },
-      (err) => {
-        setBusy(false);
-        const reasons = {
-          1: 'Location permission is blocked. Allow it in your browser settings for this site, or tap the map to place the pin.',
-          2: 'Your location is not available right now. Tap the map to place the pin instead.',
-          3: 'Finding your location took too long. Try again, or tap the map to place the pin.'
-        };
-        toast(reasons[err.code] || reasons[2], 'warning');
-      },
-      { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }
-    );
+    try {
+      const pos = await this.getMyPosition();
+      const { latitude, longitude, accuracy } = pos.coords;
+      const name = (await Promise.race([this.reverseGeocode(latitude, longitude), new Promise((r) => setTimeout(() => r(null), 4000))])) || 'My current location';
+      if (isSighting) this.jumpToSightingLocation(latitude, longitude, name);
+      else this.jumpToLocation(latitude, longitude, name);
+      const meters = Math.max(1, Math.round(accuracy || 0));
+      if (meters > 1000) toast(`Pin placed at your approximate location (about ${meters} m off). Drag the pin to the exact spot.`, 'warning');
+      else toast(`Pin placed at your location (accurate to about ${meters} m).`, 'success');
+    } catch (err) {
+      fail(err && err.code);
+    } finally {
+      setBusy(false);
+    }
   }
 
   createPinIcon() {
