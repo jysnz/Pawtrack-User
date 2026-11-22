@@ -91,9 +91,21 @@ window.SheltersView = {
       </div>
       <div id="shm-note">${member ? this.subNote(store) : `<div class="shm-note"><b>You are not part of a facility yet.</b> Register your impound facility and you become its manager, or join your colleagues' facility with the invite code your manager shares. Then you can log intakes from Impoundments.</div>`}</div>
       <div class="shm-fgroups" aria-label="Your facilities">
-        ${list.length ? list.reduce((groups, s) => { if (!s.sub || !groups.length) groups.push([]); groups[groups.length - 1].push(s); return groups; }, []).map(g => `<div class="nock-card shm-flist">${g.map(row).join('')}</div>`).join('') : '<div class="nock-card shm-flist"><div class="shm-list-empty">Facilities you add will appear here.</div></div>'}
+        ${list.length ? list.reduce((groups, s) => { if (!s.sub || !groups.length) groups.push([]); groups[groups.length - 1].push(s); return groups; }, []).map(g => `<div class="nock-card shm-flist">${g.map(row).join('')}</div>`).join('') : `
+          <section class="nofac nofac-inline" aria-labelledby="shm-empty-title">
+            <div class="nofac-mark" aria-hidden="true"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><path d="M5 21V8l7-4 7 4v13"/><path d="M9 21v-6h6v6"/><path d="M12 9v2"/></svg></div>
+            <h2 class="nofac-title" id="shm-empty-title">No facilities yet</h2>
+            <p class="nofac-sub">${member ? 'Facilities you add will appear here, with their sub-facilities underneath.' : 'Facilities appear here once you register yours or join a team. Each one gets its own pets, map and claims.'}</p>
+            ${member ? '' : `<div class="nofac-options">
+              <article class="nofac-option"><span class="nofac-option-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span><h3>Register a facility</h3><p>You are the first from your team. Add its name, address, area and official email.</p><button type="button" class="btn btn-primary btn-sm" data-empty-act="register">Register facility</button></article>
+              <article class="nofac-option"><span class="nofac-option-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg></span><h3>Join your team</h3><p>Ask your facility manager for the invite code and enter it here.</p><button type="button" class="btn btn-secondary btn-sm" data-empty-act="join">Join with a code</button></article>
+            </div>`}
+          </section>`}
       </div>`;
 
+    container.querySelectorAll('[data-empty-act]').forEach((b) => b.addEventListener('click', () => {
+      if (b.dataset.emptyAct === 'join') this.openJoinModal(); else this.openShelterModal(null);
+    }));
     container.querySelector('#btn-add-facility')?.addEventListener('click', () => this.openShelterModal(null));
     container.querySelector('#btn-join-facility')?.addEventListener('click', () => this.openJoinModal());
     // One dialog for both kinds: a checkbox says whether the new facility is a sub-facility, and of which main facility
@@ -501,7 +513,7 @@ window.SheltersView = {
             <label class="form-label" for="fm-region">Region *</label>
             <select class="form-control" id="fm-region" disabled><option value="">Loading regions…</option></select>
           </div>
-          <div class="form-group">
+          <div class="form-group form-full">
             <label class="form-label" for="fm-city">City / municipality *</label>
             <input type="text" class="form-control" id="fm-city" name="city" value="${val('city')}" placeholder="Search for a city" autocomplete="off" required />
             <div class="fm-hint" id="fm-city-hint"></div>
@@ -955,7 +967,7 @@ window.SheltersView = {
     typeSel.addEventListener('change', () => { if (typeSel.value === '__other__') showTypeText(true); });
     modal.querySelector('#fm-type-back').addEventListener('click', () => showTypeText(false));
 
-    saveBtn?.addEventListener('click', () => {
+    saveBtn?.addEventListener('click', async () => {
       showError('');
       if (!form.checkValidity()) { form.reportValidity(); return; }
       if (!typeOther.disabled && !typeOther.value.trim()) { showError('Type the facility type, or go back to the list.', typeOther); typeOther.focus(); return; }
@@ -979,6 +991,19 @@ window.SheltersView = {
         photoNudged = true;
         photoCtl.nudge(true);
         return;
+      }
+
+      // A new facility's official email is confirmed with an emailed code before the facility is registered
+      const officialEmail = String(new FormData(form).get('email') || '').trim().toLowerCase();
+      if (!isEdit && officialEmail) {
+        saveBtn.disabled = true;
+        const confirmed = await window.adminApp.verifyEmailCode({
+          email: officialEmail,
+          title: 'Confirm the facility email',
+          intro: 'Before this facility is registered, confirm that its official email is yours.'
+        });
+        saveBtn.disabled = false;
+        if (!confirmed) { showError('Confirm the official email with the code we send to register the facility.'); return; }
       }
 
       saveBtn.disabled = true;
@@ -1039,7 +1064,27 @@ window.SheltersView = {
         }
         closeDialog();
         if (photoFailed) window.adminApp.showToast('The facility was saved, but its photo could not be uploaded. Edit the facility to try again.', 'warning', 6000);
-        window.adminApp.showToast(isEdit ? `Updated "${shelterData.name}"` : (chooseType ? !isSubNow : asMain) ? `Added main facility "${shelterData.name}". You manage it and can add its sub-facilities.` : isSubNow ? `Added sub-facility "${shelterData.name}". Share its invite code with its employees.` : `Registered "${shelterData.name}". You are its manager.`, 'success');
+        const isMainNow = (chooseType ? !isSubNow : asMain);
+        if (isEdit) {
+          window.adminApp.showToast(`Updated "${shelterData.name}"`, 'success');
+        } else if (isSubNow) {
+          // A sub-facility gets a dialog: what was registered, where it works, and the next step
+          const mainName = ((mains || []).find(m => m.id === shelterData.parentId) || {}).name || '';
+          window.adminApp.showDialog({
+            tone: 'success',
+            title: 'Sub-facility registered',
+            message: `${shelterData.name} is now part of your network. Share its invite code so its employees can join.`,
+            rows: [
+              ['Sub-facility', shelterData.name],
+              ['Main facility', mainName],
+              ['City', shelterData.city],
+              ['Barangays covered', (shelterData.coverage || []).join(', ')]
+            ],
+            actions: [{ label: 'Done', primary: true }]
+          });
+        } else {
+          window.adminApp.showToast(isMainNow ? `Added main facility "${shelterData.name}". You manage it and can add its sub-facilities.` : `Registered "${shelterData.name}". You are its manager.`, 'success');
+        }
         if (typeof opts.onCreated === 'function' && !isEdit) opts.onCreated(dbId);
       });
     });

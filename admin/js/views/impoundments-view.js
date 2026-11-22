@@ -547,6 +547,16 @@ window.ImpoundmentsView = {
         if (imp) this.openEditModal(imp);
       });
     });
+
+    // Tapping a pet's row opens its edit page (the buttons inside a row keep doing their own thing)
+    container.querySelectorAll('tr[data-impound-id]').forEach(tr => {
+      tr.classList.add('is-clickable');
+      tr.addEventListener('click', (e) => {
+        if (e.target.closest('button, a, input, select, textarea, label')) return;
+        const imp = store.getImpoundmentById(tr.getAttribute('data-impound-id'));
+        if (imp) this.openEditModal(imp);
+      });
+    });
   },
 
   exportCsv(list) {

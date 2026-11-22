@@ -1417,7 +1417,11 @@ class SightingsView {
     if (!user || !user.id || !s.missing_report_id) return false;
     if (s.reporterId && s.reporterId === user.id) return false;
     const report = store.getMissingReportById(s.missing_report_id);
-    return !!report && !!report.reporterId && report.reporterId === user.id;
+    if (!report || !report.reporterId || report.reporterId !== user.id) return false;
+    // A sighting of a different kind of animal is not a sighting of your pet, whatever it was linked to
+    const kind = (v) => String(v || '').trim().toLowerCase();
+    if (kind(s.species) && kind(report.species) && kind(s.species) !== kind(report.species)) return false;
+    return true;
   }
 
   _timeAgo(value) {

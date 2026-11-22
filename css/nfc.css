@@ -103,7 +103,7 @@ body.found-mode > #found-page { display: block; width: 100%; max-width: 100vw; m
 .fp-field input:focus, .fp-field textarea:focus { outline: none; border-color: var(--border-focus); box-shadow: 0 0 0 3px var(--primary-light); }
 .fp-field.has-error input, .fp-field.has-error textarea { border-color: var(--danger); }
 .fp-error { display: none; font-size: 0.76rem; color: var(--danger); font-weight: 600; }
-.fp-field.has-error .fp-error { display: block; }
+.fp-field.has-error .fp-error { display: flex; }
 .fp-locate-row { display: flex; gap: 8px; }
 .fp-map { height: 240px; margin-top: 4px; border-radius: var(--radius-md); overflow: hidden; border: 1px solid var(--border-glass); position: relative; z-index: 0; }
 .fp-map[hidden] { display: none; }

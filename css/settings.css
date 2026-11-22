@@ -57,3 +57,5 @@
   .settings-seg-btn svg { display: none; }
   .settings-card-head, .settings-link-row { padding-left: 16px; padding-right: 16px; }
 }
+.settings-avatar-row { display: block; }
+.settings-avatar-slot { max-width: 420px; }

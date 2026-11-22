@@ -87,39 +87,33 @@
       type: 'nfc_reminder',
       petId: pet.id,
       title: again ? 'REMINDER: ' + pet.name + ' still has no NFC tag' : pet.name + ' has no NFC tag',
-      message: 'Link an NFC tag to ' + pet.name + ' by ' + when + '. After that, a Section 35 violation (Unregistered / no microchips) is recorded, with a fine of ' +
-        root.PawViolations.peso(fine.fine) + ' for a ' + ordinal(fine.offense) + ' offense.'
+      message: 'Link an NFC tag to ' + pet.name + ' by ' + when + '. After that, an impoundment facility is told and decides whether it becomes a Section 35 violation (Unregistered / no microchips). ' +
+        'The fine is ' + root.PawViolations.peso(fine.fine) + ' for a ' + ordinal(fine.offense) + ' offense.'
     });
   }
 
   function ordinal(n) { return n === 1 ? '1st' : n === 2 ? '2nd' : n === 3 ? '3rd' : n + 'th'; }
 
+  // After 7 days without a tag nothing is fined here. The pet is reported to an impoundment facility, which decides
+  // whether it becomes a violation (and then emails the owner). The 7 days are checked again by the database.
   function issueViolation(pet, st, now) {
-    var fine = nextOffense();
-    var id = 'vio-' + pet.id + '-' + now;
-    var list = violations();
-    list.push({
-      id: id,
-      ruleId: RULE_ID,
-      petId: pet.id,
-      petName: pet.name,
-      offense: fine.offense,
-      fine: fine.fine,
-      createdAt: new Date(now).toISOString(),
-      reason: 'No NFC tag was linked to ' + pet.name + ' within ' + WINDOW_DAYS + ' days.'
-    });
-    saveViolations(list);
-    st.violationId = id;
+    st.violationId = 'reported-' + now; // handled: not reported again from this device
     st.dismissedAt = null;
     store().removeLocalNotification(noteId(pet.id));
+    var sb = root.pawApp && root.pawApp.supabase;
+    if (sb && /^[0-9a-f-]{36}$/i.test(String(pet.id))) {
+      sb.rpc('flag_unlinked_pet', { p_pet: pet.id }).then(function (res) {
+        if (res && res.error) console.warn('[NFC] could not report ' + pet.name + ':', res.error.message);
+      });
+    }
     store().addNotification({
-      id: 'nfcv-' + id,
-      type: 'nfc_violation',
+      id: 'nfcr-' + pet.id + '-' + now,
+      type: 'nfc_reminder',
       category: 'priority',
       petId: pet.id,
-      title: 'VIOLATION: ' + pet.name + ' has no NFC tag',
-      message: 'A Section 35 violation (Unregistered / no microchips) was recorded: ' + ordinal(fine.offense) + ' offense, fine ' +
-        root.PawViolations.peso(fine.fine) + '. You are directed to report to the City Veterinary Department. Tap to view.'
+      title: pet.name + ' was reported for having no NFC tag',
+      message: WINDOW_DAYS + ' days passed without an NFC tag on ' + pet.name + '. An impoundment facility was told and will decide if it becomes a violation. ' +
+        'If it does, you are emailed with the fine and where to go. Link a tag now to avoid it.'
     });
   }
 

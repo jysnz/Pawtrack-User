@@ -36,6 +36,7 @@ class PetsView {
   // ---------- data ----------
 
   async refresh(force = false) {
+    this.loadApprovedClaims();
     if (this.state === 'loading') return;
     if (!force && this.state === 'ready' && Date.now() - this.fetchedAt < 8000) return;
 
@@ -145,6 +146,14 @@ class PetsView {
     return Math.round((due - today) / 86400000);
   }
 
+  // The day after an ISO date (YYYY-MM-DD), as an ISO date
+  dayAfter(iso) {
+    const d = new Date(iso + 'T00:00:00');
+    d.setDate(d.getDate() + 1);
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  }
+
   // The state of one record's next dose, or null when no due date was given
   dueInfo(row) {
     if (!row.next_due_date) return null;
@@ -168,6 +177,303 @@ class PetsView {
     });
     if (worst && worst.cls !== 'ok') return worst;
     return { cls: 'ok', label: `${rows.length} ${rows.length === 1 ? 'vaccine' : 'vaccines'} recorded` };
+  }
+
+  // ---------- approved claims (an impounded pet the facility accepted as yours) ----------
+
+  async loadApprovedClaims() {
+    const user = window.pawStore.getGoogleUser();
+    const client = this.client();
+    if (!user || !user.id || !client) return;
+    const { data, error } = await client.from('impound_claims').select('id, impound_id, status, decided_at, created_at').eq('claimant_id', user.id).eq('status', 'accepted').order('decided_at', { ascending: false });
+    if (error) return; // the claims table may not exist yet: nothing to show
+    const next = JSON.stringify(data || []);
+    if (next === this._claimsKey) return;
+    this._claimsKey = next;
+    this.approvedClaims = data || [];
+    this.draw();
+  }
+
+  claimsSectionHtml() {
+    const claims = (this.approvedClaims || []).map((c) => ({ c, imp: (window.pawStore.getImpoundments() || []).find((i) => String(i.id) === String(c.impound_id)) })).filter((x) => x.imp && x.imp.status !== 'claimed');
+    if (!claims.length) return '';
+    return `
+      <section class="claim-approved" aria-label="Approved claims">
+        <h2><i data-lucide="badge-check"></i> Claim approved</h2>
+        ${claims.map(({ c, imp }) => {
+          const shelter = (window.pawStore.getShelters() || []).find((x) => x.id === imp.shelterId) || {};
+          const photo = /^https:\/\//.test(imp.photoUrl || '') ? imp.photoUrl : '';
+          return `
+          <article class="claim-approved-card">
+            ${photo ? `<img src="${this.esc(photo)}" alt="" />` : '<span class="claim-approved-noimg"><i data-lucide="paw-print"></i></span>'}
+            <div class="claim-approved-text">
+              <strong>${this.esc(imp.petName || 'Your pet')} is ready to be collected</strong>
+              <span>Go to <b>${this.esc(shelter.name || imp.shelterName || 'the facility')}</b>${shelter.address ? ', ' + this.esc(shelter.address) : ''} and show your Digital NFC card.</span>
+            </div>
+            <button type="button" class="btn btn-primary btn-sm" onclick="window.petsView.openClaimCard('${this.esc(c.id)}')"><i data-lucide="nfc"></i> Digital NFC card</button>
+          </article>`;
+        }).join('')}
+      </section>`;
+  }
+
+  // A printable card the facility checks when the owner collects the pet
+  openClaimCard(claimId) {
+    const c = (this.approvedClaims || []).find((x) => String(x.id) === String(claimId));
+    if (!c) return;
+    const imp = (window.pawStore.getImpoundments() || []).find((i) => String(i.id) === String(c.impound_id)) || {};
+    const shelter = (window.pawStore.getShelters() || []).find((x) => x.id === imp.shelterId) || {};
+    const user = window.pawStore.getGoogleUser() || {};
+    const photo = /^https:\/\//.test(imp.photoUrl || '') ? imp.photoUrl : '';
+    let modal = document.getElementById('claim-card-modal');
+    if (!modal) {
+      modal = document.createElement('div');
+      modal.className = 'modal-overlay';
+      modal.id = 'claim-card-modal';
+      modal.addEventListener('mousedown', (e) => { if (e.target === modal) window.notifManager.closeModal('claim-card-modal'); });
+      document.body.appendChild(modal);
+    }
+    const ref = String(c.id).replace(/-/g, '').slice(0, 8).toUpperCase();
+    const rows = [
+      ['Animal', imp.petName || 'Unidentified'], ['Species', [imp.species, imp.breed].filter(Boolean).join(' · ')], ['Kennel', imp.kennel || imp.cageNumber],
+      ['Release to', user.name], ['Facility', shelter.name || imp.shelterName], ['Address', shelter.address], ['Hours', shelter.hours],
+      ['Approved on', c.decided_at ? new Date(c.decided_at).toLocaleDateString([], { dateStyle: 'long' }) : '']
+    ].filter(([, v]) => v);
+    modal.innerHTML = `
+      <div class="modal-box claim-card-box" role="dialog" aria-modal="true" aria-label="Digital NFC card">
+        <div class="claim-card" id="claim-card-print">
+          <div class="claim-card-head"><span class="claim-card-brand"><img src="images/pawtrack-logo.svg" alt="" />PawTrack</span><span class="claim-card-tag"><i data-lucide="nfc"></i> DIGITAL NFC CARD</span></div>
+          <div class="claim-card-main">
+            ${photo ? `<img class="claim-card-photo" src="${this.esc(photo)}" alt="" />` : '<span class="claim-card-photo is-empty"><i data-lucide="paw-print"></i></span>'}
+            <div><div class="claim-card-ref">Claim no.</div><div class="claim-card-refno">${this.esc(ref)}</div><div class="claim-card-status">APPROVED</div></div>
+          </div>
+          <dl class="claim-card-rows">${rows.map(([k, v]) => `<div><dt>${this.esc(k)}</dt><dd>${this.esc(v)}</dd></div>`).join('')}</dl>
+          <p class="claim-card-foot">Show this card and a valid ID to the facility staff to collect your pet.</p>
+        </div>
+        <div class="claim-card-actions no-print">
+          <button type="button" class="btn btn-outline" onclick="window.notifManager.closeModal('claim-card-modal')">Close</button>
+          <button type="button" class="btn btn-primary" onclick="window.petsView.printClaimCard()"><i data-lucide="printer"></i> Print card</button>
+        </div>
+      </div>`;
+    window.notifManager.openModal('claim-card-modal');
+    if (window.lucide) window.lucide.createIcons({ root: modal });
+  }
+
+  printClaimCard() {
+    document.body.classList.add('printing-claim-card');
+    const done = () => { document.body.classList.remove('printing-claim-card'); window.removeEventListener('afterprint', done); };
+    window.addEventListener('afterprint', done);
+    window.print();
+    setTimeout(done, 1500);
+  }
+
+  // ---------- edit a pet's details ----------
+
+  startEdit() {
+    this.editingPetId = this.openPetId;
+    this.renderDetail();
+    document.getElementById('pe-name')?.focus();
+  }
+
+  cancelEdit() {
+    this.editingPetId = null;
+    this.renderDetail();
+  }
+
+  editFormHtml(pet) {
+    const months = Number(pet.age_months);
+    const hasAge = pet.age_months != null && Number.isFinite(months);
+    const years = hasAge ? Math.floor(months / 12) : '';
+    const rest = hasAge ? months % 12 : '';
+    const options = (list, current) => {
+      const all = current && !list.includes(current) ? [...list, current] : list;
+      return all.map((v) => `<option value="${this.esc(v)}"${v === current ? ' selected' : ''}>${this.esc(v)}</option>`).join('');
+    };
+    return `
+      <form class="vax-form pet-edit-form" id="pet-edit-form" novalidate>
+        <h4><i data-lucide="pencil"></i> Edit ${this.esc(pet.name)}'s details</h4>
+        <div class="vax-msg" id="pe-msg" role="alert" hidden></div>
+        <div class="vax-row">
+          <div class="vax-field" id="pe-name-field">
+            <label for="pe-name">Name *</label>
+            <input id="pe-name" maxlength="60" value="${this.esc(pet.name)}" autocomplete="off" />
+            <span class="vax-error">Enter your pet's name.</span>
+          </div>
+          <div class="vax-field" id="pe-species-field">
+            <label for="pe-species">Species *</label>
+            <select id="pe-species">${options(['Dog', 'Cat', 'Other'], pet.species)}</select>
+            <span class="vax-error">Choose the species.</span>
+          </div>
+        </div>
+        <div class="vax-row">
+          <div class="vax-field" id="pe-breed-field">
+            <label for="pe-breed">Breed <span class="vax-opt">(optional)</span></label>
+            <input id="pe-breed" maxlength="80" value="${this.esc(pet.breed || '')}" placeholder="e.g. Aspin" autocomplete="off" />
+          </div>
+          <div class="vax-field" id="pe-gender-field">
+            <label for="pe-gender">Gender <span class="vax-opt">(optional)</span></label>
+            <select id="pe-gender"><option value="">Not set</option>${options(['Male', 'Female'], pet.gender || '')}</select>
+          </div>
+        </div>
+        <div class="vax-row">
+          <div class="vax-field" id="pe-years-field">
+            <label for="pe-years">Age (years)</label>
+            <input id="pe-years" type="number" min="0" max="40" inputmode="numeric" value="${years}" placeholder="0" />
+            <span class="vax-error">Enter a valid age.</span>
+          </div>
+          <div class="vax-field" id="pe-months-field">
+            <label for="pe-months">Age (months)</label>
+            <input id="pe-months" type="number" min="0" max="11" inputmode="numeric" value="${rest}" placeholder="0" />
+            <span class="vax-error">Months go from 0 to 11.</span>
+          </div>
+        </div>
+        <div class="vax-field" id="pe-color-field">
+          <label for="pe-color">Color &amp; markings <span class="vax-opt">(optional)</span></label>
+          <input id="pe-color" maxlength="120" value="${this.esc(pet.color || '')}" placeholder="e.g. Brown with a white chest" autocomplete="off" />
+        </div>
+        <div class="vax-field" id="pe-desc-field">
+          <label for="pe-desc">Description <span class="vax-opt">(optional)</span></label>
+          <textarea id="pe-desc" maxlength="500" rows="3" placeholder="Anything that helps someone recognise ${this.esc(pet.name)}">${this.esc(pet.description || '')}</textarea>
+        </div>
+        <div class="pet-edit-actions">
+          <button type="button" class="btn btn-outline" onclick="window.petsView.cancelEdit()">Cancel</button>
+          <button type="submit" class="btn btn-primary" id="pe-save"><i data-lucide="check"></i> Save changes</button>
+        </div>
+      </form>`;
+  }
+
+  async saveEdit(petId) {
+    const pet = this.pets.find((p) => p.id === petId);
+    if (!pet) return;
+    const val = (id) => (document.getElementById(id)?.value || '').trim();
+    const name = val('pe-name');
+    const species = val('pe-species');
+    const years = val('pe-years');
+    const months = val('pe-months');
+    const yearsOk = years === '' || (/^\d+$/.test(years) && +years <= 40);
+    const monthsOk = months === '' || (/^\d+$/.test(months) && +months <= 11);
+    const checks = [['pe-name', name.length >= 1], ['pe-species', !!species], ['pe-years', yearsOk], ['pe-months', monthsOk]];
+    checks.forEach(([id, ok]) => document.getElementById(id + '-field')?.classList.toggle('has-error', !ok));
+    const failed = checks.find(([, ok]) => !ok);
+    if (failed) { document.getElementById(failed[0])?.focus(); return; }
+
+    const ageMonths = (years === '' && months === '') ? null : (+years || 0) * 12 + (+months || 0);
+    const update = {
+      name,
+      species,
+      breed: val('pe-breed') || null,
+      gender: val('pe-gender') || null,
+      color: val('pe-color') || null,
+      age_months: ageMonths,
+      description: val('pe-desc') || null
+    };
+    const btn = document.getElementById('pe-save');
+    const msg = document.getElementById('pe-msg');
+    if (msg) { msg.hidden = true; msg.textContent = ''; }
+    if (btn) btn.disabled = true;
+    const { error } = await this.client().from('registered_pets').update(update).eq('id', petId);
+    if (error) {
+      if (btn) btn.disabled = false;
+      if (msg) { msg.textContent = `Could not save the changes: ${error.message}`; msg.hidden = false; }
+      return;
+    }
+    Object.assign(pet, update);
+    // The saved copy on this device (used by the report form) follows
+    const store = window.pawStore;
+    const local = store && store.getPetById ? store.getPetById(petId) : null;
+    if (local) store.savePet({ ...local, name, species, breed: update.breed || '', gender: update.gender || '', color: update.color || '', ageMonths, age: this.formatAge(ageMonths), description: update.description || '' });
+    this.editingPetId = null;
+    this.draw();
+    // One dialog at a time: the details modal closes, so the screen is not darkened twice
+    this.close();
+    if (window.notifManager) window.notifManager.showDialog({
+      tone: 'success',
+      title: 'Details updated',
+      message: `${name}'s details were saved.`,
+      rows: [
+        ['Name', name], ['Species', species], ['Breed', update.breed], ['Gender', update.gender],
+        ['Age', ageMonths != null ? this.formatAge(ageMonths) : ''], ['Color & markings', update.color]
+      ],
+      actions: [{ label: 'Done', primary: true }, { label: 'View details', onClick: () => this.open(petId) }]
+    });
+  }
+
+  // ---------- sightings of this pet (someone saw it, or you verified it) ----------
+
+  // Sightings posted for this pet's missing reports, newest first (dismissed and archived ones are not listed)
+  petSightings(pet) {
+    const store = window.pawStore;
+    if (!store || !pet) return [];
+    const ids = new Set((store.getMissingReports ? store.getMissingReports() : []).filter((r) => String(r.petId) === String(pet.id)).map((r) => String(r.id)));
+    const active = store.getActiveMissingReportForPet ? store.getActiveMissingReportForPet(pet.id) : null;
+    if (active) ids.add(String(active.id));
+    const when = (x) => new Date(x.createdAt || x.dateTimeSeen || 0).getTime() || 0;
+    return (store.getSightings() || [])
+      .filter((x) => x.status !== 'dismissed' && x.status !== 'archived'
+        && (ids.has(String(x.missing_report_id)) || String(x.matchedPetId) === String(pet.id) || String(x.petId) === String(pet.id)))
+      .sort((a, b) => when(b) - when(a));
+  }
+
+  sightingCounts(pet) {
+    const list = this.petSightings(pet);
+    return { possible: list.filter((x) => x.status !== 'confirmed_sighting').length, confirmed: list.filter((x) => x.status === 'confirmed_sighting').length };
+  }
+
+  timeAgo(value) {
+    const t = new Date(value).getTime();
+    if (!t) return '';
+    const mins = Math.max(1, Math.round((Date.now() - t) / 60000));
+    if (mins < 60) return `${mins} min ago`;
+    const hours = Math.round(mins / 60);
+    if (hours < 24) return `${hours} h ago`;
+    const days = Math.round(hours / 24);
+    return days < 30 ? `${days} ${days === 1 ? 'day' : 'days'} ago` : this.fmtDate(String(value).slice(0, 10));
+  }
+
+  sightingChipHtml(pet) {
+    const c = this.sightingCounts(pet);
+    if (!c.possible && !c.confirmed) return '';
+    const parts = [];
+    if (c.possible) parts.push(`<span class="pet-sight-chip is-new"><i data-lucide="eye"></i>${c.possible} ${c.possible === 1 ? 'sighting' : 'sightings'} to verify</span>`);
+    if (c.confirmed) parts.push(`<span class="pet-sight-chip is-confirmed"><i data-lucide="badge-check"></i>${c.confirmed === 1 ? 'Sighting verified' : `${c.confirmed} sightings verified`}</span>`);
+    return `<div class="pet-sight-chips">${parts.join('')}</div>`;
+  }
+
+  sightingsSectionHtml(pet) {
+    const list = this.petSightings(pet);
+    if (!list.length) return '';
+    return `
+      <section class="pet-sightings" aria-label="Sightings of ${this.esc(pet.name)}">
+        <h3><i data-lucide="eye"></i> Sightings <span class="vax-count">${list.length}</span></h3>
+        ${list.map((x) => {
+          const confirmed = x.status === 'confirmed_sighting';
+          const photo = x.photoUrl || x.photo || '';
+          return `
+          <div class="pet-sight-row${confirmed ? ' is-confirmed' : ''}">
+            ${photo ? `<img src="${this.esc(photo)}" alt="" loading="lazy" onerror="this.remove()" />` : '<span class="pet-sight-noimg"><i data-lucide="map-pin"></i></span>'}
+            <div class="pet-sight-info">
+              <strong>${confirmed ? 'Sighting verified' : 'Someone may have seen ' + this.esc(pet.name)}</strong>
+              <span>${this.esc(x.location || 'Location not shared')}</span>
+              <small>${this.esc(this.timeAgo(x.createdAt || x.dateTimeSeen))}${x.reporterName ? ' · ' + this.esc(x.reporterName) : ''}</small>
+            </div>
+            <button type="button" class="btn ${confirmed ? 'btn-outline' : 'btn-primary'} btn-sm" onclick="window.petsView.${confirmed ? 'openNextSteps' : 'openSighting'}('${this.esc(x.id)}')">
+              <i data-lucide="${confirmed ? 'route' : 'shield-check'}"></i> ${confirmed ? 'Next steps' : 'Verify'}
+            </button>
+          </div>`;
+        }).join('')}
+      </section>`;
+  }
+
+  // Opens the same Owner Verification dialog as the notification and the Verify button on the post
+  openSighting(sightingId) {
+    this.close();
+    if (window.notifManager) window.notifManager.openSightingVerificationModal(sightingId);
+  }
+
+  async openNextSteps(sightingId) {
+    const caseId = window.pawStore.getCaseIdForSighting ? await window.pawStore.getCaseIdForSighting(sightingId) : null;
+    this.close();
+    if (caseId && window.notifManager) window.notifManager.openReunionCase(caseId);
+    else if (window.notifManager) window.notifManager.openSightingVerificationModal(sightingId);
   }
 
   statusLabel(status) {
@@ -215,6 +521,7 @@ class PetsView {
             <i data-lucide="${this.layout === 'rows' ? 'layout-grid' : 'list'}"></i>
           </button>` : ''}
       </div>
+      ${user && user.name ? this.claimsSectionHtml() : ''}
       ${body}`;
     if (window.lucide) window.lucide.createIcons({ root: this.container });
   }
@@ -247,6 +554,7 @@ class PetsView {
           <div class="pet-card-name">${this.esc(p.name)}</div>
           <div class="pet-card-meta">${this.esc(meta)}${p.age_months != null ? ` · ${this.esc(this.formatAge(p.age_months))}` : ''}</div>
           <div class="vax-chip vax-${sum.cls}"><i data-lucide="syringe"></i>${this.esc(sum.label)}</div>
+          ${this.sightingChipHtml(p)}
         </div>
       </button>`;
   }
@@ -261,6 +569,7 @@ class PetsView {
 
   close() {
     this.openPetId = null;
+    this.editingPetId = null;
     window.notifManager.closeModal('pet-detail-modal');
   }
 
@@ -295,6 +604,7 @@ class PetsView {
       </div>
       ${pet.description ? `<p class="pet-detail-desc">${this.esc(pet.description)}</p>` : ''}
       ${this.statusActionHtml(pet)}
+      ${this.sightingsSectionHtml(pet)}
       ${pet.nfc_tag ? '' : `
       <div class="pet-pass-row pet-link-row">
         <div class="pet-pass-text">
@@ -312,7 +622,12 @@ class PetsView {
         <button type="button" class="btn btn-outline btn-sm" onclick="window.petsView.savePass('${this.esc(pet.id)}')"><i data-lucide="download"></i> Save pass</button>
       </div>
       ` : ''}
-      <dl class="pet-detail-facts">${facts.map(([k, v]) => `<div><dt>${k}</dt><dd>${this.esc(v)}</dd></div>`).join('')}</dl>
+      ${this.editingPetId === pet.id ? this.editFormHtml(pet) : `
+      <div class="pet-facts-head">
+        <h3><i data-lucide="id-card"></i> Pet details</h3>
+        <button type="button" class="btn btn-outline btn-sm" onclick="window.petsView.startEdit()"><i data-lucide="pencil"></i> Edit details</button>
+      </div>
+      <dl class="pet-detail-facts">${facts.map(([k, v]) => `<div><dt>${k}</dt><dd>${this.esc(v)}</dd></div>`).join('')}</dl>`}
 
       <section class="vax-section">
         <h3><i data-lucide="syringe"></i> Vaccinations <span class="vax-count">${rows.length}</span></h3>
@@ -336,9 +651,9 @@ class PetsView {
               <span class="vax-error">Pick a date that is not in the future.</span>
             </div>
             <div class="vax-field" id="vax-due-field">
-              <label for="vax-due">Next due *</label>
-              <input id="vax-due" type="date" />
-              <span class="vax-error" id="vax-due-error">Pick the next due date, on or after the date given.</span>
+              <label for="vax-due">Next due <span class="vax-opt">(optional)</span></label>
+              <input id="vax-due" type="date" min="${this.dayAfter(todayIso)}" />
+              <span class="vax-error" id="vax-due-error">Pick a date after the date given, or leave it empty.</span>
             </div>
           </div>
           <div class="vax-row">
@@ -378,8 +693,23 @@ class PetsView {
         </form>`}
       </section>`;
 
+    const editForm = body.querySelector('#pet-edit-form');
+    if (editForm) editForm.addEventListener('submit', (e) => { e.preventDefault(); this.saveEdit(pet.id); });
     const form = body.querySelector('#vax-form');
     if (form) form.addEventListener('submit', (e) => { e.preventDefault(); this.addVaccination(pet.id); });
+    const givenInput = body.querySelector('#vax-given');
+    const dueInput = body.querySelector('#vax-due');
+    if (givenInput && dueInput) {
+      const syncDue = () => {
+        dueInput.min = givenInput.value ? this.dayAfter(givenInput.value) : '';
+        if (dueInput.value && givenInput.value && dueInput.value <= givenInput.value) dueInput.value = ''; // no longer later than the date given
+        document.getElementById('vax-due-field')?.classList.remove('has-error');
+      };
+      givenInput.addEventListener('change', syncDue);
+      givenInput.addEventListener('input', syncDue);
+      dueInput.addEventListener('input', () => document.getElementById('vax-due-field')?.classList.remove('has-error'));
+      syncDue();
+    }
     this.bindDropzone(body);
     if (window.lucide) window.lucide.createIcons({ root: body });
   }
@@ -593,11 +923,12 @@ class PetsView {
     const due = val('vax-due');
     const todayIso = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
 
-    // Every field is required, checked top to bottom; the first one that fails gets the focus
+    // Checked top to bottom; the first one that fails gets the focus. The next due date is optional, but when one
+    // is given it must come after the date the vaccine was given.
     const checks = [
       ['vax-name', name.length > 0],
       ['vax-given', !!given && given <= todayIso],
-      ['vax-due', !!due && !!given && due >= given],
+      ['vax-due', !due || (!!given && due > given)],
       ['vax-vet', val('vax-vet').length > 0],
       ['vax-clinic', val('vax-clinic').length > 0]
     ];
@@ -608,6 +939,8 @@ class PetsView {
       return;
     }
 
+    const vetName = val('vax-vet');
+    const clinicName = val('vax-clinic');
     let file = document.getElementById('vax-doc')?.files?.[0] || null;
     const docField = document.getElementById('vax-doc-field');
     const docError = document.getElementById('vax-doc-error');
@@ -662,7 +995,20 @@ class PetsView {
       this.vaccines[petId] = [data, ...(this.vaccines[petId] || [])].sort((a, b) => (a.date_given < b.date_given ? 1 : -1));
       this.renderDetail();
       this.draw(); // card badges
-      if (window.notifManager) window.notifManager.showToast(`${name} added.`, 'success', 3000);
+      const petName = (this.pets.find((p) => p.id === petId) || {}).name || 'your pet';
+      if (window.notifManager) window.notifManager.showDialog({
+        tone: 'success',
+        title: 'Vaccination recorded',
+        message: `${name} is now in ${petName}'s vaccination record.`,
+        rows: [
+          ['Vaccine', name],
+          ['Given', this.fmtDate(given)],
+          ['Next due', due ? this.fmtDate(due) : 'Not set'],
+          ['Veterinarian', vetName],
+          ['Clinic', clinicName]
+        ],
+        actions: [{ label: 'Done', primary: true }]
+      });
     } catch (err) {
       console.warn('[Pets] add vaccination failed:', err);
       // Don't leave an orphan file behind if the record itself could not be saved

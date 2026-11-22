@@ -1,5 +1,7 @@
 // PawTrack admin console: a signed-in admin changes their email or password, confirmed by an emailed one-time code.
 //   { action: 'send',   purpose: 'email',    new_email }               emails a 6-digit code to the NEW address
+//   { action: 'send',   purpose: 'facility_email', email }              emails a code to a facility's official email, before the facility is registered
+//   { action: 'verify', purpose: 'facility_email', email, code }      checks that code (nothing is changed)
 //   { action: 'send',   purpose: 'password' }                          emails a 6-digit code to the CURRENT address
 //   { action: 'verify', purpose: 'email',    code }                    checks the code, then changes the sign-in email
 //   { action: 'check',  purpose: 'password', code }                    checks the code (nothing is changed yet)
@@ -80,6 +82,13 @@ function codeBox(code: string): string {
 }
 
 function codeEmail(purpose: string, to: string, code: string): { subject: string; html: string } {
+  if (purpose === 'facility_email') {
+    return {
+      subject: `${code} is your PawTrack facility email code`,
+      html: card('Confirm the facility email', `Use this code to confirm that <strong>${esc(to)}</strong> is the official email of the impoundment facility being registered on PawTrack:`, codeBox(code),
+        'The code expires in 10 minutes. If you did not expect this, ignore this message and nothing will be registered.'),
+    };
+  }
   if (purpose === 'email') {
     return {
       subject: `${code} is your PawTrack email change code`,
@@ -122,7 +131,7 @@ Deno.serve(async (req) => {
 
   const { data: account } = await admin.from('admin_accounts').select('id, status, full_name').eq('id', user.id).maybeSingle();
   if (!account || account.status !== 'approved') return json(403, { error: 'Only approved admins can change these settings.' });
-  const purpose = body.purpose === 'email' || body.purpose === 'password' ? body.purpose : '';
+  const purpose = body.purpose === 'email' || body.purpose === 'password' || body.purpose === 'facility_email' ? body.purpose : '';
   if (!purpose) return json(400, { error: 'Unknown request.' });
 
   // ---------- send ----------
@@ -135,7 +144,11 @@ Deno.serve(async (req) => {
       const { data: taken } = await admin.rpc('auth_email_taken', { p_email: target });
       if (taken) return json(409, { error: 'That email is already used by another account.' });
     }
-    const recipient = purpose === 'email' ? target : currentEmail;
+    if (purpose === 'facility_email') {
+      target = text(body.email, 254).toLowerCase();
+      if (!EMAIL.test(target)) return json(400, { error: 'Enter a valid email address.' });
+    }
+    const recipient = (purpose === 'email' || purpose === 'facility_email') ? target : currentEmail;
 
     const now = Date.now();
     const { data: row } = await admin.from('admin_account_otps').select('*').eq('user_id', user.id).eq('purpose', purpose).maybeSingle();
@@ -158,7 +171,7 @@ Deno.serve(async (req) => {
     const { error: saveError } = await admin.from('admin_account_otps').upsert({
       user_id: user.id,
       purpose,
-      target: purpose === 'email' ? target : null,
+      target: (purpose === 'email' || purpose === 'facility_email') ? target : null,
       code_hash: await hashCode(user.id, purpose, target, code),
       expires_at: new Date(now + CODE_TTL_MS).toISOString(),
       attempts: 0,
@@ -243,6 +256,28 @@ Deno.serve(async (req) => {
       console.error('[admin-account-otp] notice error:', (err as Error).message);
     }
     return json(200, { changed: true });
+  }
+
+  // ---------- verify (facility official email) ----------
+  if (body.action === 'verify' && purpose === 'facility_email') {
+    const code = text(body.code, 6);
+    const email = text(body.email, 254).toLowerCase();
+    if (!/^\d{6}$/.test(code)) return json(400, { error: 'Enter the 6-digit code from your email.' });
+    const { data: row } = await admin.from('admin_account_otps').select('*').eq('user_id', user.id).eq('purpose', purpose).maybeSingle();
+    if (!row || new Date(row.expires_at).getTime() < Date.now() || row.target !== email) {
+      return json(400, { error: 'That code has expired. Send a new one.', expired: true });
+    }
+    if (row.attempts >= MAX_ATTEMPTS) {
+      await admin.from('admin_account_otps').delete().eq('user_id', user.id).eq('purpose', purpose);
+      return json(429, { error: 'Too many wrong codes. Send a new one.', expired: true });
+    }
+    if ((await hashCode(user.id, purpose, row.target ?? '', code)) !== row.code_hash) {
+      await admin.from('admin_account_otps').update({ attempts: row.attempts + 1 }).eq('user_id', user.id).eq('purpose', purpose);
+      const left = MAX_ATTEMPTS - row.attempts - 1;
+      return json(400, { error: left > 0 ? `That code is incorrect. ${left} ${left === 1 ? 'try' : 'tries'} left.` : 'That code is incorrect. Send a new one.', expired: left <= 0 });
+    }
+    await admin.from('admin_account_otps').delete().eq('user_id', user.id).eq('purpose', purpose); // works once
+    return json(200, { verified: true });
   }
 
   // ---------- verify (email change) ----------

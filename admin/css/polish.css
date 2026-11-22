@@ -2538,3 +2538,60 @@ a:focus-visible, select:focus-visible, input:focus-visible, textarea:focus-visib
 .nofac-option h3 { margin: 0; font-size: 14px; font-weight: 700; color: var(--ink-primary); }
 .nofac-option p { flex: 1; margin: 0 0 10px; font-size: 12.5px; line-height: 1.55; color: var(--ink-muted); }
 @media (max-width: 640px) { .nofac { margin-top: 12px; padding: 28px 18px 20px; } .nofac-options { grid-template-columns: 1fr; } }
+.nofac-inline { margin: 8px 0 0; max-width: none; }
+
+/* ---------- Confirmation dialog (adminApp.showDialog) ---------- */
+.dlg-box { display: grid; justify-items: center; gap: 8px; text-align: center; padding: 28px 24px 20px; }
+.dlg-icon { width: 54px; height: 54px; border-radius: 50%; display: grid; place-items: center; color: #fff; background: var(--color-green, #15803d); box-shadow: 0 0 0 7px color-mix(in srgb, var(--color-green, #15803d) 16%, transparent); animation: dlg-pop 0.36s cubic-bezier(0.34, 1.56, 0.64, 1); }
+.dlg-info .dlg-icon { background: var(--brand-terracotta); box-shadow: 0 0 0 7px color-mix(in srgb, var(--brand-terracotta) 16%, transparent); }
+.dlg-warning .dlg-icon { background: #d97706; box-shadow: 0 0 0 7px color-mix(in srgb, #d97706 18%, transparent); }
+.dlg-box h2 { margin: 6px 0 0; }
+.dlg-box .dlg-msg { margin: 0; max-width: 36ch; }
+.dlg-rows { width: 100%; margin: 4px 0 0; padding: 2px 14px; display: grid; text-align: left; border: 1px solid var(--border-main); border-radius: var(--radius-md); background: var(--bg-card-subtle); }
+.dlg-rows > div { display: flex; justify-content: space-between; gap: 14px; padding: 8px 0; border-bottom: 1px solid var(--border-light); font-size: 12.5px; }
+.dlg-rows > div:last-child { border-bottom: 0; }
+.dlg-rows dt { color: var(--ink-muted); flex: none; }
+.dlg-rows dd { margin: 0; font-weight: 600; text-align: right; overflow-wrap: anywhere; color: var(--ink-primary); }
+.dlg-actions { width: 100%; display: flex; gap: 8px; margin-top: 8px; }
+.dlg-actions .btn { flex: 1; justify-content: center; }
+@keyframes dlg-pop { from { transform: scale(0.5); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .dlg-icon { animation: none; } }
+tr.is-clickable { cursor: pointer; }
+tr.is-clickable:hover { background: var(--bg-hover); }
+
+/* ---------- Claims page ---------- */
+.claim-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 14px; }
+.claim-tabs .chip b { margin-left: 4px; font-weight: 700; opacity: 0.7; }
+.claim-list { display: grid; gap: 12px; }
+.claim-card { display: grid; grid-template-columns: minmax(200px, 1fr) minmax(220px, 1.3fr) auto; gap: 18px; align-items: start; padding: 16px 18px; border: 1px solid var(--border-main); border-radius: var(--radius-lg); background: var(--bg-card); }
+.claim-pet { display: flex; gap: 12px; align-items: center; min-width: 0; }
+.claim-pet img, .claim-pet-noimg { flex: none; width: 58px; height: 58px; border-radius: 12px; object-fit: cover; display: grid; place-items: center; background: var(--bg-card-subtle); color: var(--ink-muted); }
+.claim-pet > div { display: grid; gap: 2px; min-width: 0; }
+.claim-pet b { font-size: 14px; color: var(--ink-primary); }
+.claim-pet span, .claim-who span { font-size: 12px; color: var(--ink-muted); overflow-wrap: anywhere; }
+.claim-who { display: grid; gap: 2px; min-width: 0; }
+.claim-who b { font-size: 13.5px; color: var(--ink-primary); }
+.claim-label { font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; }
+.claim-msg { margin: 6px 0 2px; padding: 8px 10px; border-radius: var(--radius-md); background: var(--bg-card-subtle); font-size: 12.5px; line-height: 1.5; color: var(--ink-secondary); }
+.claim-msg.is-empty { color: var(--ink-muted); font-style: italic; }
+.claim-when { font-size: 11.5px; color: var(--ink-muted); }
+.claim-decide { display: grid; gap: 10px; justify-items: end; }
+.claim-btns { display: flex; gap: 8px; }
+.claim-empty { display: grid; justify-items: center; gap: 6px; padding: 54px 20px; text-align: center; border: 1px dashed var(--border-main); border-radius: var(--radius-lg); color: var(--ink-muted); }
+.claim-empty b { color: var(--ink-primary); font-size: 15px; }
+@media (max-width: 860px) { .claim-card { grid-template-columns: 1fr; } .claim-decide { justify-items: start; } }
+
+/* A violation's details open without the dark screen around them (the record form keeps its own) */
+.vio-sheet-wrap:has(.vio-sheet:not(.vio-record)) { background: transparent; }
+.vio-sheet:not(.vio-record) { box-shadow: 0 18px 50px rgba(0, 0, 0, 0.35), 0 0 0 1px var(--border-main); }
+
+.vio-section-note { margin: -4px 0 10px; font-size: 12.5px; color: var(--ink-muted); line-height: 1.5; }
+.vio-flag-actions { display: flex; gap: 8px; flex: none; }
+@media (max-width: 640px) { .vio-issued-row { flex-wrap: wrap; } .vio-flag-actions { width: 100%; } .vio-flag-actions .btn { flex: 1; justify-content: center; } }
+
+/* Profile pictures */
+.operator-avatar, .admin-dropdown-avatar, .acct-avatar { overflow: hidden; }
+.operator-avatar img, .admin-dropdown-avatar img, .acct-avatar img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; display: block; }
+.acct-photo-slot { margin: 10px 0 4px; width: 100%; --auth-ink: var(--ink-primary); --auth-ink-muted: var(--ink-muted); --auth-field-bg: var(--bg-card-subtle); --auth-field-border: var(--border-main); --auth-surface: var(--bg-card); --auth-accent: var(--brand-terracotta); }
+.acct-photo-slot .pav-row { flex-direction: column; text-align: center; }
+.acct-photo-slot .pav-text { justify-items: center; }

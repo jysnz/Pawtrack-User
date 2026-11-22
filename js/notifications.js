@@ -298,7 +298,11 @@ class NotificationManager {
       const sighting = this.findSightingForNotification(notif);
       this.openSightingFromNotification(sighting, notif);
     } else if (notif.type === 'pet_found_match' || notif.finderPhone || (notif.title && notif.title.includes('FOUND YOUR PET'))) {
-      this.showFinderInfo(notif);
+      // Someone found the pet: the owner verifies the sighting (the same dialog as the Verify button on the post).
+      // When the sighting itself is gone, the finder's details from the alert are shown instead.
+      const sighting = this.findSightingForNotification(notif);
+      if (sighting) this.openSightingFromNotification(sighting, notif);
+      else this.showFinderInfo(notif);
     } else if (notif.type === 'impound_alert' && notif.impoundData) {
       this.showSmsSimulation(notif.impoundData);
     } else if (notif.coords) {
@@ -309,7 +313,27 @@ class NotificationManager {
         }
         document.getElementById('incident-map-section')?.scrollIntoView({behavior:'smooth'});
       }, 250);
+    } else {
+      this.showNotificationDetail(notif);
     }
+  }
+
+  // An alert with nothing more to open (or whose page is gone) still shows what it says, read or not
+  showNotificationDetail(notif) {
+    if (!notif) return;
+    const when = notif.timestamp ? new Date(notif.timestamp) : null;
+    this.showDialog({
+      tone: 'info',
+      icon: 'bell',
+      title: notif.title || 'Notification',
+      message: notif.message || '',
+      rows: [
+        ['Pet', notif.petName],
+        ['Where', notif.location],
+        ['When', when && !isNaN(when) ? when.toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }) : '']
+      ],
+      actions: [{ label: 'Close', primary: true }]
+    });
   }
 
   // An alert from the database says which pet was seen, not which sighting. The sighting is the one posted closest
@@ -334,7 +358,9 @@ class NotificationManager {
   // A sighting alert opens the Verify dialog; once the owner has confirmed, it opens the reunion steps instead
   async openSightingFromNotification(sighting, notif) {
     if (!sighting) {
-      this.showToast('This sighting is no longer available. It may have been removed.', 'info', 4500);
+      // The post is gone, but the alert still tells what happened
+      if (notif && (notif.type === 'pet_found_match' || notif.finderPhone || notif.finderName)) this.showFinderInfo(notif);
+      else this.showNotificationDetail(notif);
       return;
     }
     if (sighting.status === 'confirmed_sighting') {
@@ -660,6 +686,43 @@ class NotificationManager {
 
   showGmailPinSimulation(email) {
     this.showToast(`Verification PIN has been sent directly to your Gmail (${email || 'active account'}). Please check your primary inbox.`, 'info');
+  }
+
+  // One confirmation / information dialog for the whole app (a recorded vaccination, a sent report, a saved name...).
+  //   showDialog({ tone: 'success' | 'info' | 'warning', title, message, rows: [[label, value]], actions: [{ label, primary, onClick }] })
+  showDialog(opts = {}) {
+    const tone = ['success', 'info', 'warning'].includes(opts.tone) ? opts.tone : 'success';
+    const icon = opts.icon || { success: 'check', info: 'info', warning: 'triangle-alert' }[tone];
+    const actions = (opts.actions && opts.actions.length) ? opts.actions : [{ label: 'Done', primary: true }];
+    const rows = (opts.rows || []).filter(r => r && r[1] != null && String(r[1]).trim() !== '');
+    let overlay = document.getElementById('pt-dialog-modal');
+    if (!overlay) {
+      overlay = document.createElement('div');
+      overlay.className = 'modal-overlay';
+      overlay.id = 'pt-dialog-modal';
+      overlay.addEventListener('mousedown', (e) => { if (e.target === overlay) this.closeModal('pt-dialog-modal'); });
+      document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && overlay.classList.contains('active')) this.closeModal('pt-dialog-modal'); });
+      document.body.appendChild(overlay);
+    }
+    overlay.innerHTML = `
+      <div class="modal-box pt-dialog pt-dialog-${tone}" role="alertdialog" aria-modal="true" aria-labelledby="pt-dialog-title">
+        <span class="pt-dialog-icon" aria-hidden="true"><i data-lucide="${icon}"></i></span>
+        <h3 id="pt-dialog-title">${this.escHtml(opts.title || '')}</h3>
+        ${opts.message ? `<p class="pt-dialog-msg">${this.escHtml(opts.message)}</p>` : ''}
+        ${rows.length ? `<dl class="pt-dialog-rows">${rows.map(([k, v]) => `<div><dt>${this.escHtml(k)}</dt><dd>${this.escHtml(v)}</dd></div>`).join('')}</dl>` : ''}
+        <div class="pt-dialog-actions">
+          ${actions.map((a, i) => `<button type="button" class="btn ${a.primary ? 'btn-primary' : 'btn-outline'}" data-dlg="${i}">${this.escHtml(a.label)}</button>`).join('')}
+        </div>
+      </div>`;
+    overlay.querySelectorAll('[data-dlg]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const action = actions[+btn.dataset.dlg];
+        this.closeModal('pt-dialog-modal');
+        if (action && typeof action.onClick === 'function') action.onClick();
+      });
+    });
+    this.openModal('pt-dialog-modal');
+    setTimeout(() => overlay.querySelector('[data-dlg]')?.focus(), 60);
   }
 
   openModal(modalId) {

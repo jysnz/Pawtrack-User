@@ -43,28 +43,59 @@ window.ViolationsView = {
     return Number.isNaN(d.getTime()) ? '' : d.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
   },
 
+  // The section no longer lists the violations recorded against people. It is the review queue: pets that went 7 days
+  // without an NFC tag, which this facility decides on (record a violation, or dismiss).
   async loadIssued(container) {
-    if (!window.adminStore || !window.adminStore.listViolations) return;
-    this.issued = await window.adminStore.listViolations();
+    if (!window.adminStore || !window.adminStore.listNfcFlags) return;
+    this.flags = await window.adminStore.listNfcFlags();
     const box = container.querySelector('#vio-issued');
-    if (box) box.innerHTML = this.renderIssued();
+    if (!box) return;
+    box.innerHTML = this.renderIssued();
+    box.querySelectorAll('[data-flag-violate]').forEach((b) => b.addEventListener('click', () => this.decideFlag(container, b.dataset.flagViolate, true, b)));
+    box.querySelectorAll('[data-flag-dismiss]').forEach((b) => b.addEventListener('click', () => this.decideFlag(container, b.dataset.flagDismiss, false, b)));
   },
 
   renderIssued() {
-    const D = this.data();
-    const it = this.issued;
+    const it = this.flags;
     if (!it) return '<div class="vio-empty">Loading&hellip;</div>';
-    if (it.missing) return '<div class="vio-empty">Recording violations needs the latest database update (supabase/migrations/20261131_issued_violations.sql).</div>';
-    if (!it.rows.length) return '<div class="vio-empty">No violation has been recorded against anyone yet.</div>';
-    return `<div class="vio-rows">${it.rows.map((v) => `
-      <div class="vio-row vio-issued-row">
+    if (it.missing) return '<div class="vio-empty">Reviewing pets without an NFC tag needs the latest database update (supabase/migrations/20261141_nfc_flags.sql).</div>';
+    if (!it.rows.length) return '<div class="vio-empty">Nothing to review. When a pet goes 7 days without an NFC tag, it appears here for you to decide.</div>';
+    return `<div class="vio-rows">${it.rows.map((f) => `
+      <div class="vio-row vio-issued-row" data-flag="${this.esc(f.id)}">
         <span class="vio-row-main">
-          <span class="vio-row-name">${this.esc(v.owner_name || 'Unknown person')} &middot; ${this.esc(v.rule_name)}</span>
-          <span class="vio-row-sub"><b>${this.esc(v.section)}</b> &middot; offense ${this.esc(v.offense)}${v.pet_name ? ' &middot; ' + this.esc(v.pet_name) : ''} &middot; ${this.esc(this.fmtDate(v.created_at))}</span>
-          <span class="vio-row-sub">${this.esc(v.reason)}</span>
+          <span class="vio-row-name">${this.esc(f.pet_name)} &middot; no NFC tag after 7 days</span>
+          <span class="vio-row-sub">Owner ${this.esc(f.owner_name || 'unknown')} &middot; registered ${this.esc(this.fmtDate(f.pet_registered_on || f.created_at))} &middot; reported ${this.esc(this.fmtDate(f.created_at))}</span>
+          <span class="vio-row-sub">Section 35: Unregistered / no microchips. Fine: PHP 1,000 (1st offense), 1,500 (2nd), 2,000 (3rd).</span>
         </span>
-        <span class="vio-row-fine vio-fine-ladder">${this.esc(D.peso(v.fine_php))}</span>
+        <span class="vio-flag-actions">
+          <button type="button" class="btn btn-primary btn-sm" data-flag-violate="${this.esc(f.id)}">Record violation</button>
+          <button type="button" class="btn btn-secondary btn-sm" data-flag-dismiss="${this.esc(f.id)}">Dismiss</button>
+        </span>
       </div>`).join('')}</div>`;
+  },
+
+  async decideFlag(container, id, violate, button) {
+    const flag = (this.flags && this.flags.rows || []).find((f) => f.id === id);
+    if (violate) {
+      const ok = await window.adminApp.confirmDialog({
+        title: 'Record this violation?',
+        message: `${flag ? flag.owner_name || 'The owner' : 'The owner'} will be emailed that ${flag ? flag.pet_name : 'their pet'} has no NFC tag, with the fine and a request to come to your facility.`,
+        confirmLabel: 'Record violation', cancelLabel: 'Cancel'
+      });
+      if (!ok) return;
+    }
+    if (button) button.disabled = true;
+    const out = await window.adminStore.decideNfcFlag(id, violate, '');
+    if (!out) { if (button) button.disabled = false; return; }
+    await this.loadIssued(container);
+    window.adminApp.showDialog(violate ? {
+      tone: 'success',
+      title: 'Violation recorded',
+      message: out.emailed ? `${flag ? flag.owner_name : 'The owner'} was emailed and told to go to your facility.` : 'The violation was saved, but the email could not be sent. Contact the owner directly.',
+      rows: [['Pet', flag && flag.pet_name], ['Owner', flag && flag.owner_name], ['Offense', out.offense ? String(out.offense) : ''], ['Fine', out.fine_php != null ? 'PHP ' + Number(out.fine_php).toLocaleString('en-US') : '']]
+    } : {
+      tone: 'info', title: 'Report dismissed', message: 'No violation was recorded.', rows: [['Pet', flag && flag.pet_name], ['Owner', flag && flag.owner_name]]
+    });
   },
 
   // Record a violation against a person
@@ -292,7 +323,8 @@ window.ViolationsView = {
       </div>
 
       <div id="vio-results">${this.renderList()}</div>
-      <h2 class="vio-section-title">Recorded against people</h2>
+      <h2 class="vio-section-title">Pets without an NFC tag</h2>
+      <p class="vio-section-note">After 7 days without a tag, a pet is reported here. You decide whether it becomes a violation; if it does, the owner is emailed.</p>
       <div id="vio-issued">${this.renderIssued()}</div>
       ${open ? this.renderSheet(open) : ''}
     `;

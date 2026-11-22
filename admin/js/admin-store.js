@@ -17,7 +17,8 @@ const STORAGE_KEYS = {
   CASES: 'pawtrack_admin_cases',
   SHELTER_EXTRAS: 'pawtrack_shelter_extras',
   TICKETS: 'pawtrack_penalty_tickets',
-  EXTRA_MAINS: 'pawtrack_extra_main_ids'
+  EXTRA_MAINS: 'pawtrack_extra_main_ids',
+  CLAIMS: 'pawtrack_impound_claims'
 };
 
 // Bumped when the cached lists change meaning; older caches are cleared on load (v1: Supabase replaces the
@@ -148,7 +149,7 @@ class AdminStore {
   // 3. Coming back to the tab reloads, but never more than once per 10s.
   // 4. Our own saves reload at once (see write()).
   // syncStatus tells the UI the truth: 'live' (Realtime), 'connected' (polling only), 'offline', 'connecting'.
-  static get REALTIME_TABLES() { return ['impounded_pets', 'penalty_tickets', 'notifications', 'missing_pets']; }
+  static get REALTIME_TABLES() { return ['impounded_pets', 'penalty_tickets', 'notifications', 'missing_pets', 'impound_claims']; }
 
   startSupabaseSync() {
     this.realtime = 'off';
@@ -283,7 +284,7 @@ class AdminStore {
         }
         return { data: rows };
       };
-      const [pets, reports, sightings, impounded, shelters, tags, notifs, tickets, extraMains] = await Promise.all([
+      const [pets, reports, sightings, impounded, shelters, tags, notifs, tickets, extraMains, claims] = await Promise.all([
         pageAll('registered_pets', 'created_at'),
         pageAll('missing_pets', 'created_at'),
         sb.from('community_sightings').select('*').order('created_at', { ascending: false }).limit(1000),
@@ -292,7 +293,8 @@ class AdminStore {
         pageAll('nfc_tags', 'created_at'),
         sb.from('notifications').select('*').order('created_at', { ascending: false }).limit(300),
         pageAll('penalty_tickets', 'created_at'),
-        sb.from('facility_extra_mains').select('shelter_id')
+        sb.from('facility_extra_mains').select('shelter_id'),
+        sb.from('impound_claims').select('*').order('created_at', { ascending: false }).limit(500)
       ].map((p) => Promise.resolve(p).catch((error) => ({ error }))));
 
       // Every core list failed: the database cannot be reached. Keep what we have, show it, and back off.
@@ -325,6 +327,8 @@ class AdminStore {
       if (!notifs.error) put(STORAGE_KEYS.NOTIFICATIONS, (notifs.data || []).map((n) => this.fromNotificationRow(n)));
       // Main facilities this account manages besides its own (a database without them simply has none)
       put(STORAGE_KEYS.EXTRA_MAINS, extraMains && !extraMains.error ? (extraMains.data || []).map((r) => r.shelter_id) : []);
+      // Owners' claims on impounded animals (a database without the table simply has none)
+      put(STORAGE_KEYS.CLAIMS, claims && !claims.error ? (claims.data || []).map((r) => this.fromClaimRow(r)) : []);
       // The ticket table may not exist yet on an older database: then there are simply no tickets
       put(STORAGE_KEYS.TICKETS, tickets.error ? [] : (tickets.data || []).map((t) => this.fromTicketRow(t)));
       // Facility settings that only newer databases have (the penalty amount): used to show or hide those fields
@@ -521,6 +525,44 @@ class AdminStore {
       cityBounds: s.city_bounds || null,
       coverage: Array.isArray(s.coverage_barangays) ? s.coverage_barangays : []
     };
+  }
+
+  fromClaimRow(r) {
+    return {
+      id: r.id, impoundId: r.impound_id, claimantId: r.claimant_id,
+      name: r.claimant_name, email: r.claimant_email, phone: r.claimant_phone || '', message: r.message || '',
+      status: r.status, decidedAt: r.decided_at || null, note: r.decision_note || '', createdAt: r.created_at
+    };
+  }
+
+  getClaims() {
+    try { return JSON.parse(localStorage.getItem(STORAGE_KEYS.CLAIMS)) || []; } catch { return []; }
+  }
+
+  getPendingClaimCount() {
+    return this.getClaims().filter((c) => c.status === 'pending').length;
+  }
+
+  // Accepts or rejects a claim, then emails the owner (the email function checks this admin may decide it).
+  // Resolves { ok, emailed }.
+  async decideClaim(id, status, note) {
+    const sb = await this.waitForClient(5000);
+    const me = this.currentAdminId();
+    if (!sb || !me) { this.dbError('Could not save the decision', { message: 'not signed in' }); return { ok: false }; }
+    const { data, error } = await sb.from('impound_claims').update({ status, decided_by: me, decided_at: new Date().toISOString(), decision_note: note || null }).eq('id', id).eq('status', 'pending').select('id');
+    if (error || !data || !data[0]) {
+      this.dbError('Could not save the decision', error || { message: 'it was already decided, or it is not for your facility' });
+      this.syncFromSupabase();
+      return { ok: false };
+    }
+    let emailed = false;
+    try {
+      const res = await sb.functions.invoke('notify-claim', { body: { claim_id: id } });
+      emailed = !res.error;
+    } catch (e) { emailed = false; }
+    this.logAction(status === 'accepted' ? 'Accepted a Claim' : 'Rejected a Claim', `Claim ${id}`);
+    await this.syncFromSupabase();
+    return { ok: true, emailed };
   }
 
   fromTicketRow(t) {
@@ -1036,6 +1078,33 @@ class AdminStore {
     return { ...res.data, emailed };
   }
 
+  // Pets that went 7 days without an NFC tag, waiting for a facility to decide whether it is a violation
+  async listNfcFlags() {
+    const sb = await this.waitForClient(5000);
+    if (!sb) return { rows: [], missing: false };
+    const { data, error } = await sb.from('nfc_flags').select('*').eq('status', 'pending').order('created_at', { ascending: true }).limit(200);
+    if (error) return { rows: [], missing: true };
+    return { rows: data || [], missing: false };
+  }
+
+  // The facility's decision. A violation is recorded by the database (offense and fine worked out there), then the person is emailed.
+  async decideNfcFlag(flagId, violate, note) {
+    const facility = this.getActiveFacilityId();
+    const res = await this.rpc('Could not save the decision', 'decide_nfc_flag', { p_flag: flagId, p_violate: !!violate, p_note: note || null, p_shelter: facility || null });
+    if (!res.ok) return null;
+    const out = res.data || {};
+    let emailed = false;
+    if (violate && out.violation_id) {
+      try {
+        const sb = await this.waitForClient(5000);
+        const sent = sb && await sb.functions.invoke('notify-violation', { body: { violation_id: out.violation_id } });
+        emailed = !!(sent && !sent.error);
+      } catch (e) { emailed = false; }
+    }
+    this.logAction(violate ? 'Violation Issued' : 'Report Dismissed', `Pet without an NFC tag: ${flagId}`);
+    return { ...out, emailed };
+  }
+
   async listViolations() {
     const sb = await this.waitForClient(5000);
     if (!sb) return { rows: [], missing: false };
@@ -1232,6 +1301,11 @@ class AdminStore {
       shelters[index] = { ...shelters[index], photoUrl: url, photo: url };
       localStorage.setItem(STORAGE_KEYS.SHELTERS, JSON.stringify(shelters));
       this.notify('shelters_updated');
+    } else {
+      // A facility that was just created is not in the saved list yet (it still has its temporary id): load the list
+      // again so the photo shows straight away instead of after the next refresh
+      if (this.syncing) { try { await this.syncing; } catch (e) { /* ignore */ } }
+      await this.syncFromSupabase();
     }
     this.logAction(url ? 'Updated Facility Photo' : 'Removed Facility Photo', 'Changed the facility photo');
     return url;

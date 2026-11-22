@@ -53,7 +53,7 @@ const AdminStore = require(path.join(__dirname, '../js/admin-store.js'));
   const mine = handlers.slice(-4); mine.slice(0, 3).forEach((fn) => fn({}));
   await wait(60);
   await store.syncing;
-  const perSync = Math.max(1, before ? 9 : 9);
+  const perSync = Math.max(1, before ? 10 : 10);
   check('a burst of pushed changes causes exactly one reload', queries - before === perSync, queries - before);
 
   // A change while a reload is running is not lost

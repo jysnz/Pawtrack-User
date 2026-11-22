@@ -78,7 +78,7 @@
 .vax-error { display: none; font-size: 0.74rem; font-weight: 600; color: var(--danger); }
 .vax-field.has-error input:not([type="file"]), .vax-field.has-error textarea { border-color: var(--danger); }
 .vax-field.has-error .vax-drop { border-color: var(--danger); }
-.vax-field.has-error .vax-error { display: block; }
+.vax-field.has-error .vax-error { display: flex; }
 .vax-msg { padding: 9px 11px; border-radius: var(--radius-md); background: var(--danger-light); border: 1px solid var(--danger); font-size: 0.82rem; font-weight: 600; }
 .vax-msg[hidden] { display: none; }
 .vax-form .btn[disabled] { opacity: 0.6; pointer-events: none; }
@@ -149,8 +149,6 @@
 .report-photo-inline-text[data-state="empty"] { color: var(--text-muted); font-weight: 500; }
 .form-group.has-error input, .form-group.has-error textarea, .form-group.has-error select,
 .form-group.has-error .report-photo-inline, .form-group.has-error .pet-picker { border-color: var(--danger); box-shadow: 0 0 0 3px color-mix(in srgb, var(--danger) 16%, transparent); }
-.field-error { display: block; margin-top: 4px; font-size: 0.74rem; font-weight: 600; line-height: 1.35; color: var(--danger); }
-.field-error::before { content: "! "; font-weight: 800; }
 
 /* Report a missing pet: a normal page, laid out like Found a Pet (plain header, then cards) */
 #report-pet-modal.report-page[hidden] { display: none !important; }
@@ -559,3 +557,88 @@
 .vax-drop-remove { position: relative; z-index: 1; display: inline-flex; align-items: center; justify-content: center; flex: none; width: 32px; height: 32px; padding: 0; border: 1px solid var(--border-subtle); border-radius: 50%; background: var(--bg-surface); color: var(--text-muted); cursor: pointer; }
 .vax-drop-remove:hover { border-color: var(--danger); color: var(--danger); }
 .vax-drop-remove svg { width: 16px; height: 16px; }
+
+/* Sightings of a pet (My Pets) */
+.pet-sight-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.pet-sight-chip { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 999px; font-size: 0.7rem; font-weight: 700; }
+.pet-sight-chip svg { width: 12px; height: 12px; }
+.pet-sight-chip.is-new { background: color-mix(in srgb, var(--primary) 18%, transparent); color: var(--primary); animation: pet-sight-pulse 2s ease-in-out infinite; }
+.pet-sight-chip.is-confirmed { background: color-mix(in srgb, #16a34a 16%, transparent); color: #16a34a; }
+@keyframes pet-sight-pulse { 50% { box-shadow: 0 0 0 4px color-mix(in srgb, var(--primary) 14%, transparent); } }
+@media (prefers-reduced-motion: reduce) { .pet-sight-chip.is-new { animation: none; } }
+.pet-sightings { margin: 4px 0 16px; display: grid; gap: 8px; }
+.pet-sightings h3 { display: flex; align-items: center; gap: 8px; font-family: var(--font-heading); font-size: 1rem; margin: 0 0 2px; }
+.pet-sight-row { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: var(--radius-md); border: 1px solid color-mix(in srgb, var(--primary) 35%, transparent); background: color-mix(in srgb, var(--primary) 8%, var(--bg-surface-elevated)); }
+.pet-sight-row.is-confirmed { border-color: color-mix(in srgb, #16a34a 35%, transparent); background: color-mix(in srgb, #16a34a 8%, var(--bg-surface-elevated)); }
+.pet-sight-row img, .pet-sight-noimg { flex: none; width: 46px; height: 46px; border-radius: 10px; object-fit: cover; display: grid; place-items: center; background: var(--bg-surface); color: var(--text-muted); }
+.pet-sight-info { flex: 1; min-width: 0; display: grid; gap: 1px; }
+.pet-sight-info strong { font-size: 0.86rem; }
+.pet-sight-info span { font-size: 0.8rem; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pet-sight-info small { font-size: 0.72rem; color: var(--text-muted); }
+@media (max-width: 520px) { .pet-sight-row { flex-wrap: wrap; } .pet-sight-row .btn { width: 100%; justify-content: center; } }
+
+/* Edit a pet's details */
+.pet-facts-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 14px 0 8px; }
+.pet-facts-head h3 { display: flex; align-items: center; gap: 8px; margin: 0; font-family: var(--font-heading); font-size: 1rem; }
+.pet-edit-form { margin: 14px 0 18px; }
+.pet-edit-form h4 { display: flex; align-items: center; gap: 8px; }
+.pet-edit-form h4 svg { width: 16px; height: 16px; color: var(--primary); }
+.vax-field select { width: 100%; min-height: 45px; padding: 10px 12px; font: inherit; font-size: 0.95rem; border-radius: var(--radius-md); border: 1px solid var(--border-glass); background: var(--bg-main); color: var(--text-main); }
+.vax-field select:focus { outline: none; border-color: var(--border-focus); box-shadow: 0 0 0 3px var(--primary-light); }
+.vax-field.has-error select { border-color: var(--danger); }
+.pet-edit-actions { display: flex; gap: 8px; justify-content: flex-end; }
+.pet-edit-actions .btn[disabled] { opacity: 0.6; pointer-events: none; }
+@media (max-width: 520px) { .pet-edit-actions { flex-direction: column-reverse; } .pet-edit-actions .btn { width: 100%; justify-content: center; } }
+
+/* Impoundments: an animal's details and the claim button */
+.ip-pet.is-tappable { cursor: pointer; }
+.ip-pet-modal { max-width: 440px; }
+.ip-pet-modal-photo { width: 100%; max-height: 260px; object-fit: cover; border-radius: var(--radius-md); margin-bottom: 12px; display: grid; place-items: center; background: var(--bg-surface-elevated); color: var(--text-muted); min-height: 140px; }
+.ip-pet-modal-rows { display: grid; border-radius: var(--radius-md); border: 1px solid var(--border-subtle); padding: 2px 14px; margin: 0 0 14px; background: var(--bg-surface-elevated); }
+.ip-pet-modal-rows > div { display: flex; justify-content: space-between; gap: 14px; padding: 9px 0; border-bottom: 1px solid var(--border-subtle); font-size: 0.86rem; }
+.ip-pet-modal-rows > div:last-child { border-bottom: 0; }
+.ip-pet-modal-rows dt { color: var(--text-muted); flex: none; }
+.ip-pet-modal-rows dd { margin: 0; font-weight: 600; text-align: right; overflow-wrap: anywhere; }
+.ip-claim-box { display: grid; gap: 8px; }
+.ip-claim-box .btn { width: 100%; justify-content: center; }
+.ip-claim-note { margin: 0; padding: 10px 12px; border-radius: var(--radius-md); font-size: 0.84rem; line-height: 1.5; background: var(--bg-surface-elevated); color: var(--text-muted); }
+.ip-claim-note.is-pending { background: color-mix(in srgb, var(--primary) 12%, transparent); color: var(--text-main); }
+.ip-claim-note.is-ok { background: color-mix(in srgb, #16a34a 14%, transparent); color: var(--text-main); }
+.ip-claim-note.is-late { background: color-mix(in srgb, var(--danger) 10%, transparent); color: var(--danger); }
+.ip-claim-form { display: grid; gap: 12px; }
+.ip-claim-actions { display: flex; gap: 8px; justify-content: flex-end; padding: 0; border: 0; }
+
+/* Approved claims and the printable Digital NFC card (My Pets) */
+.claim-approved { margin: 0 0 18px; display: grid; gap: 10px; }
+.claim-approved h2 { display: flex; align-items: center; gap: 8px; margin: 0; font-family: var(--font-heading); font-size: 1.05rem; color: #16a34a; }
+.claim-approved-card { display: flex; align-items: center; gap: 14px; padding: 12px 14px; border-radius: var(--radius-lg); border: 1px solid color-mix(in srgb, #16a34a 38%, transparent); background: color-mix(in srgb, #16a34a 9%, var(--bg-surface-elevated)); }
+.claim-approved-card img, .claim-approved-noimg { flex: none; width: 56px; height: 56px; border-radius: 12px; object-fit: cover; display: grid; place-items: center; background: var(--bg-surface); color: var(--text-muted); }
+.claim-approved-text { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.claim-approved-text strong { font-size: 0.92rem; }
+.claim-approved-text span { font-size: 0.8rem; color: var(--text-muted); line-height: 1.45; }
+@media (max-width: 560px) { .claim-approved-card { flex-wrap: wrap; } .claim-approved-card .btn { width: 100%; justify-content: center; } }
+.claim-card-box { max-width: 420px; padding: 18px; }
+.claim-card { border: 2px solid var(--primary); border-radius: 16px; padding: 16px; background: var(--bg-card); }
+.claim-card-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 12px; }
+.claim-card-brand { display: inline-flex; align-items: center; gap: 7px; font-family: var(--font-heading); font-weight: 800; }
+.claim-card-brand img { width: 26px; height: 26px; }
+.claim-card-tag { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 999px; background: var(--primary); color: #1a1206; font-size: 0.66rem; font-weight: 800; letter-spacing: 0.05em; }
+.claim-card-tag svg { width: 12px; height: 12px; }
+.claim-card-main { display: flex; gap: 14px; align-items: center; margin-bottom: 12px; }
+.claim-card-photo { width: 84px; height: 84px; border-radius: 14px; object-fit: cover; display: grid; place-items: center; background: var(--bg-surface-elevated); color: var(--text-muted); flex: none; }
+.claim-card-ref { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); }
+.claim-card-refno { font-family: var(--font-mono, monospace); font-size: 1.4rem; font-weight: 800; letter-spacing: 0.08em; }
+.claim-card-status { display: inline-block; margin-top: 4px; padding: 2px 9px; border-radius: 999px; background: #16a34a; color: #fff; font-size: 0.68rem; font-weight: 800; letter-spacing: 0.06em; }
+.claim-card-rows { display: grid; margin: 0 0 10px; }
+.claim-card-rows > div { display: flex; justify-content: space-between; gap: 12px; padding: 6px 0; border-bottom: 1px dashed var(--border-subtle); font-size: 0.82rem; }
+.claim-card-rows dt { color: var(--text-muted); flex: none; }
+.claim-card-rows dd { margin: 0; font-weight: 600; text-align: right; overflow-wrap: anywhere; }
+.claim-card-foot { margin: 0; font-size: 0.74rem; color: var(--text-muted); text-align: center; }
+.claim-card-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 12px; }
+@media print {
+  body.printing-claim-card > *:not(#claim-card-modal) { display: none !important; }
+  body.printing-claim-card #claim-card-modal { position: static !important; display: block !important; background: #fff !important; }
+  body.printing-claim-card #claim-card-modal .modal-box { box-shadow: none !important; max-width: none !important; background: #fff !important; }
+  body.printing-claim-card .no-print { display: none !important; }
+  body.printing-claim-card .claim-card { color: #000; border-color: #000; }
+}

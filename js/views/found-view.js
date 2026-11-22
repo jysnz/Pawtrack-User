@@ -853,16 +853,36 @@ class FoundView {
       return;
     }
 
+    // The confirmation is a dialog over the page, which goes back to a fresh form behind it
+    const summary = [
+      ['Pet', pet ? pet.name : 'Unidentified animal'],
+      ['Found at', where],
+      ['Your phone', phone.trim()],
+      ['Posted as', reporter]
+    ];
+    this.reset();
+    this.sent = null;
+    this.render();
     if (pet && !alerted) {
       // The sighting is on the map, but the owner could not be reached (the store already explained why)
-      window.notifManager?.showToast(`Your report of ${pet.name} is on the map, but the owner could not be alerted.`, 'warning', 6000);
+      window.notifManager?.showDialog({
+        tone: 'warning',
+        title: 'Report saved',
+        message: `Your report of ${pet.name} is on the map, but the owner could not be alerted yet.`,
+        rows: summary,
+        actions: [{ label: 'View on the map', onClick: () => { window.location.hash = '#owner'; } }, { label: 'Done', primary: true }]
+      });
     } else {
-      window.notifManager?.showToast(pet ? `${pet.name}'s owner has been alerted.` : 'Sighting posted.', 'success', 4500);
+      window.notifManager?.showDialog({
+        tone: 'success',
+        title: pet ? `${pet.name}'s owner has been alerted` : 'Sighting posted',
+        message: pet
+          ? 'They received your photo, location and phone number. Thank you for helping them get home.'
+          : 'It is now on the Incident Map and the Sightings board. Thank you for helping.',
+        rows: summary,
+        actions: [{ label: 'View on the map', onClick: () => { window.location.hash = '#owner'; } }, { label: 'Done', primary: true }]
+      });
     }
-    const sent = { name: pet ? pet.name : '' };
-    this.reset();
-    this.sent = sent;
-    this.render();
   }
 }
 

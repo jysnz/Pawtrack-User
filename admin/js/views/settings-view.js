@@ -40,7 +40,8 @@ window.SettingsView = {
       body = `
         <div class="acct-layout">
           <aside class="nock-card acct-profile" aria-label="Profile summary">
-            <div class="acct-avatar" id="acct-avatar" aria-hidden="true">${esc(this.initials(name))}</div>
+            <div class="acct-avatar" id="acct-avatar" aria-hidden="true">${/^(https:\/\/|data:image\/)/.test(account.avatar_url || '') ? `<img src="${esc(account.avatar_url)}" alt="" />` : esc(this.initials(name))}</div>
+            <div id="acct-photo-slot" class="acct-photo-slot"></div>
             <div class="acct-profile-name" id="acct-profile-name">${esc(name)}</div>
             <div class="acct-profile-role" id="acct-profile-role">${esc(account.position || 'No position set')}</div>
             <span class="status-pill ${status[1]}">${esc(status[0])}</span>
@@ -187,7 +188,7 @@ window.SettingsView = {
       const c = current();
       const nameNow = c.name || account.email;
       container.querySelector('#acct-profile-name').textContent = nameNow;
-      container.querySelector('#acct-avatar').textContent = this.initials(nameNow);
+      if (!account.avatar_url) container.querySelector('#acct-avatar').textContent = this.initials(nameNow);
       container.querySelector('#acct-profile-role').textContent = c.position || 'No position set';
     };
 
@@ -237,11 +238,36 @@ window.SettingsView = {
       el.save.textContent = 'Saved ✓';
       el.save.classList.add('is-saved');
       setTimeout(() => { el.save.classList.remove('is-saved'); el.save.textContent = 'Save changes'; refresh(); }, 1600);
-      app.showToast('Your account was updated.', 'success', 1800);
+      app.showDialog({
+        tone: 'success',
+        title: 'Details updated',
+        message: 'Your personal details were saved.',
+        rows: [['Name', c.name], ['Position', c.position], ['Mobile number', c.phone ? '+63 ' + c.phone : '']]
+      });
     };
     form.addEventListener('submit', (e) => { e.preventDefault(); save(); });
 
     container.querySelector('#btn-account-signout')?.addEventListener('click', () => app.logoutAdmin());
+
+    // Profile picture: saved as soon as one is chosen (or removed)
+    if (window.PawAvatar) {
+      window.PawAvatar.mountEditor(container.querySelector('#acct-photo-slot'), {
+        id: 'acct-photo',
+        picture: account.avatar_url || '',
+        initial: account.full_name || account.email,
+        onSave: async (data) => {
+          const { data: row, error } = await app.supabase.from('admin_accounts').update({ avatar_url: data || null }).eq('id', account.id).select('*').maybeSingle();
+          if (error || !row) return false;
+          account = row;
+          app.currentAdmin = row;
+          app.updateAccountLabels();
+          const circle = container.querySelector('#acct-avatar');
+          if (circle) circle.innerHTML = data ? `<img src="${esc(data)}" alt="" />` : esc(this.initials(account.full_name || account.email));
+          app.showDialog({ tone: 'success', title: data ? 'Profile picture updated' : 'Profile picture removed', message: data ? 'Your new picture is shown across the console.' : 'The console will show your initials instead.' });
+          return true;
+        }
+      });
+    }
 
 
     // How this account signs in (the auth service knows; the account row does not)

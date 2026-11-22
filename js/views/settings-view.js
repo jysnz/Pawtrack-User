@@ -75,6 +75,8 @@ class SettingsView {
             </div>
           </div>
 
+          <div class="settings-row settings-avatar-row"><div id="settings-avatar-slot" class="settings-avatar-slot"></div></div>
+
           <form class="settings-row" id="settings-name-form" novalidate>
             <div class="settings-row-label">
               <label for="settings-first-input">${t('settings.name', 'Name')}</label>
@@ -201,6 +203,16 @@ class SettingsView {
       btn.addEventListener('click', () => { window.location.hash = '#' + btn.dataset.goto; });
     });
 
+    // Profile picture: saved as soon as one is chosen (or removed)
+    if (window.PawAvatar) {
+      window.PawAvatar.mountEditor(container.querySelector('#settings-avatar-slot'), {
+        id: 'settings-avatar',
+        picture: user.picture && !/ui-avatars\.com/.test(user.picture) ? user.picture : '',
+        initial: user.avatarInitial || user.name,
+        onSave: (data) => this.savePicture(data)
+      });
+    }
+
     // Name
     const nameForm = container.querySelector('#settings-name-form');
     const firstInput = container.querySelector('#settings-first-input');
@@ -243,6 +255,26 @@ class SettingsView {
     container.querySelector('#settings-logout-btn')?.addEventListener('click', () => window.pawApp.logOut());
   }
 
+  // Saves (or, with null, removes) the profile picture on the guardian's profile
+  async savePicture(data) {
+    const user = window.pawStore.getGoogleUser();
+    const sb = window.pawApp.supabase;
+    if (!user || !sb || !user.id) return false;
+    const { error } = await sb.from('guardians').update({ avatar_url: data || null }).eq('id', user.id);
+    if (error) return false;
+    user.picture = data || null;
+    window.pawStore.setGoogleUser(user);
+    window.pawApp.updateGoogleAuthUI();
+    const circle = document.querySelector('.settings-avatar');
+    if (circle) circle.innerHTML = data ? `<img src="${this.esc(data)}" alt="" />` : this.esc(user.avatarInitial || (user.name || 'G')[0].toUpperCase());
+    window.notifManager.showDialog({
+      tone: 'success',
+      title: data ? 'Profile picture updated' : 'Profile picture removed',
+      message: data ? 'Your new picture is now on your account and on your posts.' : 'Your account will show your initial instead.'
+    });
+    return true;
+  }
+
   // ─────────────────────────────────────────────────
   // NAME
   // ─────────────────────────────────────────────────
@@ -272,6 +304,13 @@ class SettingsView {
     user.avatarInitial = (name[0] || 'G').toUpperCase();
     window.pawStore.setGoogleUser(user);
     window.pawApp.updateGoogleAuthUI();
+    window.notifManager.showDialog({
+      tone: 'success',
+      title: 'Name updated',
+      message: 'Your name was saved. Shelters and finders will see it when they contact you.',
+      rows: [['First name', first], ['Last name', last]],
+      actions: [{ label: 'Done', primary: true }]
+    });
   }
 
   // ─────────────────────────────────────────────────

@@ -725,7 +725,18 @@ class App {
       enterApp();
     });
 
+    // A picture chosen on the sign-up form is saved on the profile the first time the new guardian is signed in
+    const applyPendingAvatar = (guardian) => {
+      let pic = '';
+      try { pic = sessionStorage.getItem('pawtrack_pending_avatar') || ''; } catch (err) {}
+      if (!pic || !guardian || guardian.avatar_url) return;
+      try { sessionStorage.removeItem('pawtrack_pending_avatar'); } catch (err) {}
+      guardian.avatar_url = pic;
+      this.supabase.from('guardians').update({ avatar_url: pic }).eq('id', guardian.id).then(() => {});
+    };
+
     const completeSignIn = (guardian, user) => {
+      applyPendingAvatar(guardian);
       this._resolvedUserId = user.id;
       window.pawStore.setGoogleUser(this.toGuardianProfile({
         id: guardian.id,
@@ -772,8 +783,12 @@ class App {
     };
 
     // First Google sign-in: ask for the name and phone shelters need
+    // Profile picture fields: on the sign-up form, and on the Google "finish setting up" dialog
+    if (window.PawAvatar) window.PawAvatar.mount('signup-avatar-slot', { id: 'signup-avatar', initial: '?' });
+
     const openRegisterDialog = (user) => {
       const meta = user.user_metadata || {};
+      if (window.PawAvatar) window.PawAvatar.mount('register-avatar-slot', { id: 'register-avatar', picture: /^https:\/\//.test(meta.avatar_url || meta.picture || '') ? (meta.avatar_url || meta.picture) : '', initial: meta.full_name || meta.name || user.email });
       if (registerEmail) registerEmail.value = user.email || '';
       if (registerName) registerName.value = meta.full_name || meta.name || '';
       if (registerPhone) registerPhone.value = '';
@@ -1233,6 +1248,7 @@ class App {
       }
 
       // The account exists now: exchange the one-time token for a session so the guardian lands signed in
+      try { const pic = window.PawAvatar && window.PawAvatar.value('signup-avatar'); if (pic) sessionStorage.setItem('pawtrack_pending_avatar', pic); } catch (err) {}
       pendingSignup = null;
       clearInterval(signupResendTimer);
       resetLoginForm();
@@ -1542,7 +1558,7 @@ class App {
       const meta = user.user_metadata || {};
       const { data: guardian, error } = await this.supabase
         .from('guardians')
-        .insert({ id: user.id, email: user.email, full_name: name, phone, avatar_url: meta.avatar_url || meta.picture || null })
+        .insert({ id: user.id, email: user.email, full_name: name, phone, avatar_url: (window.PawAvatar && window.PawAvatar.value('register-avatar')) || meta.avatar_url || meta.picture || null })
         .select('*')
         .single();
       if (error) return { ok: false, message: error.message };

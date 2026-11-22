@@ -718,7 +718,7 @@ class ReportManager {
       if (!registeredPick) conditionInput.value = '';
     }
     const photoLabel = document.getElementById('report-missing-photo-label');
-    if (photoLabel) photoLabel.textContent = 'Current photo of the pet *';
+    if (photoLabel) photoLabel.innerHTML = 'Current photo of the pet <span style="font-weight:500; color: var(--text-muted);">(optional)</span>';
 
     // Registered pets with a tag already have their photo on file; unregistered and untagged pets need one uploaded
     const photoRow = document.getElementById('report-missing-photo-row');
@@ -727,8 +727,8 @@ class ReportManager {
     if (this._photoFor !== String(petId)) { this.removeUploadedPhoto(false); this._photoFor = String(petId); photoChanged = true; } // keep a photo already added for this pet
     const photoHint = document.querySelector('#report-missing-photo-row .report-photo-hint');
     if (photoHint) photoHint.textContent = chosen
-      ? "Your pet's registered photo is used. Change it if you have a newer one."
-      : 'Add a clear photo of the pet so others can recognise it.';
+      ? "Optional. If you don't add one, your pet's registered photo is used."
+      : 'Optional. A clear photo helps others recognise the pet.';
 
     const customDesc = document.getElementById('report-missing-custom-desc');
     if (isUnregistered) {
@@ -1856,10 +1856,7 @@ class ReportManager {
     // "Another pet": is it the reporter's own pet or someone else's? The reporter is the contact either way
     const whose = (document.querySelector('input[name="report-whose"]:checked') || {}).value || '';
     if (isUnregistered && !whose) problems.push(['report-missing-whose', 'Say whether this is your pet or someone else\'s.']);
-    // Every report needs a new photo of the pet as it looks now (not its profile photo)
-    if (petId && !this.uploadedPhotoData) {
-      problems.push(['report-missing-photo-row', untagged ? `Add a photo of ${untagged.name} so others can recognise it.` : 'Add a current photo of the pet so others can recognise it.']);
-    }
+    // A current photo is optional: without one, the pet's registered photo is used
     // Every registered pet needs its current condition (injuries, collar, behaviour)
     if (untagged || isUnregistered) {
       if (!condition) problems.push(['report-missing-condition', `Describe how ${untagged ? untagged.name : 'the pet'} looked before it went missing (injuries, collar, behaviour).`]);
@@ -1964,11 +1961,24 @@ class ReportManager {
     // No notification for a newly missing pet: the guardian filed it themselves, and notifications are only
     // for news about the guardian's own pets (sightings, finds, impounds)
 
-    if (window.notifManager) {
-      window.notifManager.showToast(`Emergency Alert Broadcasted for "${petName}". Pinned on Incident Map.`, 'danger', 5000);
-    }
-
     this.closeModal();
+    if (window.notifManager) {
+      window.notifManager.showDialog({
+        tone: 'success',
+        title: 'Missing pet reported',
+        message: `${petName} is on the Incident Map, and nearby shelters and the community have been alerted.`,
+        rows: [
+          ['Pet', petName],
+          ['Last seen', location],
+          ['When', (() => { const d = new Date(date); return isNaN(d) ? date : d.toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }); })()],
+          ['Your phone', phone]
+        ],
+        actions: [
+          { label: 'View on the map', onClick: () => { window.location.hash = '#owner'; } },
+          { label: 'Done', primary: true }
+        ]
+      });
+    }
 
     if (window.location.hash === '#map' && window.publicView) {
       window.publicView.render(document.getElementById('app-viewport'));

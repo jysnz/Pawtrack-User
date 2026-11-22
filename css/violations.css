@@ -130,3 +130,7 @@ body.vl-sheet-open { overflow: hidden; }
 @keyframes mv-flash { 0%, 60% { box-shadow: 0 0 0 3px var(--primary), 0 0 24px rgba(234, 157, 30, .45); background: var(--primary-light); } 100% { box-shadow: 0 0 0 0 transparent; } }
 .mv-card.mv-flash { animation: mv-flash 3.5s ease-out; }
 @media (prefers-reduced-motion: reduce) { .mv-card.mv-flash { animation: none; box-shadow: 0 0 0 3px var(--primary); } }
+
+/* A violation's details open without the dark screen around them */
+.vl-sheet-wrap { background: transparent; }
+.vl-sheet { box-shadow: 0 18px 50px rgba(0, 0, 0, 0.35), 0 0 0 1px var(--border-glass); }

@@ -10554,3 +10554,39 @@ html[data-theme="light"] .gmap-layer-btn-light { display: none; }
 /* Lets the page notice a browser filling a field by itself (the sign-in form never keeps that) */
 @keyframes pt-autofill-detect { from { opacity: 1; } to { opacity: 1; } }
 .auth-field-input:-webkit-autofill { animation-name: pt-autofill-detect; animation-duration: 0.01s; }
+
+/* ---------- Confirmation / information dialog (notifManager.showDialog) ---------- */
+#pt-dialog-modal { z-index: 4000; }
+.pt-dialog { max-width: 400px; padding: 28px 24px 22px; text-align: center; display: grid; justify-items: center; gap: 10px; }
+.pt-dialog-icon { width: 58px; height: 58px; border-radius: 50%; display: grid; place-items: center; color: #fff; background: #16a34a; box-shadow: 0 0 0 8px color-mix(in srgb, #16a34a 16%, transparent); animation: pt-dialog-pop 0.38s cubic-bezier(0.34, 1.56, 0.64, 1); }
+.pt-dialog-info .pt-dialog-icon { background: var(--primary); color: #1a1206; box-shadow: 0 0 0 8px color-mix(in srgb, var(--primary) 18%, transparent); }
+.pt-dialog-warning .pt-dialog-icon { background: #d97706; box-shadow: 0 0 0 8px color-mix(in srgb, #d97706 18%, transparent); }
+.pt-dialog-icon svg { width: 28px; height: 28px; }
+.pt-dialog h3 { margin: 6px 0 0; font-family: var(--font-heading); font-size: 1.15rem; }
+.pt-dialog-msg { margin: 0; max-width: 34ch; font-size: 0.9rem; line-height: 1.5; color: var(--text-muted); }
+.pt-dialog-rows { width: 100%; margin: 6px 0 0; padding: 4px 14px; display: grid; text-align: left; border-radius: var(--radius-md); background: var(--bg-surface-elevated); border: 1px solid var(--border-subtle); }
+.pt-dialog-rows > div { display: flex; justify-content: space-between; gap: 14px; padding: 9px 0; border-bottom: 1px solid var(--border-subtle); font-size: 0.84rem; }
+.pt-dialog-rows > div:last-child { border-bottom: 0; }
+.pt-dialog-rows dt { color: var(--text-muted); flex: none; }
+.pt-dialog-rows dd { margin: 0; font-weight: 600; text-align: right; overflow-wrap: anywhere; }
+.pt-dialog-actions { width: 100%; display: flex; gap: 8px; margin-top: 10px; }
+.pt-dialog-actions .btn { flex: 1; justify-content: center; }
+@keyframes pt-dialog-pop { from { transform: scale(0.5); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .pt-dialog-icon { animation: none; } }
+
+/* ---------- Form errors that keep the layout intact ---------- */
+.vax-row, .fp-row { align-items: start; }
+.vax-field { align-content: start; }
+.vax-error, .field-error, .fp-error { align-items: flex-start; gap: 6px; margin-top: 2px; padding: 6px 9px; border-radius: 8px; background: color-mix(in srgb, var(--danger) 10%, transparent); font-size: 0.76rem; font-weight: 600; line-height: 1.35; color: var(--danger); animation: pt-error-in 0.16s ease-out; }
+.field-error::before { content: "!"; flex: none; width: 15px; height: 15px; margin-top: 1px; border-radius: 50%; display: grid; place-items: center; background: var(--danger); color: #fff; font-size: 0.66rem; font-weight: 800; }
+.field-error { display: flex; }
+.vax-field.has-error .vax-error, .fp-field.has-error .fp-error { display: flex; }
+.vax-field.has-error .vax-error::before { content: "!"; flex: none; width: 15px; height: 15px; margin-top: 1px; border-radius: 50%; display: grid; place-items: center; background: var(--danger); color: #fff; font-size: 0.66rem; font-weight: 800; }
+@keyframes pt-error-in { from { opacity: 0; transform: translateY(-3px); } to { opacity: 1; transform: none; } }
+
+/* A sidebar item that is switched off for now */
+.role-tab-btn.is-disabled { opacity: 0.45; cursor: not-allowed; filter: grayscale(0.4); }
+.role-tab-btn.is-disabled:hover { background: transparent; transform: none; }
+
+/* Community Sighting Reports: on a wide screen the posts line up with the search box on the left */
+.sfeed-layout .sfeed { margin-left: 0; margin-right: auto; }

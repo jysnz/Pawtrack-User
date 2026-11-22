@@ -109,9 +109,9 @@
             <span class="nav-badge" id="badge-impounds-count" style="display: none;"></span>
           </div>
 
-          <div class="nav-item" data-route="notifs">
-            <span class="nav-item-text">Alerts</span>
-            <span class="nav-badge" id="badge-notifs-count" style="display: none;"></span>
+          <div class="nav-item" data-route="claims">
+            <span class="nav-item-text">Claims</span>
+            <span class="nav-badge" id="badge-claims-count" style="display: none;"></span>
           </div>
 
           <div class="nav-item" data-route="violations">
@@ -354,6 +354,7 @@
                 <label for="admin-signup-position" class="auth-field-label">Position (optional)</label>
                 <input spellcheck="false" type="text" id="admin-signup-position" class="auth-field-input" autocomplete="organization-title" maxlength="120" />
               </div>
+              <div id="admin-signup-avatar-slot"></div>
 
               <p class="al-section">Your account</p>
               <div class="auth-field-box">
@@ -447,6 +448,7 @@
               <label for="admin-register-position" class="auth-field-label">Position (optional)</label>
               <input spellcheck="false" type="text" id="admin-register-position" class="auth-field-input" autocomplete="organization-title" maxlength="120" />
             </div>
+            <div id="admin-register-avatar-slot"></div>
 
             <div id="admin-register-turnstile" class="auth-turnstile auth-turnstile-below"></div>
 
@@ -497,9 +499,11 @@
   <script src="js/views/breakdown-view.js"></script>
   <script src="js/views/shelters-view.js"></script>
   <script src="js/views/notifs-view.js"></script>
+  <script src="js/views/claims-view.js"></script>
   <script src="../js/violations-data.js"></script>
   <script src="js/views/violations-view.js"></script>
   <script src="js/views/settings-view.js"></script>
+  <script src="../js/avatar-picker.js"></script>
   <script src="js/date-picker.js"></script>
   <script src="js/admin-motion.js"></script>
   <script src="js/admin-app.js"></script>

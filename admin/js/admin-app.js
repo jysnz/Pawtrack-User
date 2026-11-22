@@ -75,8 +75,8 @@ class AdminApp {
     const first = recent[0];
     const place = [first.lastSeenBarangay, first.lastSeenCity].filter(Boolean).join(', ') || first.location || 'your area';
     const msg = recent.length === 1
-      ? `${first.petName || 'A pet'} was reported missing in ${place}. Open Alerts for details.`
-      : `${recent.length} pets were reported missing in your area. Open Alerts for details.`;
+      ? `${first.petName || 'A pet'} was reported missing in ${place}. Open Reports for details.`
+      : `${recent.length} pets were reported missing in your area. Open Reports for details.`;
     this.showToast(msg, 'warning', 7000);
   }
 
@@ -387,10 +387,10 @@ class AdminApp {
     };
     // The buttons stay as they are while Turnstile (re)verifies, so the form does not flash grey and back. A click that
     // lands before the token is ready waits a moment for it.
-    const tokenFor = async (key) => {
+    const tokenFor = async (key, waitMs = 12000) => {
       if (turnstileTokens[key]) return turnstileTokens[key];
       setStatus('Finishing the security check…');
-      const until = Date.now() + 12000;
+      const until = Date.now() + waitMs;
       while (!turnstileTokens[key] && Date.now() < until) await new Promise(r => setTimeout(r, 150));
       if (turnstileTokens[key]) setStatus('');
       return turnstileTokens[key] || null;
@@ -461,6 +461,14 @@ class AdminApp {
       if (!account) {
         // Entering the emailed code after Google: stay on that panel
         if (currentPanel === 'otp' && pendingSignup && pendingSignup.google) return;
+        // Signed in from the owner app on this device (no admin sign-in was started here): this person is not an admin
+        // yet, so show the console's own sign-in page, not the "Finish setting up your account" form
+        if (sessionStorage.getItem(FRESH_SIGNIN_KEY) !== '1') {
+          lockConsole('signin');
+          setStatus('');
+          renderSigninTurnstile();
+          return;
+        }
         prefillRegister(user);
         lockConsole('register');
         renderRegisterTurnstile();
@@ -568,6 +576,16 @@ class AdminApp {
       // onAuthStateChange takes it from here
     });
 
+    // Profile picture fields on the sign-up and the finish-setting-up forms
+    if (window.PawAvatar) {
+      window.PawAvatar.mount('admin-signup-avatar-slot', { id: 'admin-signup-avatar', initial: '?' });
+      window.PawAvatar.mount('admin-register-avatar-slot', { id: 'admin-register-avatar', initial: '?' });
+    }
+    // A picture chosen before the account exists waits here and is saved on the account the first time it is signed in
+    const keepPendingPicture = (id) => {
+      try { const pic = window.PawAvatar && window.PawAvatar.value(id); if (pic) sessionStorage.setItem('pawtrack_admin_pending_avatar', pic); } catch (e) { /* not kept */ }
+    };
+
     // ---------- Create account: details -> emailed code -> signed in ----------
     const callAdminOtp = async (payload) => {
       try {
@@ -620,6 +638,7 @@ class AdminApp {
 
       el.signupSubmit.disabled = true;
       setStatus('Sending a verification code to your email…');
+      keepPendingPicture('admin-signup-avatar');
       const sent = await callAdminOtp({ action: 'send', email, birth_date: birthDate, turnstileToken });
       if (sent.status === 409) {
         setStatus(sent.data.error || 'This email already has an admin account. Try logging in instead.', true);
@@ -777,6 +796,7 @@ class AdminApp {
 
       // Google already signed this person in, but they still confirm the 6-digit code emailed to that address
       // before the account is created (the same step email sign-ups go through)
+      keepPendingPicture('admin-register-avatar');
       const email = (user.email || '').toLowerCase();
       const attempt = pendingSignup = {
         google: true, email, birth_date: birthDate, phone,
@@ -788,7 +808,7 @@ class AdminApp {
       showPanel('otp');
       startResendCooldown(0);
       renderOtpTurnstile();
-      const turnstileToken = await tokenFor(el.otpTurnstile.id); // shows "Finishing the security check…" while it runs
+      const turnstileToken = await tokenFor(el.otpTurnstile.id, 45000); // shows "Finishing the security check…" while it runs
       if (pendingSignup !== attempt) return;
       if (!turnstileToken) return setStatus('Complete the security check, then tap "Send again".', true);
       setStatus('Sending a code to your email…');
@@ -831,6 +851,14 @@ class AdminApp {
   }
 
   onAdminSignedIn(account, isFreshSignIn) {
+    // A picture chosen on the sign-up form is saved on the account now that it exists
+    let pending = '';
+    try { pending = sessionStorage.getItem('pawtrack_admin_pending_avatar') || ''; } catch (e) { /* ignore */ }
+    if (pending && !account.avatar_url) {
+      try { sessionStorage.removeItem('pawtrack_admin_pending_avatar'); } catch (e) { /* ignore */ }
+      account.avatar_url = pending;
+      this.supabase.from('admin_accounts').update({ avatar_url: pending }).eq('id', account.id).then(() => {});
+    }
     const alreadyIn = !!this.currentAdmin && this.currentAdmin.id === account.id && !document.body.classList.contains('auth-locked');
     this.currentAdmin = account;
     const screen = document.getElementById('admin-login-screen');
@@ -857,7 +885,10 @@ class AdminApp {
     document.querySelectorAll('.operator-name, .admin-dropdown-name').forEach(el => { el.textContent = name; });
     document.querySelectorAll('.admin-dropdown-role').forEach(el => { el.textContent = account.position || 'LGU Animal Welfare'; });
     document.querySelectorAll('.admin-dropdown-email').forEach(el => { el.textContent = account.email || ''; });
-    document.querySelectorAll('.admin-dropdown-avatar, .operator-avatar').forEach(el => { el.textContent = initials; });
+    const pic = /^(https:\/\/|data:image\/)/.test(account.avatar_url || '') ? account.avatar_url : '';
+    document.querySelectorAll('.admin-dropdown-avatar, .operator-avatar').forEach(el => {
+      if (pic) { el.innerHTML = `<img src="${pic.replace(/"/g, '&quot;')}" alt="" />`; } else { el.textContent = initials; }
+    });
     const avatar = document.getElementById('admin-avatar-trigger');
     if (avatar) avatar.title = `${name} (account menu)`;
   }
@@ -1055,7 +1086,7 @@ class AdminApp {
     // browser's Back button steps through pages and opened details like any other website
     const fullHash = window.location.hash || '#activation';
     const [rawHash, ...detail] = fullHash.replace('#', '').split('/');
-    const validRoutes = ['activation', 'breakdown', 'heatmap', 'reports', 'impoundments', 'shelters', 'notifs', 'violations', 'settings'];
+    const validRoutes = ['activation', 'breakdown', 'heatmap', 'reports', 'impoundments', 'shelters', 'notifs', 'claims', 'violations', 'settings'];
     // The Shelter Terminal was merged into Impoundments: keep old bookmarks working
     if (rawHash === 'terminal') { window.location.replace('#impoundments'); return; }
     this.currentRoute = validRoutes.includes(rawHash) ? rawHash : 'activation';
@@ -1132,6 +1163,9 @@ class AdminApp {
         case 'notifs':
           if (window.NotifsView) window.NotifsView.render(container);
           break;
+        case 'claims':
+          if (window.ClaimsView) window.ClaimsView.render(container);
+          break;
         case 'violations':
           if (window.ViolationsView) window.ViolationsView.render(container);
           break;
@@ -1191,6 +1225,14 @@ class AdminApp {
         impoundBadge.style.display = 'none';
         impoundBadge.classList.remove('danger');
       }
+    }
+
+    // Claims waiting for a decision
+    const claimBadge = document.getElementById('badge-claims-count');
+    if (claimBadge) {
+      const waiting = store.getPendingClaimCount ? store.getPendingClaimCount() : 0;
+      claimBadge.textContent = waiting > 0 ? String(waiting) : '';
+      claimBadge.style.display = waiting > 0 ? 'inline-flex' : 'none';
     }
 
     const notifBadge = document.getElementById('badge-notifs-count');
@@ -1298,6 +1340,116 @@ class AdminApp {
       });
       document.body.appendChild(wrap);
       wrap.querySelector('[data-cf="no"]').focus();
+    });
+  }
+
+  // A confirmation / information dialog (a saved change, a registered facility...). Resolves when it is closed.
+  //   showDialog({ tone: 'success' | 'info' | 'warning', title, message, rows: [[label, value]], actions: [{ label, primary, onClick }] })
+  showDialog({ tone = 'success', title = '', message = '', rows = [], actions = [{ label: 'Done', primary: true }] } = {}) {
+    return new Promise((resolve) => {
+      const esc = (v) => String(v == null ? '' : v).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+      const icon = { success: '<path d="M20 6 9 17l-5-5"/>', info: '<circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/>', warning: '<path d="m21.7 18-8-14a2 2 0 0 0-3.4 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.7-3z"/><path d="M12 9v4M12 17h.01"/>' }[tone] || '';
+      const shown = (rows || []).filter(r => r && r[1] != null && String(r[1]).trim() !== '');
+      const wrap = document.createElement('div');
+      wrap.className = 'cf-backdrop';
+      wrap.innerHTML = `
+        <div class="cf-box dlg-box dlg-${tone}" role="alertdialog" aria-modal="true" aria-labelledby="dlg-title">
+          <span class="dlg-icon" aria-hidden="true"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">${icon}</svg></span>
+          <h2 id="dlg-title">${esc(title)}</h2>
+          ${message ? `<p class="dlg-msg">${esc(message)}</p>` : ''}
+          ${shown.length ? `<dl class="dlg-rows">${shown.map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join('')}</dl>` : ''}
+          <div class="dlg-actions">${actions.map((a, i) => `<button type="button" class="btn ${a.primary ? 'btn-primary' : 'btn-secondary'}" data-dlg="${i}">${esc(a.label)}</button>`).join('')}</div>
+        </div>`;
+      const done = (action) => {
+        document.removeEventListener('keydown', onKey, true);
+        wrap.remove();
+        if (action && typeof action.onClick === 'function') action.onClick();
+        resolve();
+      };
+      const onKey = (e) => { if (e.key === 'Escape') { e.stopPropagation(); done(null); } };
+      document.addEventListener('keydown', onKey, true);
+      wrap.addEventListener('click', (e) => {
+        const btn = e.target.closest('[data-dlg]');
+        if (btn) done(actions[+btn.getAttribute('data-dlg')]);
+        else if (e.target === wrap) done(null);
+      });
+      document.body.appendChild(wrap);
+      wrap.querySelector('[data-dlg]')?.focus();
+    });
+  }
+
+  // Asks the person to prove an email address with a 6-digit code (sent by admin-account-otp). Resolves true once the code
+  // is correct, false if they cancel. Used to confirm a facility's official email before the facility is registered.
+  verifyEmailCode({ email, purpose = 'facility_email', title = 'Confirm the email', intro = '' } = {}) {
+    return new Promise((resolve) => {
+      const esc = (v) => String(v == null ? '' : v).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+      const sb = this.supabase;
+      const wrap = document.createElement('div');
+      wrap.className = 'cf-backdrop';
+      wrap.innerHTML = `
+        <div class="cf-box dlg-box dlg-info" role="dialog" aria-modal="true" aria-labelledby="vc-title">
+          <span class="dlg-icon" aria-hidden="true"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg></span>
+          <h2 id="vc-title">${esc(title)}</h2>
+          <p class="dlg-msg">${esc(intro)} We sent a 6-digit code to <b>${esc(email)}</b>.</p>
+          <form id="vc-form" style="width:100%; display:grid; gap:8px;" novalidate>
+            <input id="vc-code" class="form-control" inputmode="numeric" maxlength="6" autocomplete="one-time-code" placeholder="000000" style="text-align:center; font-size:22px; letter-spacing:0.4em; font-family:var(--font-mono);" />
+            <div id="vc-status" role="status" aria-live="polite" style="min-height:18px; font-size:12px; color:var(--ink-muted);"></div>
+            <div class="dlg-actions">
+              <button type="button" class="btn btn-secondary" id="vc-cancel">Cancel</button>
+              <button type="submit" class="btn btn-primary" id="vc-verify">Verify</button>
+            </div>
+            <button type="button" class="auth-text-btn" id="vc-resend" style="justify-self:center; background:none; border:0; color:var(--brand-terracotta); font-weight:600; cursor:pointer;" disabled>Send again</button>
+          </form>
+        </div>`;
+      document.body.appendChild(wrap);
+      const $ = (id) => wrap.querySelector('#' + id);
+      const say = (t, bad) => { $('vc-status').textContent = t || ''; $('vc-status').style.color = bad ? 'var(--color-red, #dc2626)' : 'var(--ink-muted)'; };
+      let timer = null;
+      const done = (ok) => { clearInterval(timer); document.removeEventListener('keydown', onKey, true); wrap.remove(); resolve(ok); };
+      const onKey = (e) => { if (e.key === 'Escape') { e.stopPropagation(); done(false); } };
+      document.addEventListener('keydown', onKey, true);
+      const call = async (body) => {
+        try {
+          const res = await sb.functions.invoke('admin-account-otp', { body: { purpose, email, ...body } });
+          if (res.error) {
+            let msg = res.error.message;
+            let data = {};
+            try { data = await res.error.context.json(); if (data && data.error) msg = data.error; } catch (e) { /* keep the message */ }
+            return { ok: false, msg, data };
+          }
+          return { ok: true, data: res.data || {} };
+        } catch (e) { return { ok: false, msg: 'No connection. Check your internet and try again.', data: {} }; }
+      };
+      const cooldown = (s) => {
+        clearInterval(timer);
+        let left = s;
+        const tick = () => { const b = $('vc-resend'); if (!b) return; b.disabled = left > 0; b.textContent = left > 0 ? `Send again in ${left}s` : 'Send again'; if (left <= 0) clearInterval(timer); left -= 1; };
+        tick(); timer = setInterval(tick, 1000);
+      };
+      const send = async () => {
+        say('Sending a code…');
+        const r = await call({ action: 'send' });
+        if (!r.ok) { say(r.msg, true); cooldown((r.data && r.data.retryAfter) || 5); return false; }
+        say('Code sent. Check the inbox of that address.');
+        cooldown((r.data && r.data.resendInSeconds) || 60);
+        return true;
+      };
+      $('vc-cancel').addEventListener('click', () => done(false));
+      $('vc-resend').addEventListener('click', send);
+      $('vc-code').addEventListener('input', (e) => { e.target.value = e.target.value.replace(/\D/g, '').slice(0, 6); if (e.target.value.length === 6) $('vc-form').requestSubmit(); });
+      $('vc-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const code = $('vc-code').value.trim();
+        if (!/^\d{6}$/.test(code)) { say('Enter the 6-digit code from your email.', true); return; }
+        $('vc-verify').disabled = true;
+        say('Verifying…');
+        const r = await call({ action: 'verify', code });
+        $('vc-verify').disabled = false;
+        if (!r.ok) { say(r.msg, true); $('vc-code').select(); return; }
+        done(true);
+      });
+      send();
+      setTimeout(() => $('vc-code').focus(), 60);
     });
   }
 
@@ -1707,7 +1859,7 @@ class AdminApp {
       { label: 'Impoundments: pets in holding and claim deadlines', route: 'impoundments', cat: 'Navigation' },
       { label: 'Scan Tag & Log Intake (Impoundments)', route: 'impoundments', cat: 'Navigation' },
       { label: 'Facilities: Add and Manage', route: 'shelters', cat: 'Navigation' },
-      { label: 'Dispatch Emergency Broadcast', route: 'notifs', cat: 'Navigation' },
+      { label: 'Review owner claims', route: 'claims', cat: 'Navigation' },
       { label: 'Violations: ordinance provisions and fines', route: 'violations', cat: 'Navigation' },
       { label: 'Municipal Settings & JSON Backup', route: 'settings', cat: 'Navigation' },
       { label: 'Scan & intake a pet', action: 'intake', cat: 'Actions' },

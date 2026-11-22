@@ -325,6 +325,7 @@ class ImpoundView {
   }
 
   drawPets() {
+    if (!this._claimsLoaded) { this._claimsLoaded = true; this.loadClaims(); } // which animals this person already claimed
     const all = this.impounds().filter((i) => i.shelterId === this.facilityId);
     const holdingAll = all.filter((i) => this.isHolding(i));
     this.countUp(this.container.querySelector('#ip-s1'), holdingAll.length);
@@ -384,7 +385,15 @@ class ImpoundView {
       b.setAttribute('aria-expanded', String(open));
       b.querySelector('span').textContent = open ? 'Hide details' : 'Details';
     }));
-    out.querySelectorAll('.ip-pet-photo-btn').forEach((b) => b.addEventListener('click', () => this.lightbox(b.dataset.src, b.dataset.name)));
+    out.querySelectorAll('.ip-pet-photo-btn').forEach((b) => b.addEventListener('click', (e) => { e.stopPropagation(); this.lightbox(b.dataset.src, b.dataset.name); }));
+    // Tapping an animal opens its details and the claim button
+    out.querySelectorAll('.ip-pet').forEach((card) => {
+      card.classList.add('is-tappable');
+      card.addEventListener('click', (e) => {
+        if (e.target.closest('.ip-more, .ip-pet-photo-btn')) return;
+        this.openPet(card.dataset.id);
+      });
+    });
   }
 
   petCard(i, n) {
@@ -403,7 +412,7 @@ class ImpoundView {
     const where = i.impoundLocation || i.location;
     const icon = this.speciesOf(i) === 'Cat' ? '🐈' : this.speciesOf(i) === 'Dog' ? '🐕' : '🐾';
     return `
-      <article class="ip-pet ${open ? 'is-open' : ''} ${this.closingSoon(i) ? 'is-urgent' : ''}" style="--i:${Math.min(n, 11)}">
+      <article class="ip-pet ${open ? 'is-open' : ''} ${this.closingSoon(i) ? 'is-urgent' : ''}" data-id="${this.esc(i.id)}" style="--i:${Math.min(n, 11)}">
         ${photo
           ? `<button type="button" class="ip-pet-photo ip-pet-photo-btn" data-src="${this.esc(photo)}" data-name="${this.esc(name)}" aria-label="View a larger photo of ${this.esc(name)}"><img src="${this.esc(photo)}" alt="" loading="lazy" /></button>`
           : `<div class="ip-pet-photo is-empty"><span aria-hidden="true">${icon}</span></div>`}
@@ -413,7 +422,7 @@ class ImpoundView {
             ${kennel ? `<span class="ip-kennel">${this.esc(kennel)}</span>` : ''}
           </div>
           <p class="ip-pet-sub">${this.esc([i.species, i.breed].filter(Boolean).join(' · ') || 'Animal')}</p>
-          <div class="ip-pet-chips">${claim}${status}</div>
+          <div class="ip-pet-chips">${claim}${status}${this.claimChip(i.id)}</div>
           <p class="ip-pet-note">${this.esc(i.healthCondition || 'No health notes recorded.')}</p>
           <div class="ip-pet-more-wrap"><dl class="ip-pet-more">
             <div><dt>Taken in</dt><dd>${this.esc(this.fmtDateTime(i.intakeDate) || 'Unknown')}</dd></div>
@@ -423,6 +432,157 @@ class ImpoundView {
           <button type="button" class="ip-more" data-id="${this.esc(i.id)}" aria-expanded="${open}"><span>${open ? 'Hide details' : 'Details'}</span><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
         </div>
       </article>`;
+  }
+
+  // ---------------------------------------------------------------- claiming an animal
+  client() { return (window.pawApp && window.pawApp.supabase) || null; }
+
+  // What this person has already claimed: { impoundId: 'pending' | 'accepted' | 'rejected' }
+  async loadClaims() {
+    const user = window.pawStore && window.pawStore.getGoogleUser();
+    const sb = this.client();
+    this.claims = this.claims || {};
+    if (!user || !user.id || !sb) return;
+    const { data, error } = await sb.from('impound_claims').select('impound_id, status, created_at').eq('claimant_id', user.id).order('created_at', { ascending: true });
+    if (error) return;
+    const next = {};
+    (data || []).forEach((c) => { next[c.impound_id] = c.status; });
+    const changed = JSON.stringify(next) !== JSON.stringify(this.claims);
+    this.claims = next;
+    if (changed && this.facilityId && this.container && this.container.querySelector('#ip-results')) this.drawPets();
+  }
+
+  claimChip(id) {
+    const status = this.claims && this.claims[id];
+    if (!status) return '';
+    const label = { pending: 'Claim sent', accepted: 'Claim accepted', rejected: 'Claim not approved' }[status];
+    return `<span class="ip-chip ${status === 'accepted' ? 'is-ok' : status === 'rejected' ? 'is-late' : 'is-soon'}">${label}</span>`;
+  }
+
+  openPet(id) {
+    const i = this.impounds().find((x) => String(x.id) === String(id));
+    if (!i) return;
+    this.loadClaims().then(() => { if (this.petModalId === id) this.renderPetModal(i); });
+    this.petModalId = id;
+    let overlay = document.getElementById('ip-pet-modal');
+    if (!overlay) {
+      overlay = document.createElement('div');
+      overlay.className = 'modal-overlay';
+      overlay.id = 'ip-pet-modal';
+      overlay.addEventListener('mousedown', (e) => { if (e.target === overlay) this.closePetModal(); });
+      document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && overlay.classList.contains('active')) this.closePetModal(); });
+      document.body.appendChild(overlay);
+    }
+    this.renderPetModal(i);
+    window.notifManager.openModal('ip-pet-modal');
+  }
+
+  closePetModal() {
+    this.petModalId = null;
+    window.notifManager.closeModal('ip-pet-modal');
+  }
+
+  renderPetModal(i, step = 'details') {
+    const overlay = document.getElementById('ip-pet-modal');
+    if (!overlay) return;
+    const photo = this.safePhoto(i.photoUrl);
+    const holding = this.isHolding(i);
+    const user = window.pawStore.getGoogleUser();
+    const shelter = this.shelters().find((s) => s.id === i.shelterId) || {};
+    const status = this.claims && this.claims[i.id];
+    const name = i.petName || 'Unidentified animal';
+    const h = this.hoursLeft(i);
+    const expired = holding && h != null && h <= 0;
+    let action;
+    if (!holding) action = '<p class="ip-claim-note">This animal is no longer in holding.</p>';
+    else if (status === 'pending') action = '<p class="ip-claim-note is-pending"><b>Claim sent.</b> The facility will review it and email you the result.</p>';
+    else if (status === 'accepted') action = '<p class="ip-claim-note is-ok"><b>Your claim was accepted.</b> Go to the facility and print your Digital NFC card from My Pets.</p><button type="button" class="btn btn-primary" id="ip-go-pets">Open My Pets</button>';
+    else if (expired) action = '<p class="ip-claim-note">The claim window for this animal has ended. Contact the facility.</p>';
+    else if (!user || !user.id) action = '<button type="button" class="btn btn-primary" id="ip-login">Log in to claim</button>';
+    else action = `<button type="button" class="btn btn-primary" id="ip-claim"><i data-lucide="heart-handshake"></i> This is my pet, claim it</button>${status === 'rejected' ? '<p class="ip-claim-note is-late">Your earlier claim was not approved. You can send a new one.</p>' : ''}`;
+
+    const rows = [
+      ['Species', [i.species, i.breed].filter(Boolean).join(' · ')],
+      ['Kennel', i.kennel || i.cageNumber],
+      ['Taken in', this.fmtDateTime(i.intakeDate)],
+      holding ? ['Claim by', this.fmtDateTime(i.claimDeadline)] : null,
+      ['Found at', i.impoundLocation || i.location],
+      ['Health', i.healthCondition],
+      ['Held at', shelter.name || i.shelterName],
+      ['Facility phone', shelter.phone]
+    ].filter((r) => r && r[1]);
+
+    if (step === 'form') {
+      overlay.innerHTML = `
+        <div class="modal-box ip-pet-modal" role="dialog" aria-modal="true" aria-labelledby="ip-claim-title">
+          <div class="modal-header"><h3 id="ip-claim-title">Claim ${this.esc(name)}</h3><button type="button" class="btn-outline btn-sm" id="ip-x" aria-label="Close">&times;</button></div>
+          <form class="modal-body ip-claim-form" id="ip-claim-form" novalidate>
+            <p class="ip-claim-note">Tell the facility how to reach you and how you know this is your pet. They review every claim before releasing an animal.</p>
+            <div class="vax-field" id="ipc-phone-field"><label for="ipc-phone">Your mobile number *</label><input id="ipc-phone" inputmode="tel" maxlength="20" value="${this.esc((user && user.phone) || '')}" placeholder="0917 123 4567" /><span class="vax-error">Enter a valid Philippine mobile number.</span></div>
+            <div class="vax-field" id="ipc-msg-field"><label for="ipc-msg">How do you know it's yours? <span class="vax-opt">(optional)</span></label><textarea id="ipc-msg" maxlength="600" rows="4" placeholder="Name, markings, collar, where it was lost..."></textarea></div>
+            <div class="vax-msg" id="ipc-error" role="alert" hidden></div>
+            <div class="modal-footer ip-claim-actions"><button type="button" class="btn btn-outline" id="ip-back">Back</button><button type="submit" class="btn btn-primary" id="ip-send">Send claim</button></div>
+          </form>
+        </div>`;
+      overlay.querySelector('#ip-x').addEventListener('click', () => this.closePetModal());
+      overlay.querySelector('#ip-back').addEventListener('click', () => this.renderPetModal(i));
+      overlay.querySelector('#ip-claim-form').addEventListener('submit', (e) => { e.preventDefault(); this.sendClaim(i); });
+      return;
+    }
+
+    overlay.innerHTML = `
+      <div class="modal-box ip-pet-modal" role="dialog" aria-modal="true" aria-labelledby="ip-pet-title">
+        <div class="modal-header"><h3 id="ip-pet-title">${this.esc(name)}</h3><button type="button" class="btn-outline btn-sm" id="ip-x" aria-label="Close">&times;</button></div>
+        <div class="modal-body">
+          ${photo ? `<img class="ip-pet-modal-photo" src="${this.esc(photo)}" alt="${this.esc(name)}" />` : '<div class="ip-pet-modal-photo is-empty"><i data-lucide="paw-print"></i></div>'}
+          <dl class="ip-pet-modal-rows">${rows.map(([k, v]) => `<div><dt>${this.esc(k)}</dt><dd>${this.esc(v)}</dd></div>`).join('')}</dl>
+          <div class="ip-claim-box">${action}</div>
+        </div>
+      </div>`;
+    overlay.querySelector('#ip-x').addEventListener('click', () => this.closePetModal());
+    overlay.querySelector('#ip-claim')?.addEventListener('click', () => this.renderPetModal(i, 'form'));
+    overlay.querySelector('#ip-login')?.addEventListener('click', () => { this.closePetModal(); if (window.pawApp && window.pawApp.openLoginDialog) window.pawApp.openLoginDialog(); });
+    overlay.querySelector('#ip-go-pets')?.addEventListener('click', () => { this.closePetModal(); window.location.hash = '#pets'; });
+    if (window.lucide) window.lucide.createIcons({ root: overlay });
+  }
+
+  async sendClaim(i) {
+    const overlay = document.getElementById('ip-pet-modal');
+    const user = window.pawStore.getGoogleUser();
+    const sb = this.client();
+    const phoneBox = overlay.querySelector('#ipc-phone');
+    const phone = phoneBox.value.replace(/[\s\-().]/g, '');
+    const ok = /^(\+?63|0)9\d{9}$/.test(phone);
+    overlay.querySelector('#ipc-phone-field').classList.toggle('has-error', !ok);
+    if (!ok) { phoneBox.focus(); return; }
+    const err = overlay.querySelector('#ipc-error');
+    err.hidden = true;
+    const btn = overlay.querySelector('#ip-send');
+    btn.disabled = true;
+    const { error } = await sb.from('impound_claims').insert({
+      impound_id: i.id,
+      claimant_id: user.id,
+      claimant_name: user.name || 'PawTrack guardian',
+      claimant_email: user.email,
+      claimant_phone: phone,
+      message: overlay.querySelector('#ipc-msg').value.trim() || null
+    });
+    if (error) {
+      btn.disabled = false;
+      err.textContent = error.code === '23505' ? 'You already sent a claim for this animal. The facility will email you its decision.' : `Could not send your claim: ${error.message}`;
+      err.hidden = false;
+      return;
+    }
+    this.claims = { ...(this.claims || {}), [i.id]: 'pending' };
+    this.closePetModal();
+    this.drawPets();
+    window.notifManager.showDialog({
+      tone: 'success',
+      title: 'Claim sent',
+      message: 'The facility will review your claim. You will get an email when it is accepted or rejected.',
+      rows: [['Animal', i.petName || 'Unidentified animal'], ['Facility', i.shelterName], ['Your phone', phone]],
+      actions: [{ label: 'Done', primary: true }]
+    });
   }
 
   // ---------------------------------------------------------------- photo viewer

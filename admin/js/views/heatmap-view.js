@@ -493,6 +493,10 @@ window.HeatmapView = {
               ${[1, 2, 3, 4, 5, 6].map(n => `<option value="District ${n}">District ${n}</option>`).join('')}
             </select>
           </div>
+          <div class="hm-field" id="hm-brgy-field" hidden>
+            <span class="hm-label">Barangay</span>
+            <select id="select-barangay-filter" class="hm-select" aria-label="Go to a barangay"></select>
+          </div>
           <div class="hm-field hm-field-search">
             <span class="hm-label">Search</span>
             <div class="filter-search-box hm-search">
@@ -572,6 +576,21 @@ window.HeatmapView = {
     const showDistricts = this.isQuezonCity(scope) && !(scope && scope.barangays.length);
     if (dsField) dsField.hidden = !showDistricts;
     if (!showDistricts && this.selectedDistrict !== 'all') this.selectedDistrict = 'all';
+
+    // A sub-facility that covers several barangays gets a dropdown to move the map between them
+    const brgyField = root.querySelector('#hm-brgy-field');
+    const brgySel = root.querySelector('#select-barangay-filter');
+    if (brgyField && brgySel) {
+      const list = scope ? scope.barangays : [];
+      brgyField.hidden = list.length < 2;
+      const key = list.join('|');
+      if (brgySel.dataset.key !== key) {
+        brgySel.dataset.key = key;
+        brgySel.innerHTML = `<option value="">All covered barangays</option>${list.map(n => `<option value="${this.esc(n)}">${this.esc(n)}</option>`).join('')}`;
+        this.selectedBarangay = '';
+      }
+      brgySel.value = this.selectedBarangay || '';
+    }
 
     // Toolbar state
     const rg = root.querySelector('#select-range-filter'); if (rg) rg.value = this.selectedDateRange;
@@ -665,6 +684,7 @@ window.HeatmapView = {
       if (e.target.id === 'select-animal-filter') { this.selectedAnimal = e.target.value; rerender(); }
       if (e.target.id === 'select-status-filter') { this.selectedStatus = e.target.value; rerender(); }
       else if (e.target.id === 'select-district-filter') { this.selectedDistrict = e.target.value; rerender(); }
+      else if (e.target.id === 'select-barangay-filter') { this.selectedBarangay = e.target.value; this.goToBarangay(e.target.value); }
       else if (e.target.id === 'select-sort') { this.sortBy = e.target.value; this.refresh(); }
     });
 
@@ -849,6 +869,38 @@ window.HeatmapView = {
     } else if (tries < 24) {
       setTimeout(() => { if (this.gmap === g) this.frameScope(b, tries + 1); }, 250); // the page is still laying out
     }
+  },
+
+  // Moves the map to a covered barangay. The place is looked up once (Google, else OpenStreetMap) and remembered.
+  async goToBarangay(name) {
+    if (!this.gmap) return;
+    if (!name) { this._noFitUntil = 0; this._fitKey = ''; return this.fitToIncidents(this.getFilteredIncidents(), true); }
+    const scope = this.scope();
+    this._brgyCache = this._brgyCache || {};
+    const query = `${name}, ${scope && scope.city ? scope.city + ', ' : ''}Philippines`;
+    let spot = this._brgyCache[query];
+    if (!spot) {
+      try {
+        await window.PawGoogleMaps.load();
+        const { Geocoder } = await google.maps.importLibrary('geocoding');
+        const { results } = await new Geocoder().geocode({ address: query, region: 'ph' });
+        if (results && results[0]) {
+          const loc = results[0].geometry.location;
+          spot = { lat: loc.lat(), lng: loc.lng(), viewport: results[0].geometry.viewport ? results[0].geometry.viewport.toJSON() : null };
+        }
+      } catch (e) { /* fall through to the other lookup */ }
+      if (!spot) {
+        try {
+          const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(query)}`);
+          const hit = (await res.json())[0];
+          if (hit) spot = { lat: +hit.lat, lng: +hit.lon, viewport: null };
+        } catch (e) { /* offline */ }
+      }
+      if (spot) this._brgyCache[query] = spot;
+    }
+    if (!spot) { window.adminApp && window.adminApp.showToast(`Could not find ${name} on the map.`, 'warning'); return; }
+    this._noFitUntil = Date.now() + 8000; // a re-render must not undo the move
+    if (spot.viewport) this.gmap.fitBounds(spot.viewport, 20); else { this.gmap.panTo({ lat: spot.lat, lng: spot.lng }); this.gmap.setZoom(15); }
   },
 
   // Keeps the map inside the facility's scope (its city or the area around it); nothing is drawn on the map for it
