@@ -204,18 +204,29 @@ window.IntakeModal = {
         </button>
       </div>
       <div id="in-nfc" class="trm-nfc" role="status" aria-live="polite" hidden><i aria-hidden="true"></i><span></span></div>
+      <form class="trm-scan-form trm-code-form" id="in-code-form" style="margin-top:12px;" autocomplete="off">
+        <input type="text" class="form-control" id="in-code" maxlength="60" placeholder="Or type the tag code (e.g. PT-ABC12345)" aria-label="Tag code" />
+        <button type="submit" class="btn btn-secondary">Look up</button>
+      </form>
       ${this.facilityPickHtml() ? `<div style="margin-top:14px;">${this.facilityPickHtml()}</div>` : ''}
       <p class="trm-notag">Pet has no tag? <button type="button" class="trm-link" id="in-notag">Log it without NFC</button></p>`;
 
     body.querySelector('#in-nfc-btn').addEventListener('click', () => (this.nfc.state === 'scanning' ? this.stopNfc() : this.startNfc()));
     body.querySelector('#in-notag').addEventListener('click', () => this.showForm(null));
+    body.querySelector('#in-code-form').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const payload = this.manualPayload(body.querySelector('#in-code').value);
+      if (!payload) { this.setNfc('error', 'Type the tag code first.'); return; }
+      this.stopNfc();
+      this.showForm(payload);
+    });
     this.bindFacility(body);
     this.paintNfc();
   },
 
   // ----- Step 2: the form, already filled in -----
   showForm(payload) {
-    this.stopNfc();
+    this.holdNfc();
     this.draft = this.buildDraft(payload, this.facilityId);
     if (payload && window.adminStore.logAction) {
       window.adminStore.logAction('Intake Scan', this.draft.petId ? `Tag ${this.draft.tag} read for ${this.draft.petName}` : `Unregistered tag ${this.draft.tag} read`);
@@ -503,8 +514,19 @@ window.IntakeModal = {
   },
 
   // ===== NFC: tap a tag on this device (Web NFC: Chrome on Android, over HTTPS) =====
+  isBrave() {
+    return !!(navigator.brave && typeof navigator.brave.isBrave === 'function');
+  },
+
   nfcSupported() {
-    return 'NDEFReader' in window && !(navigator.brave && typeof navigator.brave.isBrave === 'function');
+    return 'NDEFReader' in window && !this.isBrave();
+  },
+
+  // Why this device cannot scan, in the same words as the owner app
+  unsupportedText() {
+    if (this.isBrave()) return 'Brave does not support NFC scanning. Open this page in Chrome on Android to scan tags, or type the tag code below.';
+    if (window.isSecureContext === false) return 'NFC scanning needs a secure (HTTPS) page. Open the console over HTTPS, or type the tag code below.';
+    return 'This device cannot read NFC tags (Web NFC works in Chrome on Android over HTTPS). Type the tag code below instead.';
   },
 
   setNfc(state, text) {
@@ -536,14 +558,22 @@ window.IntakeModal = {
     return !!(this.root && this.root.querySelector('#in-body') && (!backdrop || backdrop.classList.contains('open')));
   },
 
+  // Once a pet is on the form, further taps are ignored. The reader stays open on purpose (so a tap cannot launch the
+  // tag's web page on this device) but nothing it reads changes the form. "Scan again" or closing the dialog ends it.
+  holdNfc() {
+    this.locked = !!this._abort;
+    if (this.nfc.state !== 'idle') this.setNfc('idle');
+  },
+
   stopNfc() {
+    this.locked = false;
     if (this._abort) { this._abort.abort(); this._abort = null; }
     if (this.nfc.state !== 'idle') this.setNfc('idle');
   },
 
   async startNfc() {
     if (!this.nfcSupported()) {
-      this.setNfc('error', 'This device cannot read NFC. Use Chrome on Android over HTTPS, or type the tag code.');
+      this.setNfc('error', this.unsupportedText());
       return;
     }
     this.stopNfc();
@@ -568,12 +598,14 @@ window.IntakeModal = {
       reader.addEventListener('reading', (event) => {
         // The dialog was closed while a read was on its way
         if (abort.signal.aborted || !this.isOpen()) { this.stopNfc(); return; }
+        if (this.locked) return; // a pet is already on the form
         const payload = this.parseTag(event.message, event.serialNumber);
         if (!payload) { this.setNfc('scanning', 'That tag has no ID. Try another tag.'); return; }
         if (navigator.vibrate) navigator.vibrate(30);
         this.showForm(payload);
       });
       reader.addEventListener('readingerror', () => {
+        if (this.locked) return;
         this.setNfc('scanning', 'Could not read the tag. Hold it flat against the back of the device and keep still.');
         if (navigator.vibrate) navigator.vibrate(80);
       });
