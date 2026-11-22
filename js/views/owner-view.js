@@ -50,27 +50,27 @@ class OwnerView {
           <div class="impound-details-grid">
             <div class="detail-item">
               <span class="detail-label">Holding Facility</span>
-              <span class="detail-value">${activeImpoundment.shelterName}</span>
+              <span class="detail-value">${this.esc(activeImpoundment.shelterName)}</span>
             </div>
             <div class="detail-item">
               <span class="detail-label">Facility Address</span>
-              <span class="detail-value">${activeImpoundment.shelterAddress}</span>
+              <span class="detail-value">${this.esc(activeImpoundment.shelterAddress || 'Ask the facility')}</span>
             </div>
             <div class="detail-item">
               <span class="detail-label">Kennel / Cage ID</span>
-              <span class="detail-value" style="color:var(--primary); font-weight:700;">${activeImpoundment.cageNumber}</span>
+              <span class="detail-value" style="color:var(--primary); font-weight:700;">${this.esc(activeImpoundment.cageNumber || 'Ask the facility')}</span>
             </div>
             <div class="detail-item">
               <span class="detail-label">Impound Location</span>
-              <span class="detail-value">${activeImpoundment.impoundLocation || activeImpoundment.shelterAddress || 'Metro Manila Facility'}</span>
+              <span class="detail-value">${this.esc(activeImpoundment.impoundLocation || activeImpoundment.shelterAddress || 'Metro Manila Facility')}</span>
             </div>
             <div class="detail-item">
               <span class="detail-label">Health & Notes</span>
-              <span class="detail-value" style="font-size:0.82rem;">${activeImpoundment.healthCondition || 'Healthy, vaccinated status verified.'}</span>
+              <span class="detail-value" style="font-size:0.82rem;">${this.esc(activeImpoundment.healthCondition || 'Healthy, vaccinated status verified.')}</span>
             </div>
             <div class="detail-item">
               <span class="detail-label">Hotline</span>
-              <span class="detail-value" style="color:var(--primary); font-weight:700;">${activeImpoundment.shelterPhone}</span>
+              <span class="detail-value" style="color:var(--primary); font-weight:700;">${this.esc(activeImpoundment.shelterPhone || 'Ask the facility')}</span>
             </div>
           </div>
 
