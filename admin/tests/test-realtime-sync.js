@@ -25,7 +25,7 @@ const channel = {
 };
 const fakeSb = {
   channel: () => channel,
-  from: (t) => { const q = { select: () => q, order: () => q, limit: () => q, eq: () => q, in: () => q, then: (ok) => { queries++; return Promise.resolve(failing ? { data: null, error: { message: 'down' } } : { data: rows[t] || [], error: null }).then(ok); } }; return q; },
+  from: (t) => { const q = { select: () => q, order: () => q, limit: () => q, range: () => q, eq: () => q, in: () => q, then: (ok) => { queries++; return Promise.resolve(failing ? { data: null, error: { message: 'down' } } : { data: rows[t] || [], error: null }).then(ok); } }; return q; },
   rpc: async () => ({ data: 0, error: null })
 };
 window.adminApp = { currentAdmin: { id: 'a', shelter_id: ID, facility_role: 'manager' }, supabase: fakeSb, refreshAccount: async () => {}, showToast() {} };

@@ -268,15 +268,30 @@ class AdminStore {
     {
       const sb = await this.waitForClient();
       if (!sb) { this.syncFailures = (this.syncFailures || 0) + 1; this.setStatus('offline'); this.schedulePoll(); return false; }
+      // The API hands back at most 1000 rows per request and does not say when it cut the list short, so the lists
+      // that grow with the number of guardians are read page by page (otherwise rows past 1000 would silently vanish)
+      const pageAll = async (table, orderBy) => {
+        const PAGE = 1000, MAX_PAGES = 50; // 50,000 rows is far past what one console should hold in memory
+        let rows = [];
+        for (let i = 0; i < MAX_PAGES; i++) {
+          const { data, error } = await sb.from(table).select('*')
+            .order(orderBy, { ascending: false }).order('id', { ascending: false })
+            .range(i * PAGE, (i + 1) * PAGE - 1);
+          if (error) return { error };
+          rows = rows.concat(data || []);
+          if (!data || data.length < PAGE) break;
+        }
+        return { data: rows };
+      };
       const [pets, reports, sightings, impounded, shelters, tags, notifs, tickets, extraMains] = await Promise.all([
-        sb.from('registered_pets').select('*').order('created_at', { ascending: false }),
-        sb.from('missing_pets').select('*').order('created_at', { ascending: false }),
+        pageAll('registered_pets', 'created_at'),
+        pageAll('missing_pets', 'created_at'),
         sb.from('community_sightings').select('*').order('created_at', { ascending: false }).limit(1000),
-        sb.from('impounded_pets').select('*').order('intake_at', { ascending: false }),
-        sb.from('shelters').select('*').order('name'),
-        sb.from('nfc_tags').select('*').order('created_at', { ascending: false }),
+        pageAll('impounded_pets', 'intake_at'),
+        sb.from('shelters').select('*').order('name').limit(1000),
+        pageAll('nfc_tags', 'created_at'),
         sb.from('notifications').select('*').order('created_at', { ascending: false }).limit(300),
-        sb.from('penalty_tickets').select('*').order('created_at', { ascending: false }),
+        pageAll('penalty_tickets', 'created_at'),
         sb.from('facility_extra_mains').select('shelter_id')
       ].map((p) => Promise.resolve(p).catch((error) => ({ error }))));
 

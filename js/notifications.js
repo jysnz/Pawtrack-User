@@ -53,7 +53,7 @@ class NotificationManager {
 
     let icon = 'info';
     if (type === 'success') icon = 'check-circle';
-    if (type === 'danger') icon = 'alert-triangle';
+    if (type === 'danger' || type === 'error') icon = 'alert-triangle';
     if (type === 'warning') icon = 'alert-circle';
 
     toast.innerHTML = `
@@ -61,7 +61,7 @@ class NotificationManager {
         <i data-lucide="${icon}"></i>
       </div>
       <div style="flex:1;">
-        <div style="font-size:0.875rem; font-weight:500;">${message}</div>
+        <div style="font-size:0.875rem; font-weight:500;">${this.escHtml(message)}</div>
       </div>
       <button style="color:var(--text-muted); font-size:1.1rem; line-height:1; padding:4px;" onclick="this.parentElement.remove()" aria-label="Close">&times;</button>
     `;

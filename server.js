@@ -72,7 +72,6 @@ const server = http.createServer((req, res) => {
       try {
         const payload = body ? JSON.parse(body) : {};
         const result = autoSync.performSync(payload.message);
-        broadcastSSE({ type: 'git_synced', result, timestamp: Date.now() });
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify(result));
       } catch (err) {

@@ -24,7 +24,7 @@ const rows = {
 };
 let queries = 0;
 const fakeSb = {
-  from: (t) => { const q = { select: () => q, order: () => q, limit: () => q, eq: () => q, in: () => q, then: (ok) => { queries++; return Promise.resolve({ data: rows[t] || [], error: null }).then(ok); } }; return q; },
+  from: (t) => { const q = { select: () => q, order: () => q, limit: () => q, range: () => q, eq: () => q, in: () => q, then: (ok) => { queries++; return Promise.resolve({ data: rows[t] || [], error: null }).then(ok); } }; return q; },
   rpc: async () => ({ data: 0, error: null })
 };
 

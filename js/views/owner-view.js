@@ -149,7 +149,7 @@ class OwnerView {
           ${heroLeftHtml}
         </div>
         <div class="${statsGridClass}">
-          ${this.renderHeroStatCards(pets, t, showAlerts('lost'))}
+          ${this.renderHeroStatCards(pets, t, showAlerts('lost'), mapPets)}
         </div>
       </div>
     ` : summaryHtml;
@@ -271,7 +271,7 @@ class OwnerView {
   }
 
   // Stat cards shown beside the impoundment notice
-  renderHeroStatCards(pets, t, showAlerts) {
+  renderHeroStatCards(pets, t, showAlerts, mapPets = pets) {
     return `
           <div class="stat-card glass-card" data-label="${t('owner.statTotalPets', 'Total Registered Pets')}" title="Click to view all registered pets in Sightings" style="cursor:pointer;" onclick="window.location.hash='#sightings';">
             <div class="stat-icon" style="background:linear-gradient(135deg, #ea9d1e, #b85410); color:#180d07;">

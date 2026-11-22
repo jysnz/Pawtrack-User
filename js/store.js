@@ -207,11 +207,39 @@ class Store {
     return this.client();
   }
 
+  // Keeps the local copy fresh without flooding the database when many people have the app open at once:
+  //  - every poll is spread out with random jitter, so thousands of tabs never hit Supabase in the same second
+  //  - hidden tabs do not poll at all, and one that comes back to the front catches up (at most once every 10 s)
+  //  - after a failed load the wait grows (x2, up to 5 min) and returns to normal once a load works again
+  //  - only one load runs at a time per tab
   startSupabaseSync() {
-    this.syncFromSupabase();
-    this.pollTimer = setInterval(() => { if (!document.hidden) this.syncFromSupabase(); }, 20000);
-    if (this.pollTimer && this.pollTimer.unref) this.pollTimer.unref(); // tests running in Node can exit
-    document.addEventListener('visibilitychange', () => { if (!document.hidden) this.syncFromSupabase(); });
+    const BASE_MS = 30000, MAX_MS = 300000;
+    this.syncFailures = 0;
+    this.lastSyncAt = 0;
+    const nextDelay = () => {
+      const base = Math.min(MAX_MS, BASE_MS * Math.pow(2, Math.min(this.syncFailures, 4)));
+      return base * (0.8 + Math.random() * 0.4); // +/- 20 %
+    };
+    const tick = async () => {
+      this.pollTimer = null;
+      if (!document.hidden) await this.runPollSync();
+      this.pollTimer = setTimeout(tick, nextDelay());
+      if (this.pollTimer && this.pollTimer.unref) this.pollTimer.unref(); // tests running in Node can exit
+    };
+    this.runPollSync();
+    this.pollTimer = setTimeout(tick, nextDelay());
+    if (this.pollTimer && this.pollTimer.unref) this.pollTimer.unref();
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden && Date.now() - this.lastSyncAt > 10000) this.runPollSync();
+    });
+  }
+
+  async runPollSync() {
+    let ok = false;
+    try { ok = await this.syncFromSupabase(); } catch (e) { ok = false; }
+    this.lastSyncAt = Date.now();
+    this.syncFailures = ok ? 0 : Math.min((this.syncFailures || 0) + 1, 10);
+    return ok;
   }
 
   // Loads the public lists (missing reports, sightings, shelters, impounds) and, when signed in, the guardian's own
@@ -225,9 +253,9 @@ class Store {
       const signedIn = !!(user && user.id);
       const none = Promise.resolve({ data: [] });
       const [reports, sightings, shelters, impounded, pets, notifs, reunited, contacts] = await Promise.all([
-        sb.from('missing_pets').select('*').in('status', ['missing', 'sighted']).order('last_seen_at', { ascending: false }),
+        sb.from('missing_pets').select('*').in('status', ['missing', 'sighted']).order('last_seen_at', { ascending: false }).limit(500),
         sb.from('community_sightings').select('*').order('created_at', { ascending: false }).limit(500),
-        sb.from('shelters').select('*').order('name'),
+        sb.from('shelters').select('*').order('name').limit(500),
         sb.from('impounded_pets').select('*').order('intake_at', { ascending: false }).limit(200),
         // Filter by owner here too: an account that is also an approved admin can read every pet through RLS
         signedIn ? sb.from('registered_pets').select('*').eq('owner_id', user.id).order('created_at') : none,
@@ -245,7 +273,15 @@ class Store {
         localStorage.setItem(key, next);
         changed = true;
       };
-      const warn = (what, res) => { if (res && res.error) console.warn(`[Store] Could not load ${what}:`, res.error.message || res.error); };
+      const warn = (what, res) => {
+        if (!res || !res.error) return;
+        console.warn(`[Store] Could not load ${what}:`, res.error.message || res.error);
+        // A database error (not just a dropped connection) means something is broken for everyone: tell Sentry
+        const status = Number(res.error.status || res.status || 0);
+        if (window.pawSentry && res.error.message && (status >= 500 || res.error.code)) {
+          window.pawSentry.report(new Error(`Could not load ${what}: ${res.error.message}`), { tags: { area: 'supabase-sync' }, extra: { code: res.error.code || '', status } });
+        }
+      };
       [['missing reports', reports], ['sightings', sightings], ['shelters', shelters], ['impounds', impounded], ['pets', pets], ['notifications', notifs], ['reunited pets', reunited]].forEach(([w, r]) => warn(w, r));
 
       const reportList = reports.error ? this.getMissingReports() : (reports.data || []).map((r) => this.fromReportRow(r));
@@ -274,6 +310,8 @@ class Store {
         this.notifsLoadedFor = uid;
       }
 
+      // Every public list failed: the database is struggling (or unreachable), so report failure and let the poll back off
+      if ([reports, sightings, shelters, impounded].every((r) => r && r.error)) { this.syncStatus = 'offline'; return false; }
       this.syncStatus = 'connected';
       // Pets without an NFC tag: remind the owner, and record the violation once the 7 days are up.
       // Only run from a successful pets load, so a failed request can never look like "no tag".
