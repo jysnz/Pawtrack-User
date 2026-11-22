@@ -289,12 +289,12 @@
             <form id="admin-login-form" class="auth-dialog-form al-form" autocomplete="on" novalidate>
               <div class="auth-field-box">
                 <label for="admin-login-email" class="auth-field-label">Email</label>
-                <input type="email" id="admin-login-email" class="auth-field-input" autocomplete="username" inputmode="email" placeholder="you@lgu.gov.ph" required />
+                <input spellcheck="false" type="email" id="admin-login-email" class="auth-field-input" autocomplete="username" inputmode="email" placeholder="you@lgu.gov.ph" required />
               </div>
               <div class="auth-field-box auth-password-box">
                 <label for="admin-login-password" class="auth-field-label">Password</label>
                 <div class="auth-password-row">
-                  <input type="password" id="admin-login-password" class="auth-field-input" autocomplete="current-password" required />
+                  <input spellcheck="false" type="password" id="admin-login-password" class="auth-field-input" autocomplete="current-password" required />
                   <button type="button" class="auth-password-toggle" data-toggle-for="admin-login-password" aria-label="Show password" aria-pressed="false">
                     <svg class="icon-eye" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg>
                     <svg class="icon-eye-off" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.94 17.94A10.94 10.94 0 0 1 12 19C5 19 1 12 1 12a18.5 18.5 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19M14.12 14.12a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
@@ -304,12 +304,12 @@
 
               <div id="admin-login-turnstile" class="auth-turnstile auth-turnstile-below"></div>
 
-              <button type="submit" id="admin-login-submit" class="auth-dialog-submit-btn" disabled>Log in</button>
+              <button type="submit" id="admin-login-submit" class="auth-dialog-submit-btn">Log in</button>
             </form>
 
             <div class="auth-dialog-divider">or</div>
 
-            <button type="button" id="admin-login-google-btn" class="auth-google-continue-btn" disabled>
+            <button type="button" id="admin-login-google-btn" class="auth-google-continue-btn">
               <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true">
                 <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
                 <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
@@ -330,40 +330,40 @@
               <div class="auth-name-row">
                 <div class="auth-field-box">
                   <label for="admin-signup-first" class="auth-field-label">First name</label>
-                  <input type="text" id="admin-signup-first" class="auth-field-input" autocomplete="given-name" maxlength="40" required />
+                  <input spellcheck="false" type="text" id="admin-signup-first" class="auth-field-input" autocomplete="given-name" maxlength="40" required />
                 </div>
                 <div class="auth-field-box">
                   <label for="admin-signup-last" class="auth-field-label">Last name</label>
-                  <input type="text" id="admin-signup-last" class="auth-field-input" autocomplete="family-name" maxlength="40" required />
+                  <input spellcheck="false" type="text" id="admin-signup-last" class="auth-field-input" autocomplete="family-name" maxlength="40" required />
                 </div>
               </div>
               <div class="auth-field-box">
                 <label for="admin-signup-birth" class="auth-field-label">Birth date</label>
-                <input type="date" id="admin-signup-birth" class="auth-field-input" autocomplete="bday" required />
+                <input spellcheck="false" type="date" id="admin-signup-birth" class="auth-field-input" autocomplete="bday" required />
               </div>
               <div class="auth-field-box">
                 <label for="admin-signup-phone" class="auth-field-label">Mobile number</label>
                 <div class="auth-phone-row">
                   <span class="auth-phone-prefix" aria-hidden="true">+63</span>
-                  <input type="tel" id="admin-signup-phone" class="auth-field-input" autocomplete="tel-national" inputmode="numeric" placeholder="917 123 4567" data-ph-mobile required />
+                  <input spellcheck="false" type="tel" id="admin-signup-phone" class="auth-field-input" autocomplete="tel-national" inputmode="numeric" placeholder="917 123 4567" data-ph-mobile required />
                 </div>
               </div>
 
               <p class="al-section">Your role</p>
               <div class="auth-field-box">
                 <label for="admin-signup-position" class="auth-field-label">Position (optional)</label>
-                <input type="text" id="admin-signup-position" class="auth-field-input" autocomplete="organization-title" maxlength="120" />
+                <input spellcheck="false" type="text" id="admin-signup-position" class="auth-field-input" autocomplete="organization-title" maxlength="120" />
               </div>
 
               <p class="al-section">Your account</p>
               <div class="auth-field-box">
                 <label for="admin-signup-email" class="auth-field-label">Email</label>
-                <input type="email" id="admin-signup-email" class="auth-field-input" autocomplete="off" inputmode="email" placeholder="you@lgu.gov.ph" required />
+                <input spellcheck="false" type="email" id="admin-signup-email" class="auth-field-input" autocomplete="off" inputmode="email" placeholder="you@lgu.gov.ph" required />
               </div>
               <div class="auth-field-box auth-password-box">
                 <label for="admin-signup-password" class="auth-field-label">Password</label>
                 <div class="auth-password-row">
-                  <input type="password" id="admin-signup-password" class="auth-field-input" autocomplete="new-password" required />
+                  <input spellcheck="false" type="password" id="admin-signup-password" class="auth-field-input" autocomplete="new-password" required />
                   <button type="button" class="auth-password-toggle" data-toggle-for="admin-signup-password" aria-label="Show password" aria-pressed="false">
                     <svg class="icon-eye" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg>
                     <svg class="icon-eye-off" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.94 17.94A10.94 10.94 0 0 1 12 19C5 19 1 12 1 12a18.5 18.5 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19M14.12 14.12a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
@@ -380,12 +380,12 @@
 
               <div id="admin-signup-turnstile" class="auth-turnstile auth-turnstile-below"></div>
 
-              <button type="submit" id="admin-signup-submit" class="auth-dialog-submit-btn" disabled>Send verification code</button>
+              <button type="submit" id="admin-signup-submit" class="auth-dialog-submit-btn">Send verification code</button>
             </form>
 
             <div class="auth-dialog-divider">or</div>
 
-            <button type="button" id="admin-signup-google-btn" class="auth-google-continue-btn" disabled>
+            <button type="button" id="admin-signup-google-btn" class="auth-google-continue-btn">
               <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true">
                 <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
                 <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
@@ -404,7 +404,7 @@
 
             <div class="auth-field-box">
               <label for="admin-otp" class="auth-field-label">VERIFICATION CODE</label>
-              <input type="text" id="admin-otp" class="auth-field-input auth-otp-input" autocomplete="one-time-code" inputmode="numeric" maxlength="6" placeholder="000000" required />
+              <input spellcheck="false" type="text" id="admin-otp" class="auth-field-input auth-otp-input" autocomplete="one-time-code" inputmode="numeric" maxlength="6" placeholder="000000" required />
             </div>
             <button type="submit" id="admin-otp-verify-btn" class="auth-dialog-submit-btn">Verify and create account</button>
             <div id="admin-otp-turnstile" class="auth-turnstile auth-turnstile-below"></div>
@@ -425,32 +425,32 @@
             <div class="auth-name-row">
               <div class="auth-field-box">
                 <label for="admin-register-first" class="auth-field-label">First name</label>
-                <input type="text" id="admin-register-first" class="auth-field-input" autocomplete="given-name" maxlength="40" required />
+                <input spellcheck="false" type="text" id="admin-register-first" class="auth-field-input" autocomplete="given-name" maxlength="40" required />
               </div>
               <div class="auth-field-box">
                 <label for="admin-register-last" class="auth-field-label">Last name</label>
-                <input type="text" id="admin-register-last" class="auth-field-input" autocomplete="family-name" maxlength="40" required />
+                <input spellcheck="false" type="text" id="admin-register-last" class="auth-field-input" autocomplete="family-name" maxlength="40" required />
               </div>
             </div>
             <div class="auth-field-box">
               <label for="admin-register-birth" class="auth-field-label">Birth date</label>
-              <input type="date" id="admin-register-birth" class="auth-field-input" autocomplete="bday" required />
+              <input spellcheck="false" type="date" id="admin-register-birth" class="auth-field-input" autocomplete="bday" required />
             </div>
             <div class="auth-field-box">
               <label for="admin-register-phone" class="auth-field-label">Mobile number</label>
               <div class="auth-phone-row">
                 <span class="auth-phone-prefix" aria-hidden="true">+63</span>
-                <input type="tel" id="admin-register-phone" class="auth-field-input" autocomplete="tel-national" inputmode="numeric" placeholder="917 123 4567" data-ph-mobile required />
+                <input spellcheck="false" type="tel" id="admin-register-phone" class="auth-field-input" autocomplete="tel-national" inputmode="numeric" placeholder="917 123 4567" data-ph-mobile required />
               </div>
             </div>
             <div class="auth-field-box">
               <label for="admin-register-position" class="auth-field-label">Position (optional)</label>
-              <input type="text" id="admin-register-position" class="auth-field-input" autocomplete="organization-title" maxlength="120" />
+              <input spellcheck="false" type="text" id="admin-register-position" class="auth-field-input" autocomplete="organization-title" maxlength="120" />
             </div>
 
             <div id="admin-register-turnstile" class="auth-turnstile auth-turnstile-below"></div>
 
-            <button type="submit" class="auth-dialog-submit-btn" disabled>Create account</button>
+            <button type="submit" class="auth-dialog-submit-btn">Create account</button>
             <div class="auth-forgot-row" style="justify-content: center;">
               <button type="button" class="auth-text-btn" data-login-action="signout">Use a different account</button>
             </div>
@@ -500,6 +500,7 @@
   <script src="../js/violations-data.js"></script>
   <script src="js/views/violations-view.js"></script>
   <script src="js/views/settings-view.js"></script>
+  <script src="js/date-picker.js"></script>
   <script src="js/admin-motion.js"></script>
   <script src="js/admin-app.js"></script>
 </body>

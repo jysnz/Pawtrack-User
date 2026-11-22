@@ -2125,11 +2125,11 @@
             <div class="auth-name-row" data-signup-only hidden>
               <div class="auth-field-box">
                 <label for="login-name" class="auth-field-label">First name</label>
-                <input type="text" id="login-name" class="auth-field-input" autocomplete="given-name" maxlength="40" />
+                <input spellcheck="false" type="text" id="login-name" class="auth-field-input" autocomplete="given-name" maxlength="40" />
               </div>
               <div class="auth-field-box">
                 <label for="login-lastname" class="auth-field-label">Last name</label>
-                <input type="text" id="login-lastname" class="auth-field-input" autocomplete="family-name" maxlength="40" />
+                <input spellcheck="false" type="text" id="login-lastname" class="auth-field-input" autocomplete="family-name" maxlength="40" />
               </div>
             </div>
 
@@ -2137,7 +2137,7 @@
               <label for="login-phone" class="auth-field-label">Mobile number</label>
               <div class="auth-phone-row">
                 <span class="auth-phone-prefix" aria-hidden="true">+63</span>
-                <input type="tel" id="login-phone" class="auth-field-input" autocomplete="tel-national" inputmode="numeric" placeholder="917 123 4567" data-ph-mobile />
+                <input spellcheck="false" type="tel" id="login-phone" class="auth-field-input" autocomplete="tel-national" inputmode="numeric" placeholder="917 123 4567" data-ph-mobile />
               </div>
             </div>
             <p class="al-hint" data-signup-only hidden>Shelters use your name and mobile number to reach you if your pet is found.</p>
@@ -2145,13 +2145,13 @@
             <p class="al-section" data-signup-only hidden>Your account</p>
             <div class="auth-field-box">
               <label for="login-email" class="auth-field-label">Email</label>
-              <input type="email" id="login-email" name="pt-account-id" class="auth-field-input" autocomplete="off" inputmode="email" placeholder="you@example.com" readonly data-no-autofill required />
+              <input spellcheck="false" type="email" id="login-email" name="pt-account-id" class="auth-field-input" autocomplete="off" inputmode="email" placeholder="you@example.com" readonly data-no-autofill required />
             </div>
 
             <div class="auth-field-box auth-password-box">
               <label for="login-password" class="auth-field-label">Password</label>
               <div class="auth-password-row">
-                <input type="password" id="login-password" name="pt-account-key" class="auth-field-input" autocomplete="new-password" readonly data-no-autofill required />
+                <input spellcheck="false" type="password" id="login-password" name="pt-account-key" class="auth-field-input" autocomplete="new-password" readonly data-no-autofill required />
                 <button type="button" class="auth-password-toggle" id="login-password-toggle" aria-label="Show password" aria-pressed="false">
                   <svg class="icon-eye" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg>
                   <svg class="icon-eye-off" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.94 17.94A10.94 10.94 0 0 1 12 19C5 19 1 12 1 12a18.5 18.5 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19M14.12 14.12a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
@@ -2226,20 +2226,20 @@
       <form id="register-dialog-form" class="auth-dialog-form" novalidate>
         <div class="auth-field-box auth-field-box-locked">
           <label for="register-email" class="auth-field-label">EMAIL</label>
-          <input type="email" id="register-email" class="auth-field-input" readonly />
+          <input spellcheck="false" type="email" id="register-email" class="auth-field-input" readonly />
         </div>
         <div class="auth-field-hint">From your Google account</div>
 
         <div class="auth-field-box">
           <label for="register-name" class="auth-field-label">FULL NAME</label>
-          <input type="text" id="register-name" class="auth-field-input" autocomplete="name" maxlength="80" required />
+          <input spellcheck="false" type="text" id="register-name" class="auth-field-input" autocomplete="name" maxlength="80" required />
         </div>
 
         <div class="auth-field-box">
           <label for="register-phone" class="auth-field-label">MOBILE NUMBER</label>
           <div class="auth-phone-row">
             <span class="auth-phone-prefix" aria-hidden="true">+63</span>
-            <input type="tel" id="register-phone" class="auth-field-input" autocomplete="tel-national" inputmode="numeric" placeholder="917 123 4567" data-ph-mobile required />
+            <input spellcheck="false" type="tel" id="register-phone" class="auth-field-input" autocomplete="tel-national" inputmode="numeric" placeholder="917 123 4567" data-ph-mobile required />
           </div>
         </div>
 
@@ -2264,7 +2264,7 @@
       <form id="signup-otp-form" class="auth-dialog-form" novalidate>
         <div class="auth-field-box">
           <label for="signup-otp" class="auth-field-label">VERIFICATION CODE</label>
-          <input type="text" id="signup-otp" class="auth-field-input auth-otp-input" autocomplete="one-time-code" inputmode="numeric" maxlength="6" placeholder="000000" required />
+          <input spellcheck="false" type="text" id="signup-otp" class="auth-field-input auth-otp-input" autocomplete="one-time-code" inputmode="numeric" maxlength="6" placeholder="000000" required />
         </div>
         <button type="submit" id="signup-otp-verify-btn" class="auth-dialog-submit-btn">Verify and create account</button>
         <div id="signup-otp-turnstile" class="auth-turnstile auth-turnstile-below"></div>
@@ -2433,7 +2433,7 @@
         <p class="auth-dialog-sub" data-i18n="settings.changeEmailSub">Enter your new email address. We'll send a 6-digit code to it to confirm it's yours.</p>
         <div class="auth-field-box">
           <label for="change-email-input" class="auth-field-label" data-i18n="settings.newEmail">NEW EMAIL</label>
-          <input type="email" id="change-email-input" class="auth-field-input" autocomplete="email" inputmode="email" required />
+          <input spellcheck="false" type="email" id="change-email-input" class="auth-field-input" autocomplete="email" inputmode="email" required />
         </div>
         <div id="change-email-turnstile" class="auth-turnstile auth-turnstile-below"></div>
         <button type="submit" id="change-email-send-btn" class="auth-dialog-submit-btn" data-i18n="settings.sendCode">Send code</button>
@@ -2443,7 +2443,7 @@
         <p class="auth-dialog-sub"><span data-i18n="settings.codeSentTo">We sent a 6-digit code to</span> <strong id="change-email-target"></strong>.</p>
         <div class="auth-field-box">
           <label for="change-email-otp" class="auth-field-label" data-i18n="settings.verificationCode">VERIFICATION CODE</label>
-          <input type="text" id="change-email-otp" class="auth-field-input auth-otp-input" autocomplete="one-time-code" inputmode="numeric" maxlength="6" placeholder="000000" required />
+          <input spellcheck="false" type="text" id="change-email-otp" class="auth-field-input auth-otp-input" autocomplete="one-time-code" inputmode="numeric" maxlength="6" placeholder="000000" required />
         </div>
         <button type="submit" id="change-email-verify-btn" class="auth-dialog-submit-btn" data-i18n="settings.verifyCode">Verify code</button>
         <div class="auth-mode-row">
@@ -2476,7 +2476,7 @@
         <p class="auth-dialog-sub">Enter your account email and we'll send you a 6-digit verification code.</p>
         <div class="auth-field-box">
           <label for="forgot-email" class="auth-field-label">EMAIL</label>
-          <input type="email" id="forgot-email" class="auth-field-input" autocomplete="email" inputmode="email" required />
+          <input spellcheck="false" type="email" id="forgot-email" class="auth-field-input" autocomplete="email" inputmode="email" required />
         </div>
         <div id="forgot-turnstile" class="auth-turnstile auth-turnstile-below"></div>
         <button type="submit" id="forgot-send-btn" class="auth-dialog-submit-btn">Send code</button>
@@ -2486,7 +2486,7 @@
         <p class="auth-dialog-sub">We sent a 6-digit code to <strong id="forgot-otp-email"></strong>. It expires in 10 minutes.</p>
         <div class="auth-field-box">
           <label for="forgot-otp" class="auth-field-label">VERIFICATION CODE</label>
-          <input type="text" id="forgot-otp" class="auth-field-input auth-otp-input" autocomplete="one-time-code" inputmode="numeric" maxlength="6" placeholder="000000" required />
+          <input spellcheck="false" type="text" id="forgot-otp" class="auth-field-input auth-otp-input" autocomplete="one-time-code" inputmode="numeric" maxlength="6" placeholder="000000" required />
         </div>
         <button type="submit" id="forgot-verify-btn" class="auth-dialog-submit-btn">Verify code</button>
         <div class="auth-mode-row">
@@ -2515,7 +2515,7 @@
         <div class="auth-field-box">
           <label for="reset-password-input" class="auth-field-label">NEW PASSWORD</label>
           <div class="auth-password-row">
-            <input type="password" id="reset-password-input" class="auth-field-input" autocomplete="new-password" minlength="8" required />
+            <input spellcheck="false" type="password" id="reset-password-input" class="auth-field-input" autocomplete="new-password" minlength="8" required />
             <button type="button" class="auth-password-toggle" data-toggle-for="reset-password-input" aria-label="Show password" aria-pressed="false"><svg class="icon-eye" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg><svg class="icon-eye-off" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.94 17.94A10.94 10.94 0 0 1 12 19C5 19 1 12 1 12a18.5 18.5 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19M14.12 14.12a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg></button>
           </div>
         </div>
@@ -2530,7 +2530,7 @@
         <div class="auth-field-box">
           <label for="reset-password-confirm" class="auth-field-label">CONFIRM PASSWORD</label>
           <div class="auth-password-row">
-            <input type="password" id="reset-password-confirm" class="auth-field-input" autocomplete="new-password" minlength="8" required />
+            <input spellcheck="false" type="password" id="reset-password-confirm" class="auth-field-input" autocomplete="new-password" minlength="8" required />
             <button type="button" class="auth-password-toggle" data-toggle-for="reset-password-confirm" aria-label="Show password" aria-pressed="false"><svg class="icon-eye" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg><svg class="icon-eye-off" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.94 17.94A10.94 10.94 0 0 1 12 19C5 19 1 12 1 12a18.5 18.5 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19M14.12 14.12a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg></button>
           </div>
         </div>

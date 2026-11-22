@@ -827,6 +827,7 @@ class App {
     };
 
     const openLoginDialog = () => {
+      const wasOpen = !!authLanding && authLanding.style.display === 'flex';
       if (onetapPrompt) onetapPrompt.style.display = 'none';
       if (warningModal) warningModal.style.display = 'none';
       if (authLanding) authLanding.style.display = 'flex';
@@ -839,7 +840,8 @@ class App {
         setStatus(loginStatus, pendingAuthError, true);
         pendingAuthError = null;
       }
-      renderLoginTurnstile();
+      // The dialog was already open with a passed check (an auth event after coming back to the tab): do not restart it
+      if (!(wasOpen && loginTurnstileId !== null && loginTurnstileToken)) renderLoginTurnstile();
     };
     this.openLoginDialog = openLoginDialog;
 

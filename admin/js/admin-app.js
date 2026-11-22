@@ -357,7 +357,8 @@ class AdminApp {
       if (!container) return;
       const key = container.id;
       const list = (Array.isArray(buttons) ? buttons : [buttons]).filter(Boolean);
-      list.forEach(b => { b.disabled = true; });
+      // A fresh check means the buttons are usable again (after a failed attempt); they are never greyed while it verifies
+      list.forEach(b => { b.disabled = false; });
       turnstileTokens[key] = null;
       try {
         await waitForTurnstile();
@@ -372,18 +373,26 @@ class AdminApp {
           size: 'flexible',
           callback: (token) => {
             turnstileTokens[key] = token;
-            list.forEach(b => { b.disabled = false; });
             if (!pendingError) setStatus('');
           },
           'expired-callback': () => {
             turnstileTokens[key] = null;
-            list.forEach(b => { b.disabled = true; });
           },
           'error-callback': () => setStatus('Security check failed to load. Please refresh and try again.', true)
         });
       } catch (err) {
         setStatus(err.message, true);
       }
+    };
+    // The buttons stay as they are while Turnstile (re)verifies, so the form does not flash grey and back. A click that
+    // lands before the token is ready waits a moment for it.
+    const tokenFor = async (key) => {
+      if (turnstileTokens[key]) return turnstileTokens[key];
+      setStatus('Finishing the security check…');
+      const until = Date.now() + 12000;
+      while (!turnstileTokens[key] && Date.now() < until) await new Promise(r => setTimeout(r, 150));
+      if (turnstileTokens[key]) setStatus('');
+      return turnstileTokens[key] || null;
     };
     const renderSigninTurnstile = () => renderTurnstile(el.loginTurnstile, [el.loginSubmit, el.googleBtn], 'admin-signin');
     const renderSignupTurnstile = () => renderTurnstile(el.signupTurnstile, [el.signupSubmit, el.signupGoogleBtn], 'admin-signup');
@@ -424,6 +433,8 @@ class AdminApp {
       if (!user) {
         // Someone filling in the sign-up form or entering a code must not be bounced by a background auth event
         if (currentPanel === 'signup' || currentPanel === 'otp') return;
+        // Already showing the sign-in form (an auth event after coming back to the tab): leave it, and its check, alone
+        if (currentPanel === 'signin' && !pendingError && document.body.classList.contains('auth-locked')) return;
         lockConsole('signin');
         setStatus(pendingError ? `Google sign-in failed: ${pendingError}` : '', !!pendingError);
         pendingError = null;
@@ -462,7 +473,12 @@ class AdminApp {
         return;
       }
 
-      showAccessStatus('Access suspended', `Console access for ${account.email} has been suspended. Contact your PawTrack administrator to restore it.`);
+      // Only a suspended account is locked out on purpose; any other status is an account that was never activated
+      if (account.status === 'suspended') {
+        showAccessStatus('Access suspended', `Console access for ${account.email} has been suspended. Contact your PawTrack administrator to restore it.`);
+      } else {
+        showAccessStatus('Account not active yet', `${account.email} is registered but its console access is not active yet (status: ${account.status || 'unknown'}). Contact your PawTrack administrator to activate it.`);
+      }
     };
 
     // ---------- Log in: Google ----------
@@ -492,7 +508,7 @@ class AdminApp {
       const email = val('admin-login-email').toLowerCase();
       const password = el.loginPassword ? el.loginPassword.value : '';
       if (!email || !password) { setStatus('Enter your email and password.', true); return; }
-      const captchaToken = turnstileTokens[el.loginTurnstile.id];
+      const captchaToken = await tokenFor(el.loginTurnstile.id);
       if (!captchaToken) { setStatus('Please complete the security check first.', true); return; }
 
       el.loginSubmit.disabled = true;
@@ -556,7 +572,7 @@ class AdminApp {
       if (!validMobile(phone)) return setStatus('Please enter a valid Philippine mobile number (9XX XXX XXXX).', true);
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return setStatus('Please enter a valid email address.', true);
       if (!updatePasswordRules()) return setStatus('Your password needs 10+ characters with an uppercase letter, a lowercase letter, a number and a symbol.', true);
-      const turnstileToken = turnstileTokens[el.signupTurnstile.id];
+      const turnstileToken = await tokenFor(el.signupTurnstile.id);
       if (!turnstileToken) return setStatus('Please complete the security check first.', true);
 
       el.signupSubmit.disabled = true;
@@ -600,7 +616,7 @@ class AdminApp {
 
     el.otpResend?.addEventListener('click', async () => {
       if (!pendingSignup) return;
-      const turnstileToken = turnstileTokens[el.otpTurnstile.id];
+      const turnstileToken = await tokenFor(el.otpTurnstile.id);
       if (!turnstileToken) return setStatus('Complete the security check, then tap "Send again".', true);
       el.otpResend.disabled = true;
       setStatus('Sending a new code…');
@@ -680,7 +696,7 @@ class AdminApp {
       const user = session && session.user;
       if (!user) return resolveAccess();
 
-      const turnstileToken = turnstileTokens[el.registerTurnstile.id];
+      const turnstileToken = await tokenFor(el.registerTurnstile.id);
       if (!turnstileToken) return setStatus('Please complete the security check first.', true);
 
       const firstName = val('admin-register-first');
