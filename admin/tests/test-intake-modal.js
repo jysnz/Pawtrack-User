@@ -102,12 +102,10 @@ const enc = (s) => new TextEncoder().encode(s);
   handlers.readingerror();
   check('a bad read keeps scanning', M.nfc.state === 'scanning' && /keep still/.test(M.nfc.text));
   handlers.reading({ message: { records: [{ recordType: 'url', data: enc('https://x/?nfc=PT-AB12CD34') }] }, serialNumber: '04:A1:B2:C3' });
-  check('a read fills the form and locks the reader', M.nfc.state === 'idle' && M.locked === true && M.draft && M.draft.petId === 'p1');
+  check('a read switches the reader off and fills the form', aborted && M.nfc.state === 'idle' && M.draft && M.draft.petId === 'p1');
   const before = M.draft;
-  handlers.reading({ message: { records: [{ recordType: 'url', data: enc('https://x/?nfc=PT-ZZ99ZZ99') }] }, serialNumber: '04:FF:FF:FF' });
-  check('a second tap while the form is open changes nothing', M.draft === before);
-  M.stopNfc();
-  check('closing or scanning again releases the reader', aborted && M.locked === false);
+  if (handlers.reading) handlers.reading({ message: { records: [{ recordType: 'url', data: enc('https://x/?nfc=PT-ZZ99ZZ99') }] }, serialNumber: '04:FF:FF:FF' });
+  check('a late tap does not change the form', M.draft === before);
 
   // Wiring
   const idx = fs.readFileSync(path.join(__dirname, '../index.html'), 'utf8');

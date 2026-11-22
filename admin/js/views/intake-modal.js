@@ -558,11 +558,9 @@ window.IntakeModal = {
     return !!(this.root && this.root.querySelector('#in-body') && (!backdrop || backdrop.classList.contains('open')));
   },
 
-  // Once a pet is on the form, further taps are ignored. The reader stays open on purpose (so a tap cannot launch the
-  // tag's web page on this device) but nothing it reads changes the form. "Scan again" or closing the dialog ends it.
+  // Once a pet is on the form the reader is switched off, so nothing more is read until "Scan again" is pressed
   holdNfc() {
-    this.locked = !!this._abort;
-    if (this.nfc.state !== 'idle') this.setNfc('idle');
+    this.stopNfc();
   },
 
   stopNfc() {
