@@ -57,16 +57,17 @@ verify(4, 'Instructions Panel Close Button calls toggleInstructionGuide(false)',
 });
 
 // 5. Report Type Tab: "Found / Sighted Stray Pet"
-verify(5, 'Tab Found Button calls setType("found")', () => {
-  return indexHtml.includes('id="report-tab-found"') &&
-         indexHtml.includes("window.reportManager.setType('found')") &&
+verify(5, 'Report type switch: Found / Sighted panel is shown by setType found', () => {
+  // The Found / Sighted and Missing forms are two panels of the Report page, switched by setType()
+  return indexHtml.includes('id="report-fields-found"') &&
+         reportManagerJs.includes('setType(type)') &&
          reportManagerJs.includes("if (type === 'found')");
 });
 
 // 6. Report Type Tab: "Report Missing Pet Alert"
-verify(6, 'Tab Missing Button calls setType("missing")', () => {
-  return indexHtml.includes('id="report-tab-missing"') &&
-         indexHtml.includes("window.reportManager.setType('missing')");
+verify(6, 'Report type switch: Missing panel is shown by setType missing', () => {
+  return indexHtml.includes('id="report-fields-missing"') &&
+         reportManagerJs.includes("this.setType(type)");
 });
 
 // 7. View Mode Switcher: "Maps" Mode Button
@@ -83,16 +84,14 @@ verify(8, 'Mode Upload Button calls setViewMode("upload")', () => {
 });
 
 // 9. Map Layer Switcher: Roadmap Layer Button
-verify(9, 'Map Layer "Map" Button calls setMapLayer("roadmap")', () => {
-  return indexHtml.includes("setMapLayer('roadmap')") &&
-         reportManagerJs.includes("setMapLayer(");
+verify(9, 'Report map supports the roadmap layer via setMapLayer()', () => {
+  return reportManagerJs.includes('setMapLayer(type)') && reportManagerJs.includes("'roadmap'");
 });
 
 // 10. Map Layer Switcher: Satellite / Hybrid / Dark Buttons
-verify(10, 'Map Layer Satellite, Hybrid, Dark Buttons configured', () => {
-  return indexHtml.includes("setMapLayer('satellite')") &&
-         indexHtml.includes("setMapLayer('hybrid')") &&
-         indexHtml.includes("setMapLayer('dark')");
+verify(10, 'Report map supports the satellite, hybrid and dark layers', () => {
+  const body = reportManagerJs.slice(reportManagerJs.indexOf('setMapLayer(type)'), reportManagerJs.indexOf('locateMe()'));
+  return ['satellite', 'hybrid', 'dark'].every(l => body.includes("'" + l + "'"));
 });
 
 // 11. GPS Recenter / Locate Me Tool Button
@@ -142,9 +141,11 @@ verify(17, 'Missing Pet Select dropdown triggers handlePetSelect()', () => {
 });
 
 // 18. Removed Redundant Photo Status Bar from Missing Pet Form
-verify(18, 'Photo Status Bar removed from Missing Pet Form for clean UI layout', () => {
+verify(18, 'Missing Pet form shows the photo status as a compact inline line', () => {
+  // The photo status is a small inline line (text + button) now, not the old full-width bar
   return !indexHtml.includes('id="report-missing-photo-status-bar"') &&
-         !indexHtml.includes('id="report-missing-photo-status-btn"');
+         indexHtml.includes('id="report-missing-photo-status-text"') &&
+         indexHtml.includes('id="report-missing-photo-status-btn"');
 });
 
 // 19. Modal Footer Cancel Button
@@ -172,10 +173,11 @@ verify(20, 'Form Submit Button triggers handleSubmit & persists reports without 
 });
 
 // 21. Describe Pet Label in Report Missing Pet Alert
-verify(21, 'Report Missing Pet Alert label updated from Distinct Markings to Describe Pet', () => {
+verify(21, 'Missing Pet notes field is labelled by report.circumstances in English and Filipino', () => {
   const i18nJs = fs.readFileSync(path.join(__dirname, '..', 'js', 'i18n.js'), 'utf8');
-  return indexHtml.includes('>Describe Pet</label>') &&
-         i18nJs.includes("'report.circumstances': 'Describe Pet'");
+  return indexHtml.includes('data-i18n="report.circumstances"') &&
+         i18nJs.includes("'report.circumstances': 'Notes (optional)'") &&
+         i18nJs.includes("'report.circumstances': 'Ilarawan ang Alaga (Describe Pet)'");
 });
 
 // 22. Required Form Fields (All required except message)
@@ -237,33 +239,31 @@ verify(27, 'Collar NFC Tag field removed from Found / Sighted Stray Pet form', (
 });
 
 // 28. Report Pet Sighting modal has Maps/Upload toggle, layer dock, and preserves green pinpoint icon
-verify(28, 'Report Pet Sighting modal has Maps/Upload layout, layers, search bar, and preserves green pinpoint icon', () => {
-  const hasModeToggle = indexHtml.includes('id="sighting-view-mode-toggle"');
-  const hasLayerDock = indexHtml.includes('id="sighting-map-layer-dock"');
+verify(28, 'Report Pet Sighting modal has the place search, the photo upload view, map layers and the pin icon', () => {
   const hasSearchWrap = indexHtml.includes('id="sighting-location-search-wrap"');
   const hasUploadContainer = indexHtml.includes('id="sighting-upload-view-container"');
+  const hasLayerDock = reportManagerJs.includes('sighting-map-layer-dock');
   const hasPinIcon = reportManagerJs.includes("className: 'sighting-pin-leaflet-icon'");
   const hasMethods = reportManagerJs.includes('setSightingViewMode(') &&
                      reportManagerJs.includes('setSightingMapLayer(') &&
                      reportManagerJs.includes('handleSightingLocationSearch(');
-  return hasModeToggle && hasLayerDock && hasSearchWrap && hasUploadContainer && hasPinIcon && hasMethods;
+  return hasSearchWrap && hasUploadContainer && hasLayerDock && hasPinIcon && hasMethods;
 });
 
 // 29. Report Pet Sighting modal has Name / Anonymous toggle button, single-line name first, and same-line Date & Phone with 09 placeholder
-verify(29, 'Report Pet Sighting has Name/Anonymous toggle, 1-line name, and same-line Date & Phone', () => {
-  const hasNameToggle = indexHtml.includes('id="sighting-name-type-toggle"') &&
-                        indexHtml.includes('id="sighting-name-btn"') &&
-                        indexHtml.includes('id="sighting-anon-btn"');
-  const hasSingleLineName = indexHtml.includes('id="sighting-reporter-name-group"');
-  const hasDatePhoneInSameRow = indexHtml.includes('id="sighting-datetime-input"') &&
-                                indexHtml.includes('id="sighting-reporter-phone"');
+verify(29, 'Report Pet Sighting has a name field with a Stay anonymous box, and a contact phone with a 09 placeholder', () => {
+  const hasAnonToggle = indexHtml.includes('id="sighting-anon-checkbox"') &&
+                        indexHtml.includes("setSightingNameMode(this.checked ? 'anonymous' : 'named', true)");
+  const hasNameGroup = indexHtml.includes('id="sighting-reporter-name-group"');
+  const hasDatePhone = indexHtml.includes('id="sighting-datetime-input"') &&
+                       indexHtml.includes('id="sighting-reporter-phone"');
   const hasMethods = reportManagerJs.includes('setSightingNameMode(') &&
                      reportManagerJs.includes('handleSightingNameInput(');
   const nameIdx = indexHtml.indexOf('id="sighting-reporter-name-group"');
-  const dateIdx = indexHtml.indexOf('id="sighting-datetime-input"');
-  const nameFirst = nameIdx !== -1 && dateIdx !== -1 && nameIdx < dateIdx;
+  const phoneIdx = indexHtml.indexOf('id="sighting-reporter-phone"');
+  const nameFirst = nameIdx !== -1 && phoneIdx !== -1 && nameIdx < phoneIdx;
   const phoneStarts09 = indexHtml.includes('id="sighting-reporter-phone" placeholder="e.g. 0917 123 4567"');
-  return hasNameToggle && hasSingleLineName && hasDatePhoneInSameRow && hasMethods && nameFirst && phoneStarts09;
+  return hasAnonToggle && hasNameGroup && hasDatePhone && hasMethods && nameFirst && phoneStarts09;
 });
 
 console.log('\n===============================================================');

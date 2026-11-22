@@ -33,7 +33,7 @@ window.FacilityPhoto = { fieldHtml: () => '<div id="fp-root"></div>', bind: () =
 window.FacilityForm = {
   phone: { digits: (v) => String(v || ''), toStored: (v) => v, bind() {} },
   hours: { parse: () => null, defaultModel: () => ({}), fieldHtml: () => '', bind: () => ({ value: () => 'Mon-Fri 9-5', validate: () => null }) },
-  MapPicker: { create: async () => ({ canGeocode: false, getPin: () => pin, setBounds(b) { boundsSet.push(b); }, destroy() {} }) },
+  MapPicker: { create: async () => ({ canGeocode: false, getPin: () => pin, clearPin() { pin = null; }, setBounds(b) { boundsSet.push(b); }, setAreas() {}, destroy() {} }) },
   City: {
     inBounds: (p, b) => !b || !p || (p.lat >= b.south && p.lat <= b.north && p.lng >= b.west && p.lng <= b.east),
     resolve: async () => null,
@@ -73,6 +73,7 @@ const resetDom = () => { Object.keys(registry).forEach(k => delete registry[k]);
   // fill the form
   const set = (k, v) => { mkEl('f:' + k).value = v; };
   set('name', 'New Place'); set('address', '1 Road'); set('city', 'QC'); set('phone', '9171234567'); set('capacity', '20');
+  mkEl('#fm-type-other').disabled = true; // the "other facility type" box stays off while a listed type is chosen
 
   // No city picked yet: nothing is saved
   mkEl('#shelter-save-btn').click();
@@ -102,8 +103,9 @@ const resetDom = () => { Object.keys(registry).forEach(k => delete registry[k]);
   closed = false; created = null; resetDom();
   V.openShelterModal(null, { chooseType: true, onCreated: (id) => { created = id; } });
   await new Promise(r => setTimeout(r, 10));
-  set('name', 'New Sub'); set('address', '2 Road'); set('city', 'QC');
+  set('name', 'New Sub'); set('address', '2 Road'); set('city', 'QC'); mkEl('#fm-type-other').disabled = true;
   cityCtl.set(QC);
+  pin = { lat: 14.6, lng: 121 }; // choosing the city clears an old pin, so drop a new one
   const box = mkEl('f:isSub'); box.checked = true; box.change();
   check('ticking the box shows the main facility prompt and makes it required', mkEl('#fm-parent-wrap').hidden === false && mkEl('#fm-parent').required === true);
   check('...and the title and button now say sub-facility', mkEl('#fm-title').textContent === 'Add a sub-facility' && mkEl('#shelter-save-btn').textContent === 'Add sub-facility', mkEl('#fm-title').textContent + ' / ' + mkEl('#shelter-save-btn').textContent);

@@ -55,19 +55,19 @@ let html = '';
 try { html = render(base); check('renders without touching the pet registry, cases or sightings', true); }
 catch (e) { check('renders without touching the pet registry, cases or sightings', false, e.message); }
 
-check('names the facility and its sub-facility', /Main Shelter and 1 sub-facility/.test(html));
+check('names the facility and says it is a main facility', /Main Shelter/.test(html) && /Main facility/.test(html));
 check('counts only this facility\'s animals in holding (4 of 5, not the other facility\'s)', />4 <span class="kpi-unit">animals/.test(html), html.match(/In holding now[\s\S]{0,400}/)?.[0]);
 check('capacity uses the facility tree only (4 of 20)', /4 of 20 places taken/.test(html) && />20%</.test(html), html.match(/Capacity in use[\s\S]{0,400}/)?.[0]);
 check('flags the overdue claim', /1 past deadline/.test(html));
 check('needs-attention lists the incoming transfer and the unpaid ticket', /pets arriving from sub-facilities/.test(html) && /penalty tickets waiting for payment/.test(html));
 check('penalty card counts only tickets for this facility (not the other facility\'s 900)', /1 · PHP 500/.test(html) && !/PHP 900/.test(html));
-check('shows the by-facility breakdown for a main facility', /By facility/.test(html) && /Sub One/.test(html));
+check('the page is for one facility, so there is no by-facility breakdown', !/By facility/.test(html));
 check('no registry-wide wording remains', !/Pets safe at home|Median recovery|New registrations|Recovery funnel|sighting/i.test(html));
 check('the report only holds facility figures', V._report.metrics.some((m) => m[0] === 'Capacity in use') && !V._report.metrics.some((m) => /Registered pets|missing cases/i.test(m[0])));
 
 // A sub-facility employee
 mine.length = 0; mine.push(imp('s1', 'SUB'));
-const subHtml = render({ ...base, getMyShelter: () => ({ id: 'SUB', name: 'Sub One' }), getMyFacilityIds: () => ['SUB'], getSubFacilities: () => [], getMainFacility: () => ({ id: 'MAIN', name: 'Main Shelter' }), getIncomingTransfers: () => [], getTickets: () => [], getTicketsToCollect: () => [], getShelters: base.getShelters });
+const subHtml = render({ ...base, getMyShelter: () => ({ id: 'SUB', name: 'Sub One', parentId: 'MAIN' }), getMyFacilityIds: () => ['SUB'], getSubFacilities: () => [], getMainFacility: () => ({ id: 'MAIN', name: 'Main Shelter' }), getIncomingTransfers: () => [], getTickets: () => [], getTicketsToCollect: () => [], getShelters: base.getShelters });
 check('a sub-facility employee sees it labelled as a sub-facility, without the facility breakdown', /Sub-facility of Main Shelter/.test(subHtml) && !/By facility/.test(subHtml));
 
 // No facility at all

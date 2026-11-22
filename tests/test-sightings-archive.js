@@ -19,7 +19,7 @@ console.log('[PASS] Sighting status changes are saved to Supabase.');
 
 // 3. SightingsView buttons and actions
 assert(sightingsViewJs.includes('id="sightings-header-archived-btn"'), 'SightingsView must have header Archived button');
-assert(sightingsViewJs.includes("this._filterPill('archived'"), 'SightingsView must have Archived filter pill');
+assert(sightingsViewJs.includes("['archived', 'Archived', stats.archived]") && sightingsViewJs.includes('_filterPill('), 'SightingsView must have Archived filter pill');
 assert(sightingsViewJs.includes('archiveSighting('), 'SightingsView must have archiveSighting method');
 assert(sightingsViewJs.includes('retrieveSighting('), 'SightingsView must have retrieveSighting method');
 assert(sightingsViewJs.includes('deleteSighting('), 'SightingsView must have deleteSighting method');

@@ -79,6 +79,7 @@ global.window.adminStore = {
   isMainFacility: () => true,
   getMainFacility: () => null,
   getMyFacilityIds: () => ['sh-1'],
+  getActiveFacilityId: () => 'sh-1', setActiveFacility() {},
   getManagedShelterIds: () => ['sh-1'],
   getIncomingTransfers: () => [],
   getOutgoingTransfers: () => [],
@@ -106,6 +107,7 @@ global.window.adminStore = {
 };
 
 // Load view scripts
+require('../js/search-box.js');
 require('../js/views/activation-view.js');
 require('../js/views/heatmap-view.js');
 require('../js/views/impoundments-view.js');

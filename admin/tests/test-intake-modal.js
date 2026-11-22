@@ -4,8 +4,8 @@ const path = require('path');
 const fs = require('fs');
 global.window = global;
 let shown = null, closed = 0; const toasts = []; const saved = [];
-const stub = () => ({ addEventListener() {}, focus() {}, value: '', dataset: {}, setAttribute() {}, hidden: true, querySelector: stub });
-const body = { set innerHTML(v) { box._html = v; }, get innerHTML() { return box._html; }, querySelector: stub };
+const stub = () => ({ addEventListener() {}, focus() {}, value: '', dataset: {}, setAttribute() {}, hidden: true, querySelector: stub, querySelectorAll: () => [] });
+const body = { set innerHTML(v) { box._html = v; }, get innerHTML() { return box._html; }, querySelector: stub, querySelectorAll: () => [] };
 const box = { _html: '', set innerHTML(v) { this._html = v; }, get innerHTML() { return this._html; }, querySelector(sel) { return sel === '#in-body' ? (this._html ? body : null) : stub(); } };
 global.document = { getElementById: () => null, body: { contains: () => true }, createElement: () => ({}) };
 window.adminApp = { openModalContent: (h) => { box.innerHTML = h; shown = h; return box; }, closeModal() { closed++; }, showToast: (m) => toasts.push(m), renderView() {}, currentRoute: 'impoundments' };
@@ -80,6 +80,11 @@ const enc = (s) => new TextEncoder().encode(s);
   // A stray with no tag
   M.showForm(null);
   data.petName = 'Stray'; data.species = 'Cat'; data.breed = 'Puspin'; data.shelterId = 'MAIN';
+  // A photo is required: without one nothing is logged
+  await M.submit({});
+  check('an intake without a photo is not logged', saved.length === 1 && toasts.some(t => /Add a photo of the pet/.test(t)));
+  data.photo = { size: 10 };
+  M.uploadPhoto = async () => 'https://x/stray.jpg';
   await M.submit({});
   check('a pet with no tag is logged with an empty tag and no pet link', saved[1].rfidTag === '' && saved[1].petId === null && saved[1].species === 'Cat');
 
