@@ -508,12 +508,13 @@ class AdminApp {
     // Back from Google's page: the browser may bring this page back exactly as it was left, with the buttons
     // disabled and "Redirecting to Google…" showing. Make the form usable again.
     window.addEventListener('pageshow', (e) => {
+      // Only when the page was left for Google: otherwise nothing is touched, so every form (and its security check)
+      // looks exactly as it did when the person left
       const stuck = [el.googleBtn, el.signupGoogleBtn].some(b => b && b.disabled);
-      if (!e.persisted && !stuck) return;
+      if (!stuck) return;
       sessionStorage.removeItem(FRESH_SIGNIN_KEY);
       [el.googleBtn, el.signupGoogleBtn, el.loginSubmit, el.signupSubmit].forEach(b => { if (b) b.disabled = false; });
       if (/redirecting to google/i.test((status && status.textContent) || '')) setStatus('');
-      if (currentPanel === 'signup') renderSignupTurnstile(); else if (currentPanel === 'signin') renderSigninTurnstile();
     });
 
     // ---------- Log in: email + password ----------

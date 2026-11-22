@@ -5,7 +5,7 @@
 //                       birth_date }                                                     the admin_accounts row, and returns a
 //                                                                                        token_hash the browser exchanges for a session
 // Secrets: BREVO_API_KEY, BREVO_SENDER_EMAIL (verified in Brevo), BREVO_SENDER_NAME (optional), TURNSTILE_SECRET_KEY.
-// Table: public.admin_signup_otps (service role only). Approval is still decided by an administrator.
+// Table: public.admin_signup_otps (service role only). There is no approval step: the account is active once the code is entered.
 import { createClient } from 'npm:@supabase/supabase-js@2.45.4';
 
 const CORS = {
@@ -217,21 +217,35 @@ Deno.serve(async (req) => {
       // Not 'pawtrack_owner': this account must not become a pet-owner guardian
       user_metadata: { signup_source: 'pawtrack_admin', full_name: fullName, phone },
     });
-    if (createError || !created || !created.user) {
+
+    let userId: string | null = created && created.user ? created.user.id : null;
+    let isNewLogin = !!userId;
+    // A one-time token the browser exchanges for a session, so the admin lands signed in (straight into the console)
+    let tokenHash: string | null = null;
+
+    if (!userId) {
       const message = (createError && createError.message) || '';
       if (/already|registered|exists/i.test(message)) {
-        return json(409, { error: 'This email already has a PawTrack account. Log in with it instead, and you will be asked to finish setting up your admin account.' });
-      }
-      if ((createError as { code?: string } | null)?.code === 'weak_password' || /password/i.test(message)) {
+        // The email already has a PawTrack login (a pet owner account, say). The emailed code just proved this
+        // mailbox is theirs, so that same login becomes an admin account too; their own password still applies.
+        const { data: existingLink, error: existingError } = await admin.auth.admin.generateLink({ type: 'magiclink', email });
+        userId = existingLink && existingLink.user ? existingLink.user.id : null;
+        tokenHash = (existingLink && existingLink.properties && existingLink.properties.hashed_token) || null;
+        if (existingError || !userId) {
+          console.error('[admin-signup-otp] existing login lookup error:', existingError && existingError.message);
+          return json(500, { error: 'Could not create your account. Please try again.' });
+        }
+      } else if ((createError as { code?: string } | null)?.code === 'weak_password' || /password/i.test(message)) {
         return json(400, { error: 'That password is too weak or has appeared in a data breach. Please choose a different one.', expired: true });
+      } else {
+        console.error('[admin-signup-otp] createUser error:', message);
+        return json(500, { error: 'Could not create your account. Please try again.' });
       }
-      console.error('[admin-signup-otp] createUser error:', message);
-      return json(500, { error: 'Could not create your account. Please try again.' });
     }
 
     // The status (approved) and the age rule are enforced by the database trigger
     const { error: insertError } = await admin.from('admin_accounts').insert({
-      id: created.user.id,
+      id: userId,
       email,
       full_name: fullName,
       position,
@@ -239,17 +253,19 @@ Deno.serve(async (req) => {
       birth_date: birthDate,
     });
     if (insertError) {
+      if (insertError.code === '23505') return json(409, { error: 'This email already has an admin account. Try logging in instead.' });
       console.error('[admin-signup-otp] admin_accounts insert error:', insertError.message);
-      await admin.auth.admin.deleteUser(created.user.id); // leave nothing half-created; the person can simply try again
+      if (isNewLogin) await admin.auth.admin.deleteUser(userId!); // leave nothing half-created; the person can simply try again
       return json(500, { error: 'Could not create your account. Please try again.' });
     }
 
-    // A one-time token the browser exchanges for a session, so the new admin lands signed in (straight into the console)
-    const { data: link, error: linkError } = await admin.auth.admin.generateLink({ type: 'magiclink', email });
-    const tokenHash = link && link.properties && link.properties.hashed_token;
-    if (linkError || !tokenHash) {
-      console.error('[admin-signup-otp] generateLink error:', linkError && linkError.message);
-      return json(200, { created: true, token_hash: null });
+    if (!tokenHash) {
+      const { data: link, error: linkError } = await admin.auth.admin.generateLink({ type: 'magiclink', email });
+      tokenHash = (link && link.properties && link.properties.hashed_token) || null;
+      if (linkError || !tokenHash) {
+        console.error('[admin-signup-otp] generateLink error:', linkError && linkError.message);
+        return json(200, { created: true, token_hash: null });
+      }
     }
     return json(200, { created: true, token_hash: tokenHash });
   }

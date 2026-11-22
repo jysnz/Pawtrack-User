@@ -10543,3 +10543,10 @@ html[data-theme="light"] .gmap-layer-btn-light { display: none; }
 .hw-stage .hw-callout p { font-size: 0.8rem; }
 
 .hw-stage .tag-3d-model { cursor: default; }
+
+/* The field box already shows focus: never draw a second ring around the text inside it */
+.auth-field-input:focus,
+.auth-field-input:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
+}

@@ -177,6 +177,44 @@ window.HeatmapView = {
     if (found && document.getElementById('pawtrack-leaflet-map')) this.render(document.getElementById('view-container'));
   },
 
+  // ----- The facility's scope: its city (and, for a sub-facility, the barangays it covers) -----
+  // The map and every figure on this page describe only that area.
+  scope() {
+    const store = window.adminStore;
+    const f = store && typeof store.getActiveFacility === 'function' ? store.getActiveFacility() : null;
+    if (!f) return null;
+    const b = f.cityBounds;
+    const ok = b && ['north', 'south', 'east', 'west'].every(k => Number.isFinite(+b[k]));
+    return {
+      facility: f,
+      city: f.city || '',
+      bounds: ok ? { north: +b.north, south: +b.south, east: +b.east, west: +b.west } : null,
+      barangays: Array.isArray(f.coverage) ? f.coverage.map(x => String(x || '').trim()).filter(Boolean) : []
+    };
+  },
+
+  isQuezonCity(scope) {
+    return !scope || !scope.city || /quezon|\bqc\b/i.test(scope.city);
+  },
+
+  scopeLabel(scope) {
+    if (!scope) return 'Quezon City';
+    if (scope.barangays.length) return `${scope.facility.name}'s coverage area`;
+    return scope.city || `${scope.facility.name}'s area`;
+  },
+
+  inScope(inc, scope) {
+    if (!scope) return true;
+    const b = scope.bounds;
+    if (b && !(inc.lat >= b.south && inc.lat <= b.north && inc.lng >= b.west && inc.lng <= b.east)) return false;
+    if (scope.barangays.length && !inc.needsGeo) {
+      const norm = (t) => String(t || '').toLowerCase().replace(/^barangay\s+|^brgy\.?\s+/, '').replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
+      const hay = norm(`${inc.location} ${inc.barangay}`);
+      return scope.barangays.some(name => { const n = norm(name); return n && hay.includes(n); });
+    }
+    return true;
+  },
+
   buildIncidents() {
     const store = window.adminStore;
     if (!store) return [];
@@ -238,7 +276,8 @@ window.HeatmapView = {
       }));
     });
 
-    return list;
+    const scope = this.scope();
+    return list.filter(i => this.inScope(i, scope));
   },
 
   applyDateRange(list) {
@@ -298,6 +337,8 @@ window.HeatmapView = {
   // Groups nearby incidents (about 1 km grid cells) and ranks them
   getHotspots(list) {
     const incidents = list || this.incidentsData;
+    const sc = this.scope();
+    const cityLabel = sc && !this.isQuezonCity(sc) ? sc.city : null;
     const cells = {};
     incidents.forEach(i => {
       const key = `${Math.round(i.lat / 0.01)}|${Math.round(i.lng / 0.01)}`;
@@ -313,7 +354,7 @@ window.HeatmapView = {
         const level = total >= 3 ? ['HIGH RISK', 'risk-high'] : total === 2 ? ['MODERATE RISK', 'risk-moderate'] : ['LOW RISK', 'risk-low'];
         return {
           barangay: name,
-          city: district === 'Outside QC' ? 'Outside Quezon City' : `Quezon City (${district})`,
+          city: cityLabel || (district === 'Outside QC' ? 'Outside Quezon City' : `Quezon City (${district})`),
           dogs: items.filter(i => (i.species || '').toLowerCase() === 'dog').length,
           cats: items.filter(i => (i.species || '').toLowerCase() === 'cat').length,
           riskLevel: level[0], riskClass: level[1], totalReports: total,
@@ -351,6 +392,13 @@ window.HeatmapView = {
 
   // Builds the page shell once; later calls only refresh the data so the map is not rebuilt on every filter change.
   render(container) {
+    // An account that has not joined or created a facility has nothing to show here yet: only the way in, no map
+    const store = window.adminStore;
+    const account = store && typeof store.currentAdmin === 'function' ? store.currentAdmin() : null;
+    if (account && typeof store.hasFacility === 'function' && !store.hasFacility()) {
+      window.AdminNoFacility.render(container, 'Heatmap', 'This map shows where animals are reported in your facility\'s area.');
+      return;
+    }
     this.incidentsData = this.buildIncidents();
     this.resolveNames(this.incidentsData);
     this._container = container;
@@ -389,7 +437,7 @@ window.HeatmapView = {
           <div class="view-header-titles">
             <div class="dash-eyebrow">Geospatial insights</div>
             <h1>Heatmap</h1>
-            <div class="subtitle"><span>Where lost and stray animals are being reported across Quezon City, live from the database</span></div>
+            <div class="subtitle"><span id="hm-subtitle-text">Where lost and stray animals are being reported across Quezon City, live from the database</span></div>
           </div>
           <div class="view-header-actions">
             <button class="chip" id="btn-reset-heatmap-filters" hidden>
@@ -497,6 +545,16 @@ window.HeatmapView = {
     const others = filtered.length - filtered.filter(i => i.status === 'lost').length;
     const top = hotspots[0];
     const peak = this.peakWindow(filtered);
+
+    // The page describes the facility's own area only
+    const scope = this.scope();
+    const sub = root.querySelector('#hm-subtitle-text');
+    if (sub) sub.textContent = `Where lost and stray animals are being reported in ${this.scopeLabel(scope)}, live from the database`;
+    // Districts are a Quezon City idea: other cities have none to filter by
+    const dsField = root.querySelector('#select-district-filter') && root.querySelector('#select-district-filter').closest('.hm-field');
+    const showDistricts = this.isQuezonCity(scope) && !(scope && scope.barangays.length);
+    if (dsField) dsField.hidden = !showDistricts;
+    if (!showDistricts && this.selectedDistrict !== 'all') this.selectedDistrict = 'all';
 
     // Toolbar state
     const rg = root.querySelector('#select-range-filter'); if (rg) rg.value = this.selectedDateRange;
@@ -745,18 +803,39 @@ window.HeatmapView = {
     this.heatOverlay.setPoints(incidents.map(i => ({ lat: Math.round(i.lat * 1000) / 1000, lng: Math.round(i.lng * 1000) / 1000, w: weight(i) })).filter(p => p.w > 0));
     this.heatOverlay.setVisible(this.showHeat);
 
+    this.applyScopeToMap();
     this.fitToIncidents(incidents);
     return true;
+  },
+
+  // Keeps the map inside the facility's scope (its city) and draws that area's outline
+  applyScopeToMap() {
+    if (!this.gmap) return;
+    const scope = this.scope();
+    const key = scope && scope.bounds ? `${scope.facility.id}|${JSON.stringify(scope.bounds)}` : 'none';
+    if (this._scopeKey === key && this._scopeMap === this.gmap) return;
+    this._scopeKey = key;
+    this._scopeMap = this.gmap;
+    if (this._scopeRect) { this._scopeRect.setMap(null); this._scopeRect = null; }
+    if (!scope || !scope.bounds) { this.gmap.setOptions({ restriction: null }); return; }
+    this.gmap.setOptions({ restriction: { latLngBounds: scope.bounds, strictBounds: false } });
+    this._scopeRect = new google.maps.Rectangle({
+      map: this.gmap, bounds: scope.bounds, clickable: false,
+      strokeColor: '#c2410c', strokeOpacity: 0.75, strokeWeight: 2, fillColor: '#c2410c', fillOpacity: 0.04
+    });
+    this._fitKey = ''; // frame the new scope
   },
 
   // Frames the map around the reports in view (or the chosen district when there are none).
   // Skipped right after a deliberate "fly to", and when the set of reports has not changed.
   fitToIncidents(incidents, force = false) {
     if (!this.gmap) return;
-    const key = incidents.map(i => i.id).sort().join('|') + '#' + this.selectedDistrict;
+    const key = incidents.map(i => i.id).sort().join('|') + '#' + this.selectedDistrict + '#' + (this._scopeKey || '');
     if (!force && (key === this._fitKey || Date.now() < this._noFitUntil)) { this._fitKey = key; return; }
     this._fitKey = key;
     if (!incidents.length) {
+      const sc = this.scope();
+      if (sc && sc.bounds) { this.gmap.fitBounds(sc.bounds, 20); return; } // nothing to plot: show the whole scope
       const d = (this.qcDistricts && this.qcDistricts[this.selectedDistrict]) || this.qcDistricts['all'];
       this.gmap.panTo({ lat: d.center[0], lng: d.center[1] });
       this.gmap.setZoom(d.zoom);
@@ -902,12 +981,19 @@ window.HeatmapView = {
 
     if (typeof L === 'undefined') return;
 
+    const sc = this.scope();
     this.mapInstance = L.map(mapElement, {
       center: defaultCenter,
       zoom: defaultZoom,
       zoomControl: true,
       attributionControl: false
     });
+    // Keep the fallback map inside the facility's scope too
+    if (sc && sc.bounds && typeof L.latLngBounds === 'function') {
+      const lb = L.latLngBounds([sc.bounds.south, sc.bounds.west], [sc.bounds.north, sc.bounds.east]);
+      this.mapInstance.setMaxBounds(lb.pad(0.1));
+      this.mapInstance.fitBounds(lb);
+    }
 
 
     // Layer URL mapping

@@ -6,6 +6,45 @@
  * Guardian contact details are not listed here either: they stay on the individual records.
  */
 
+/**
+ * The page an account sees on the Dashboard and Heatmap until it has joined or created a facility.
+ * Nothing from the console is shown there, only the two ways in.
+ */
+window.AdminNoFacility = {
+  html(pageTitle, whatItShows) {
+    const icon = (path) => `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${path}</svg>`;
+    return `
+      <div class="view-header"><div class="view-header-titles"><h1>${pageTitle}</h1></div></div>
+      <section class="nofac" aria-labelledby="nofac-title">
+        <div class="nofac-mark" aria-hidden="true">
+          <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><path d="M5 21V8l7-4 7 4v13"/><path d="M9 21v-6h6v6"/><path d="M12 9v2"/></svg>
+        </div>
+        <h2 class="nofac-title" id="nofac-title">Set up your facility to get started</h2>
+        <p class="nofac-sub">${whatItShows} Register your facility, or join the team that already runs one.</p>
+        <div class="nofac-options">
+          <article class="nofac-option">
+            <span class="nofac-option-icon">${icon('<path d="M12 5v14M5 12h14"/>')}</span>
+            <h3>Register a facility</h3>
+            <p>You are the first from your team. Add its name, address and the area it covers.</p>
+            <button type="button" class="btn btn-primary btn-sm" data-nofac-go="shelters">Register facility</button>
+          </article>
+          <article class="nofac-option">
+            <span class="nofac-option-icon">${icon('<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>')}</span>
+            <h3>Join your team</h3>
+            <p>Ask your facility manager for the invite code, then enter it on the Facilities page.</p>
+            <button type="button" class="btn btn-secondary btn-sm" data-nofac-go="shelters">Join with a code</button>
+          </article>
+        </div>
+      </section>`;
+  },
+  render(container, pageTitle, whatItShows) {
+    container.innerHTML = this.html(pageTitle, whatItShows);
+    container.querySelectorAll('[data-nofac-go]').forEach((btn) => {
+      btn.addEventListener('click', () => { window.location.hash = '#' + btn.dataset.nofacGo; });
+    });
+  }
+};
+
 window.ActivationView = {
   timeframe: 'monthly', // 'weekly' | 'monthly' | 'yearly'
   funnelMode: 'percent', // 'percent' | 'number'
@@ -290,6 +329,12 @@ window.ActivationView = {
     if (loading) {
       this._wasLoading = true;
       return this.renderSkeleton(container);
+    }
+    // An account that has not joined or created a facility has nothing to show here yet: only the way in, no figures
+    if (account && !hasFacility) {
+      this._wasLoading = false;
+      window.AdminNoFacility.render(container, 'Dashboard', 'This dashboard shows your facility\'s animals, transfers and penalties.');
+      return;
     }
     // Entry animations play when the page is opened, when the data first arrives, and after the person's own action.
     // A background re-render (every realtime sync) stays perfectly still.

@@ -840,8 +840,9 @@ class App {
         setStatus(loginStatus, pendingAuthError, true);
         pendingAuthError = null;
       }
-      // The dialog was already open with a passed check (an auth event after coming back to the tab): do not restart it
-      if (!(wasOpen && loginTurnstileId !== null && loginTurnstileToken)) renderLoginTurnstile();
+      // The dialog was already open (an auth event after coming back to the tab): leave its security check alone.
+      // Turnstile renews an expired check by itself; restarting it here made the widget flash.
+      if (!(wasOpen && loginTurnstileId !== null)) renderLoginTurnstile();
     };
     this.openLoginDialog = openLoginDialog;
 
@@ -1480,11 +1481,12 @@ class App {
     // Back from Google's page: the browser may bring this page back exactly as it was left, with the log in and
     // create account tabs still disabled and "Redirecting to Google…" showing. Make the form usable again.
     window.addEventListener('pageshow', (e) => {
-      if (!e.persisted && !(loginGoogleBtn && loginGoogleBtn.disabled)) return;
+      // Only when the page was left for Google: otherwise nothing is touched, so the form (and its security check)
+      // looks exactly as it did when the person left
+      if (!(loginGoogleBtn && loginGoogleBtn.disabled)) return;
       try { sessionStorage.removeItem(FRESH_SIGNIN_KEY); } catch (err) {}
       setBusy(false);
       if (loginStatus && /redirecting to google/i.test(loginStatus.textContent)) setStatus(loginStatus, '');
-      resetLoginTurnstile();
     });
 
     registerForm?.addEventListener('submit', async (e) => {

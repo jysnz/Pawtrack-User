@@ -1201,8 +1201,8 @@ body.auth-locked {
 /* The field box already shows focus: no second ring inside it (the global input:focus-visible ring drew a box around the text) */
 .auth-field-input:focus-visible,
 .auth-field-input:focus {
-  outline: none;
-  box-shadow: none;
+  outline: none !important;
+  box-shadow: none !important;
 }
 
 /* ==========================================================================
