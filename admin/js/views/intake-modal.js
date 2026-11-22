@@ -204,22 +204,11 @@ window.IntakeModal = {
         </button>
       </div>
       <div id="in-nfc" class="trm-nfc" role="status" aria-live="polite" hidden><i aria-hidden="true"></i><span></span></div>
-      <form class="trm-scan-form trm-code-form" id="in-code-form" style="margin-top:12px;" autocomplete="off">
-        <input type="text" class="form-control" id="in-code" maxlength="60" placeholder="Or type the tag code (e.g. PT-ABC12345)" aria-label="Tag code" />
-        <button type="submit" class="btn btn-secondary">Look up</button>
-      </form>
       ${this.facilityPickHtml() ? `<div style="margin-top:14px;">${this.facilityPickHtml()}</div>` : ''}
       <p class="trm-notag">Pet has no tag? <button type="button" class="trm-link" id="in-notag">Log it without NFC</button></p>`;
 
     body.querySelector('#in-nfc-btn').addEventListener('click', () => (this.nfc.state === 'scanning' ? this.stopNfc() : this.startNfc()));
     body.querySelector('#in-notag').addEventListener('click', () => this.showForm(null));
-    body.querySelector('#in-code-form').addEventListener('submit', (e) => {
-      e.preventDefault();
-      const payload = this.manualPayload(body.querySelector('#in-code').value);
-      if (!payload) { this.setNfc('error', 'Type the tag code first.'); return; }
-      this.stopNfc();
-      this.showForm(payload);
-    });
     this.bindFacility(body);
     this.paintNfc();
   },
@@ -524,9 +513,9 @@ window.IntakeModal = {
 
   // Why this device cannot scan, in the same words as the owner app
   unsupportedText() {
-    if (this.isBrave()) return 'Brave does not support NFC scanning. Open this page in Chrome on Android to scan tags, or type the tag code below.';
-    if (window.isSecureContext === false) return 'NFC scanning needs a secure (HTTPS) page. Open the console over HTTPS, or type the tag code below.';
-    return 'This device cannot read NFC tags (Web NFC works in Chrome on Android over HTTPS). Type the tag code below instead.';
+    if (this.isBrave()) return 'Brave does not support NFC scanning. Open this page in Chrome on Android to scan tags, or use "Log it without NFC" below.';
+    if (window.isSecureContext === false) return 'NFC scanning needs a secure (HTTPS) page. Open the console over HTTPS, or use "Log it without NFC" below.';
+    return 'This device cannot read NFC tags (Web NFC works in Chrome on Android over HTTPS). Use "Log it without NFC" below instead.';
   },
 
   setNfc(state, text) {
