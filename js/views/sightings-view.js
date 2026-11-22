@@ -207,8 +207,16 @@ class SightingsView {
   }
 
   // The account's profile picture when there is one; the coloured initial shows behind it and stays if the picture fails
+  _isAnonymous(name) {
+    return ['community good samaritan', 'anonymous'].includes(String(name || '').trim().toLowerCase());
+  }
+
+  // Anonymous posters show the PawTrack logo instead of an initial or a profile picture
   _avatar(name, cls = '', src = '') {
     const n = String(name || '?').trim();
+    if (this._isAnonymous(n)) {
+      return `<span class="spost-avatar is-system ${cls}" title="PawTrack"><img src="images/pawtrack-logo.svg" alt="PawTrack" loading="lazy" /></span>`;
+    }
     const pic = /^(https:|data:image\/)/.test(String(src || '')) ? `<img src="${this._esc(src)}" alt="" loading="lazy" onerror="this.remove()" />` : '';
     return `<span class="spost-avatar ${cls}" style="background:hsl(${this._hue(n)} 55% 42%); color:#fff;">${this._esc(n.charAt(0).toUpperCase())}${pic}</span>`;
   }

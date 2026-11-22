@@ -99,23 +99,37 @@ class HardwareView {
   render(container) {
     const t = (k, d) => (window.pawI18n ? window.pawI18n.t(k, d) : d);
 
+    const specs = [
+      { icon: 'radio', label: t('hardware.specFrequency', 'Frequency'), value: '13.56 MHz' },
+      { icon: 'cpu', label: t('hardware.specChip', 'Chip'), value: 'NTAG213' },
+      { icon: 'droplets', label: t('hardware.specRating', 'Water rating'), value: 'IP67' },
+      { icon: 'battery-off', label: t('hardware.specPower', 'Power'), value: t('hardware.specPassive', 'Passive, no battery') }
+    ];
+    const steps = [
+      { icon: 'tag', n: 1, title: t('hardware.card1Title', '1. NFC Collar Tag (13.56 MHz NTAG213)'), desc: t('hardware.card1Desc', 'Encapsulated inside a sealed waterproof enclosure. Features high-frequency NTAG213 NFC for citizen phone taps and 134.2 kHz FDX-B for municipal scanner reads.') },
+      { icon: 'smartphone', n: 2, title: t('hardware.card2Title', '2. Smartphone NFC Tap-to-Report (No App Needed)'), desc: t('hardware.card2Desc', 'Works natively on Apple iOS and Android smartphones. Tapping the collar tag launches the PawTrack web portal and opens the report dialog with one touch.') },
+      { icon: 'shield', n: 3, title: t('hardware.card3Title', '3. Standardized Impact-Resistant Enclosure'), desc: t('hardware.card3Desc', 'Unified single-design casing fabricated with durable weather-sealed PETG, reinforced steel eyelet for collar attachment, and IP67 water resistance.') },
+      { icon: 'map-pin', n: 4, title: t('hardware.card4Title', '4. Recorded Checkpoint Detection (No Battery or GPS Needed)'), desc: t('hardware.card4Desc', 'Passively powered by the interrogating NFC field. Eliminates heavy batteries and satellite fees while ensuring instant identification during recovery.') }
+    ];
+    // The step titles carry their own "1. " prefix; the badge shows the number instead
+    const stepTitle = (x) => x.title.replace(/^\s*\d+\.\s*/, '');
+
     container.innerHTML = `
       <div class="view-header">
         <div class="view-title-group">
+          <button type="button" class="hw-back" onclick="window.location.hash = 'settings'">
+            <i data-lucide="arrow-left"></i><span>${t('settings.title', 'Settings')}</span>
+          </button>
           <h1>${t('hardware.title', 'Universal NFC Collar Tag Specifications')}</h1>
           <div class="view-subtitle">${t('hardware.subtitle', 'Review the standardized smartphone NFC collar tag, reader architecture, and municipal pet recovery integration.')}</div>
         </div>
       </div>
 
-      <div class="hardware-studio-grid">
-        <!-- Left: Interactive 3D Tag Preview (Unified Circular Design with Keychain) -->
-        <div class="glass-card filament-preview-stage">
-          <div style="font-size:0.75rem; text-transform:uppercase; color:var(--text-muted); font-weight:700; letter-spacing:0.05em; margin-bottom:0.75rem;">
-            ${t('hardware.previewHeading', 'Standardized Collar Tag Prototype')}
-          </div>
+      <div class="hw-layout">
+        <section class="glass-card hw-stage">
+          <div class="hw-eyebrow">${t('hardware.previewHeading', 'Standardized Collar Tag Prototype')}</div>
 
           <div class="tag-preview-wrapper">
-            <!-- Metallic Split Ring & Keychain Rig -->
             <div class="tag-keychain-rig">
               <div class="tag-keychain-splitring"></div>
               <div class="tag-keychain-chain">
@@ -125,8 +139,7 @@ class HardwareView {
               <div class="tag-jumpring"></div>
             </div>
 
-            <!-- White Circular Tag Model with Embossed Emblem (Auto-morphing every 3s) -->
-            <div class="tag-3d-model" id="tag-3d-preview" onclick="window.hardwareView.scanAndReport()" title="${t('hardware.tagClickTitle', 'Tap or click to simulate phone NFC collar scan')}">
+            <div class="tag-3d-model" id="tag-3d-preview">
               <div class="tag-hole"></div>
               <div class="tag-emboss-graphic" id="tag-emblem-slot">
                 ${this.getPatternSvg(this.selectedPattern)}
@@ -135,86 +148,48 @@ class HardwareView {
             </div>
           </div>
 
-          <!-- Simulate Phone NFC Scan Button -->
-          <div style="margin-top:1.25rem; width:100%;">
-            <button class="btn btn-primary" onclick="window.hardwareView.scanAndReport()" style="width:100%; display:flex; align-items:center; justify-content:center; gap:8px; font-weight:700; box-shadow:0 4px 14px rgba(234,157,30,0.35);">
-              <i data-lucide="scan-line" style="width:18px; height:18px;"></i>
-              <span>${t('hardware.scanNfcBtn', 'Simulate Phone NFC Tap (Report Pet)')}</span>
-            </button>
+          <div class="hw-callout">
+            <div class="hw-callout-head">
+              <span class="hw-callout-icon"><i data-lucide="smartphone"></i></span>
+              <strong>${t('hardware.nfcPhoneTitle', 'Smartphone NFC Instant Sighting')}</strong>
+            </div>
+            <p>${t('hardware.nfcPhoneDesc', 'Standardized single-mold design with integrated NTAG213 NFC chip. Anyone finding the pet can simply tap their NFC-enabled smartphone against the tag to open the pet profile and report dialog instantly.')}</p>
           </div>
+        </section>
 
-          <!-- Smartphone NFC Detection Feature Card -->
-          <div style="margin-top:1.25rem; width:100%; background:var(--bg-surface-elevated, rgba(35,19,10,0.6)); border:1px solid var(--border-subtle, rgba(234,157,30,0.25)); border-radius:var(--radius-md, 12px); padding:1rem; text-align:left;">
-            <div style="display:flex; align-items:center; gap:8px; margin-bottom:0.5rem;">
-              <div style="width:28px; height:28px; border-radius:6px; background:linear-gradient(135deg, #ea9d1e, #b85410); color:#180d07; display:flex; align-items:center; justify-content:center; flex-shrink:0;">
-                <i data-lucide="smartphone" style="width:16px; height:16px;"></i>
-              </div>
-              <strong style="font-size:0.88rem; color:var(--text-main);">${t('hardware.nfcPhoneTitle', 'Smartphone NFC Instant Sighting')}</strong>
+        <div class="hw-side">
+          <section class="glass-card hw-panel">
+            <h2 class="hw-panel-title"><i data-lucide="list-checks"></i> ${t('hardware.glanceTitle', 'At a glance')}</h2>
+            <div class="hw-specs">
+              ${specs.map((x) => `
+                <div class="hw-spec">
+                  <span class="hw-spec-icon"><i data-lucide="${x.icon}"></i></span>
+                  <small>${x.label}</small>
+                  <strong>${x.value}</strong>
+                </div>`).join('')}
             </div>
-            <p style="font-size:0.78rem; color:var(--text-muted); line-height:1.45; margin:0 0 0.75rem;">
-              ${t('hardware.nfcPhoneDesc', 'Standardized single-mold design with integrated NTAG213 NFC chip. Anyone finding the pet can simply tap their NFC-enabled smartphone against the tag to open the pet profile and report dialog instantly.')}
-            </p>
-            <div style="display:flex; flex-wrap:wrap; gap:6px;">
-              <span class="badge" style="background:rgba(234,157,30,0.15); color:var(--primary, #ea9d1e); font-size:10.5px; font-weight:700; padding:3px 8px; border-radius:99px; border:1px solid rgba(234,157,30,0.25);">
-                ✓ 13.56 MHz NFC Type 2
-              </span>
-              <span class="badge" style="background:rgba(22,163,74,0.15); color:#16a34a; font-size:10.5px; font-weight:700; padding:3px 8px; border-radius:99px; border:1px solid rgba(22,163,74,0.25);">
-                ✓ Zero Battery (Passive)
-              </span>
-              <span class="badge" style="background:rgba(184,84,16,0.15); color:#b85410; font-size:10.5px; font-weight:700; padding:3px 8px; border-radius:99px; border:1px solid rgba(184,84,16,0.25);">
-                ✓ IP67 Waterproof Tag
-              </span>
-            </div>
-          </div>
-        </div>
+          </section>
 
-        <!-- Right: Hardware System Specifications -->
-        <div class="glass-card" style="padding:1.75rem; display:flex; flex-direction:column; gap:1.25rem;">
-          <h3 style="font-size:1.2rem; display:flex; align-items:center; gap:0.5rem;">
-            <i data-lucide="cpu" style="color:var(--primary);"></i> ${t('hardware.archTitle', 'Hardware & Reader Architecture')}
-          </h3>
+          <section class="glass-card hw-panel">
+            <h2 class="hw-panel-title"><i data-lucide="cpu"></i> ${t('hardware.archTitle', 'Hardware & Reader Architecture')}</h2>
+            <ol class="hw-steps">
+              ${steps.map((x) => `
+                <li class="hw-step">
+                  <span class="hw-step-icon"><i data-lucide="${x.icon}"></i><b>${x.n}</b></span>
+                  <div>
+                    <strong>${stepTitle(x)}</strong>
+                    <p>${x.desc}</p>
+                  </div>
+                </li>`).join('')}
+            </ol>
 
-          <div style="display:flex; flex-direction:column; gap:1rem;">
-            <div style="background:var(--bg-surface-elevated); padding:1rem; border-radius:var(--radius-md); border-left:3px solid var(--primary);">
-              <strong style="font-size:0.9rem; color:var(--text-main);">${t('hardware.card1Title', '1. NFC Collar Tag (13.56 MHz NTAG213)')}</strong>
-              <p style="font-size:0.825rem; color:var(--text-muted); margin-top:0.25rem;">
-                ${t('hardware.card1Desc', 'Encapsulated inside a sealed waterproof enclosure. Features high-frequency NTAG213 NFC for citizen phone taps and 134.2 kHz FDX-B for municipal scanner reads.')}
-              </p>
-            </div>
-
-            <div style="background:var(--bg-surface-elevated); padding:1rem; border-radius:var(--radius-md); border-left:3px solid var(--secondary);">
-              <strong style="font-size:0.9rem; color:var(--text-main);">${t('hardware.card2Title', '2. Smartphone NFC Tap-to-Report (No App Needed)')}</strong>
-              <p style="font-size:0.825rem; color:var(--text-muted); margin-top:0.25rem;">
-                ${t('hardware.card2Desc', 'Works natively on Apple iOS and Android smartphones. Tapping the collar tag launches the PawTrack web portal and opens the report dialog with one touch.')}
-              </p>
-            </div>
-
-            <div style="background:var(--bg-surface-elevated); padding:1rem; border-radius:var(--radius-md); border-left:3px solid var(--warning);">
-              <strong style="font-size:0.9rem; color:var(--text-main);">${t('hardware.card3Title', '3. Standardized Impact-Resistant Enclosure')}</strong>
-              <p style="font-size:0.825rem; color:var(--text-muted); margin-top:0.25rem;">
-                ${t('hardware.card3Desc', 'Unified single-design casing fabricated with durable weather-sealed PETG, reinforced steel eyelet for collar attachment, and IP67 water resistance.')}
-              </p>
-            </div>
-
-            <div style="background:var(--bg-surface-elevated); padding:1rem; border-radius:var(--radius-md); border-left:3px solid #16a34a;">
-              <strong style="font-size:0.9rem; color:var(--text-main);">${t('hardware.card4Title', '4. Recorded Checkpoint Detection (No Battery or GPS Needed)')}</strong>
-              <p style="font-size:0.825rem; color:var(--text-muted); margin-top:0.25rem;">
-                ${t('hardware.card4Desc', 'Passively powered by the interrogating NFC field. Eliminates heavy batteries and satellite fees while ensuring instant identification during recovery.')}
-              </p>
-            </div>
-          </div>
-
-          <div style="border-top:1px solid var(--border-subtle); padding-top:1rem; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
-            <span style="font-size:0.8rem; color:var(--text-muted);">${t('hardware.audioVerify', 'Acoustic Hardware Verification')}</span>
-            <div style="display:flex; gap:8px;">
-              <button class="btn btn-outline btn-sm" onclick="window.nfcScanner.playSuccessChirp()">
+            <div class="hw-audio">
+              <span>${t('hardware.audioVerify', 'Acoustic Hardware Verification')}</span>
+              <button type="button" class="btn btn-outline btn-sm" onclick="window.nfcScanner.playSuccessChirp()">
                 <i data-lucide="volume-2"></i> ${t('hardware.testBeeperBtn', 'Test Reader Audio Beeper')}
               </button>
-              <button class="btn btn-primary btn-sm" onclick="window.hardwareView.scanAndReport()">
-                <i data-lucide="scan-line"></i> <span>${t('hardware.scanCollarBtn', 'Simulate Phone NFC Tap')}</span>
-              </button>
             </div>
-          </div>
+          </section>
         </div>
       </div>
     `;

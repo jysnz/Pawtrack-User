@@ -174,6 +174,19 @@ class SettingsView {
 
         <section class="glass-card settings-card">
           <div class="settings-card-head">
+            <div class="settings-card-icon"><i data-lucide="nfc"></i></div>
+            <div class="settings-card-head-text">
+              <h2>${t('settings.hardware', 'Hardware')}</h2>
+              <p>${t('settings.hardwareSub', 'The NFC collar tag and how it works.')}</p>
+            </div>
+          </div>
+          <button type="button" class="settings-link-row" data-goto="hardware">
+            <i data-lucide="cpu"></i><span>${t('nav.hardware', 'Hardware Specs')}</span><i data-lucide="chevron-right"></i>
+          </button>
+        </section>
+
+        <section class="glass-card settings-card">
+          <div class="settings-card-head">
             <div class="settings-card-icon"><i data-lucide="scale"></i></div>
             <div class="settings-card-head-text">
               <h2>${t('settings.legal', 'Legal')}</h2>

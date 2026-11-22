@@ -289,14 +289,6 @@ class App {
       if (onetapPrompt) onetapPrompt.style.display = 'none';
     });
 
-    // User Dropdown: Guardian Profile Button
-    document.getElementById('dropdown-profile-btn')?.addEventListener('click', (e) => {
-      e.stopPropagation();
-      if (userDropdown) userDropdown.style.display = 'none';
-      this.populateGuardianProfile(false);
-      if (profileModal) profileModal.classList.add('active');
-    });
-
     // Guardian Profile: Switch to Edit Mode
     const openGuardianEditMode = (e) => {
       if (e) e.stopPropagation();
@@ -411,13 +403,6 @@ class App {
       if (window.notifManager) {
         window.notifManager.showToast('Guardian profile updated successfully.', 'success');
       }
-    });
-
-    // User Dropdown: Hardware Specs Button (under Guardian Profile)
-    document.getElementById('dropdown-hardware-btn')?.addEventListener('click', (e) => {
-      e.stopPropagation();
-      if (userDropdown) userDropdown.style.display = 'none';
-      window.location.hash = 'hardware';
     });
 
     // User Dropdown: Settings opens the Settings page

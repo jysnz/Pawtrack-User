@@ -21,8 +21,8 @@
    1. Interactive feedback: specific transitions, press state, focus ring
    -------------------------------------------------------------------------- */
 .btn, .chip, .btn-icon, .icon-btn-subtle, .nav-item, .command-item,
-.period-option-btn, .workspace-option-btn, .admin-dropdown-item,
-.admin-dropdown-logout-btn, .workspace-chip, .global-search-trigger, .dash-info {
+.period-option-btn, .workspace-option-btn, .user-dropdown-item,
+.workspace-chip, .global-search-trigger, .dash-info {
   transition-property: background-color, border-color, color, box-shadow, transform, opacity;
   transition-duration: 150ms;
   transition-timing-function: var(--ease-out);
@@ -44,15 +44,15 @@
 /* Keyboard focus: visible, on-brand, never shown for mouse clicks */
 .btn:focus-visible, .chip:focus-visible, .btn-icon:focus-visible,
 .icon-btn-subtle:focus-visible, .nav-item:focus-visible,
-.admin-avatar-btn:focus-visible, .workspace-chip:focus-visible,
-.global-search-trigger:focus-visible, .admin-dropdown-item:focus-visible,
-.admin-dropdown-logout-btn:focus-visible, .workspace-option-btn:focus-visible,
+.header-user-pill-btn:focus-visible, .workspace-chip:focus-visible,
+.global-search-trigger:focus-visible, .user-dropdown-item:focus-visible,
+.workspace-option-btn:focus-visible,
 .period-option-btn:focus-visible, .dash-info:focus-visible {
   outline: none;
   box-shadow: var(--focus-ring);
 }
 
-.global-search-trigger, .admin-avatar-btn { cursor: pointer; }
+.global-search-trigger, .header-user-pill-btn { cursor: pointer; }
 
 /* --------------------------------------------------------------------------
    2. Sidebar navigation
@@ -114,7 +114,7 @@
    4. Dropdowns: grow from their trigger, not from the centre
    -------------------------------------------------------------------------- */
 .workspace-dropdown { transform-origin: top left; }
-.admin-user-dropdown { transform-origin: top right; }
+.user-account-dropdown-panel { transform-origin: bottom left; }
 
 /* --------------------------------------------------------------------------
    5. Overlays: drawer, modal, command palette
@@ -236,7 +236,7 @@
   .nav-item.active::before { opacity: 1; }
   .nav-badge, .admin-access-count, .workspace-dot { animation: none; }
 
-  .workspace-dropdown, .admin-user-dropdown { animation: motion-fade 120ms linear; }
+  .workspace-dropdown, .user-account-dropdown-panel { animation: motion-fade 120ms linear; }
 
   .drawer-panel, .drawer-backdrop.open .drawer-panel { transform: none; opacity: 0; transition: opacity 150ms linear; }
   .drawer-backdrop.open .drawer-panel { opacity: 1; }
@@ -1420,11 +1420,11 @@ span.pp-zoom { cursor: default; }
 
   .nock-brand-row { display: flex; padding: 0 6px 12px; margin-bottom: 4px; border-bottom: 1px solid var(--border-light); }
   .facility-chip { display: flex; margin: 4px 2px 10px; }
-  .sidebar-footer { display: flex; margin-top: 8px; padding: 12px; flex: none; }
-  .operator-avatar { width: 40px; height: 40px; font-size: 13px; }
-  .operator-name { font-size: 14px; }
-  .operator-role { font-size: 12px; }
-  .operator-open-app { width: 40px; height: 40px; }
+  .sidebar-account { display: block; margin-top: 8px; padding-top: 12px; flex: none; }
+  .header-avatar-circle { width: 40px; height: 40px; font-size: 13px; }
+  .header-user-name { font-size: 14px; }
+  .sidebar-account-sub { font-size: 12px; }
+  .user-account-dropdown-panel { width: auto; right: 0; }
   .nav-group-label { display: block; }
 
   .nav-scrollable {
@@ -1481,8 +1481,6 @@ span.pp-zoom { cursor: default; }
   }
   .global-search-trigger .search-placeholder { gap: 0; }
   .global-search-trigger .search-placeholder span, .kbd-shortcut { display: none; }
-  .admin-avatar-btn { width: 36px; height: 36px; }
-  .admin-user-dropdown { position: fixed; top: 58px; right: 10px; left: 10px; width: auto; max-height: calc(100dvh - 140px); overflow-y: auto; }
 
   /* Content */
   .view-viewport { padding: 14px 14px calc(18px + 8px); }
@@ -2141,7 +2139,7 @@ span.pp-zoom { cursor: default; }
 .view-viewport img, .view-viewport svg, .view-viewport canvas { max-width: 100%; }
 
 /* Visible keyboard focus on every interactive control, including the div-based nav and avatar */
-.nav-item:focus-visible, [role="button"]:focus-visible, .admin-avatar-btn:focus-visible,
+.nav-item:focus-visible, [role="button"]:focus-visible, .header-user-pill-btn:focus-visible,
 .btn:focus-visible, .chip:focus-visible, .page-btn:focus-visible, .dash-segmented button:focus-visible,
 a:focus-visible, select:focus-visible, input:focus-visible, textarea:focus-visible {
   outline: 2px solid var(--brand-terracotta);
@@ -2155,8 +2153,6 @@ a:focus-visible, select:focus-visible, input:focus-visible, textarea:focus-visib
 .topbar-right { gap: 10px; }
 .topbar-right .theme-toggle, .nock-topbar .btn-sidebar-toggle-topbar { transition: background .15s ease, border-color .15s ease, transform .15s ease; }
 .topbar-right .theme-toggle:hover { transform: translateY(-1px); }
-.admin-avatar-btn { box-shadow: 0 0 0 2px var(--bg-card), 0 0 0 3px color-mix(in srgb, var(--brand-terracotta) 40%, transparent); transition: transform .15s ease, box-shadow .15s ease; }
-.admin-avatar-btn:hover { transform: scale(1.05); }
 .topbar-greeting-hello { letter-spacing: -0.01em; }
 
 /* Heatmap dropdown filters: custom arrow, consistent look */

@@ -20,9 +20,9 @@ navTabs.forEach(tab => {
   console.log(`[PASS] Found tab [data-view="${tab}"] in index.html`);
 });
 
-// Verify Hardware Specs button in User Account Dropdown
-assert(indexHtml.includes('id="dropdown-hardware-btn"'), 'index.html must include #dropdown-hardware-btn in user dropdown');
-console.log('[PASS] Found #dropdown-hardware-btn in User Account Dropdown menu.');
+// Hardware Specs now lives in Settings, not the account dropdown
+assert(!indexHtml.includes('id="dropdown-hardware-btn"') && !indexHtml.includes('id="dropdown-profile-btn"'), 'account dropdown must not list Guardian Profile or Hardware Specs');
+console.log('[PASS] Account dropdown no longer lists Guardian Profile or Hardware Specs.');
 
 // 2. Mock DOM environment
 let currentUser = null;

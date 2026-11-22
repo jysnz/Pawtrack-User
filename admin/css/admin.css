@@ -501,79 +501,194 @@ html, body {
   color: var(--color-red);
 }
 
-/* Sidebar Operator Footer: avatar, who is signed in, and a shortcut to the owner app */
-.sidebar-footer {
+/* Sidebar account: same pill and upward menu as the owner app sidebar */
+.sidebar-account {
+  position: relative;
   margin-top: auto;
-  padding: 10px 10px 10px 12px;
-  border-radius: var(--radius-lg);
-  background: var(--bg-card);
-  border: 1px solid var(--border-main);
-  box-shadow: 0 1px 2px rgba(28, 25, 23, 0.04);
-  display: flex;
-  align-items: center;
-  gap: 10px;
+  border-top: 1px solid var(--border-light);
+  padding-top: 0.85rem;
 }
 
-.operator-avatar {
+.header-user-pill-btn {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0.65rem;
+  padding: 0.5rem 0.65rem;
+  background: var(--bg-card);
+  border: 1px solid var(--border-main);
+  border-radius: var(--radius-md);
+  box-shadow: 0 1px 2px rgba(28, 25, 23, 0.04);
+  color: var(--ink-primary);
+  font-family: var(--font-sans);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.header-user-pill-btn:hover {
+  border-color: var(--brand-terracotta);
+}
+
+.header-avatar-circle {
   flex: none;
-  width: 34px;
-  height: 34px;
+  width: 30px;
+  height: 30px;
   border-radius: 50%;
   display: grid;
   place-items: center;
   background: var(--brand-terracotta);
   color: #fff;
   font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-  box-shadow: 0 0 0 2px var(--bg-card), 0 0 0 3px var(--brand-terracotta-border);
+  font-weight: 800;
+  overflow: hidden;
 }
 
-.operator-info {
-  flex: 1 1 auto;
+.sidebar-account-meta {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+
+.header-user-name {
+  display: block;
+  font-size: 0.88rem;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sidebar-account-sub {
+  font-size: 0.72rem;
+  color: var(--ink-muted);
+}
+
+.sidebar-account-chevron {
+  flex-shrink: 0;
+  color: var(--ink-muted);
+}
+
+/* Account menu opens upward from the bottom of the sidebar */
+.user-account-dropdown-panel {
+  position: absolute;
+  bottom: calc(100% + 10px);
+  left: 0;
+  width: 290px;
+  max-width: calc(100vw - 24px);
+  background: var(--bg-card);
+  border: 1px solid var(--border-main);
+  border-radius: 14px;
+  box-shadow: var(--shadow-modal);
+  z-index: 2600;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  animation: fadeInDropdown 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.user-account-dropdown-panel[hidden] { display: none; }
+
+.user-dropdown-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 4px 10px;
+}
+
+.user-dropdown-avatar {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--brand-terracotta);
+  color: #fff;
+  display: grid;
+  place-items: center;
+  font-size: 15px;
+  font-weight: 800;
+  overflow: hidden;
+}
+
+.user-dropdown-meta {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 1px;
-  line-height: 1.25;
 }
 
-.operator-name {
-  font-size: 12.5px;
+.user-dropdown-name {
   font-weight: 700;
+  font-size: 13px;
   color: var(--ink-primary);
-  white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.operator-role {
+.user-dropdown-email {
   font-size: 11px;
   color: var(--ink-muted);
-  white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
 }
+.user-dropdown-email:empty { display: none; }
 
-.operator-actions {
-  flex: none;
-  display: flex;
-}
-
-.operator-open-app {
-  width: 32px;
-  height: 32px;
-  padding: 0;
-  border-radius: var(--radius-md);
-  border: 1px solid var(--border-main);
-  background: var(--bg-card-subtle);
-  color: var(--ink-secondary);
-}
-.operator-open-app:hover {
+.user-dropdown-role {
+  font-size: 9.5px;
+  font-weight: 700;
+  color: var(--brand-terracotta);
   background: var(--brand-terracotta-subtle);
-  border-color: var(--brand-terracotta-border);
+  padding: 1px 6px;
+  border-radius: 99px;
+  width: max-content;
+  max-width: 100%;
+  margin-top: 3px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.user-dropdown-divider {
+  height: 1px;
+  background: var(--border-light);
+  margin: 6px 0;
+}
+
+.user-dropdown-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.user-dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 10px;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  color: var(--ink-primary);
+  font-family: var(--font-sans);
+  font-size: 12.5px;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+
+.user-dropdown-item:hover {
+  background: var(--bg-hover);
   color: var(--brand-terracotta);
 }
+
+.user-dropdown-logout { color: var(--color-red); }
+.user-dropdown-logout:hover { background: var(--color-red-light); color: var(--color-red); }
 
 .icon-btn-subtle {
   background: transparent;
@@ -708,55 +823,6 @@ html, body {
   flex-shrink: 0;
 }
 
-/* User Menu & Dropdown */
-.admin-user-menu-wrapper {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-}
-
-.admin-avatar-btn {
-  width: 30px;
-  height: 30px;
-  border-radius: 50%;
-  background: var(--brand-terracotta);
-  color: #fff;
-  display: grid;
-  place-items: center;
-  font-size: 11px;
-  font-weight: 700;
-  border: 2px solid #fff;
-  box-shadow: var(--shadow-sm);
-  cursor: pointer;
-  transition: transform 0.15s ease, box-shadow 0.15s ease;
-  user-select: none;
-}
-
-.admin-avatar-btn:hover {
-  transform: scale(1.05);
-  box-shadow: 0 0 0 2px var(--brand-terracotta-border);
-}
-
-.admin-user-dropdown {
-  position: absolute;
-  top: calc(100% + 8px);
-  right: 0;
-  width: 256px;
-  background: var(--bg-card);
-  border: 1px solid var(--border-main);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-modal);
-  padding: 10px;
-  display: none;
-  flex-direction: column;
-  z-index: 1000;
-  animation: fadeInDropdown 0.15s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.admin-user-dropdown.open {
-  display: flex;
-}
-
 .period-dropdown.open {
   display: flex !important;
 }
@@ -799,118 +865,6 @@ html, body {
     opacity: 1;
     transform: translateY(0) scale(1);
   }
-}
-
-.admin-user-dropdown-header {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 6px 4px 8px;
-}
-
-.admin-dropdown-avatar {
-  width: 34px;
-  height: 34px;
-  border-radius: 50%;
-  background: var(--brand-terracotta);
-  color: #fff;
-  display: grid;
-  place-items: center;
-  font-weight: 700;
-  font-size: 12px;
-  flex-shrink: 0;
-  box-shadow: var(--shadow-sm);
-}
-
-.admin-dropdown-user-info {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-}
-
-.admin-dropdown-name {
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--ink-primary);
-  line-height: 1.2;
-}
-
-.admin-dropdown-role {
-  font-size: 11px;
-  color: var(--ink-muted);
-  line-height: 1.3;
-}
-
-.admin-dropdown-jurisdiction {
-  font-size: 9.5px;
-  color: var(--brand-terracotta);
-  font-weight: 700;
-  margin-top: 2px;
-  text-transform: uppercase;
-  letter-spacing: 0.02em;
-}
-
-.admin-user-dropdown-divider {
-  height: 1px;
-  background: var(--border-light);
-  margin: 6px 0;
-}
-
-.admin-user-dropdown-menu {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.admin-dropdown-item {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  padding: 7px 10px;
-  border-radius: var(--radius-md);
-  border: none;
-  background: transparent;
-  color: var(--ink-secondary);
-  font-family: var(--font-sans);
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  text-align: left;
-  transition: all 0.12s ease;
-}
-
-.admin-dropdown-item:hover {
-  background: var(--bg-hover);
-  color: var(--ink-primary);
-}
-
-.admin-dropdown-item svg {
-  color: var(--ink-muted);
-  flex-shrink: 0;
-}
-
-.admin-dropdown-logout-btn {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 10px;
-  border-radius: var(--radius-md);
-  border: 1px solid var(--color-red-border);
-  background: var(--color-red-light);
-  color: var(--color-red);
-  font-family: var(--font-sans);
-  font-size: 12px;
-  font-weight: 700;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.admin-dropdown-logout-btn:hover {
-  background: #fecdd3;
-  color: #9f1239;
-  border-color: #f43f5e;
 }
 
 /* Content Container */
@@ -1143,7 +1097,7 @@ body.auth-locked {
     flex-shrink: 0;
   }
 
-  .sidebar-footer {
+  .sidebar-account {
     display: none;
   }
 

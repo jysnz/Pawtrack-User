@@ -110,40 +110,39 @@ class AdminApp {
     const avatarTrigger = document.getElementById('admin-avatar-trigger');
     const dropdown = document.getElementById('admin-user-dropdown');
     const configBtn = document.getElementById('menu-btn-config');
-    const ownerBtn = document.getElementById('menu-btn-owner-app');
     const accessBtn = document.getElementById('menu-btn-access-requests');
     const logoutBtn = document.getElementById('admin-logout-btn');
 
     if (!avatarTrigger || !dropdown) return;
 
+    const setOpen = (open) => {
+      dropdown.hidden = !open;
+      avatarTrigger.setAttribute('aria-expanded', open ? 'true' : 'false');
+    };
+    const close = () => setOpen(false);
+
     avatarTrigger.addEventListener('click', (e) => {
       e.stopPropagation();
-      dropdown.classList.toggle('open');
+      setOpen(dropdown.hidden);
     });
 
     document.addEventListener('click', (e) => {
-      if (!dropdown.contains(e.target) && e.target !== avatarTrigger) {
-        dropdown.classList.remove('open');
-      }
+      if (!dropdown.contains(e.target) && !avatarTrigger.contains(e.target)) close();
     });
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
 
     configBtn?.addEventListener('click', () => {
-      dropdown.classList.remove('open');
+      close();
       window.location.hash = '#settings';
     });
 
-    ownerBtn?.addEventListener('click', () => {
-      dropdown.classList.remove('open');
-      this.openOwnerApp();
-    });
-
     accessBtn?.addEventListener('click', () => {
-      dropdown.classList.remove('open');
+      close();
       this.openAccessRequests();
     });
 
     logoutBtn?.addEventListener('click', () => {
-      dropdown.classList.remove('open');
+      close();
       this.logoutAdmin();
     });
   }
@@ -777,10 +776,11 @@ class AdminApp {
     const name = account.full_name || account.email;
     const initials = name.split(/\s+/).filter(Boolean).map(w => w[0]).join('').slice(0, 2).toUpperCase();
     document.querySelectorAll('.operator-name, .admin-dropdown-name').forEach(el => { el.textContent = name; });
-    document.querySelectorAll('.operator-role, .admin-dropdown-role').forEach(el => { el.textContent = account.position || account.email; });
-    document.querySelectorAll('#admin-avatar-trigger, .admin-dropdown-avatar, .operator-avatar').forEach(el => { el.textContent = initials; });
+    document.querySelectorAll('.admin-dropdown-role').forEach(el => { el.textContent = account.position || 'LGU Animal Welfare'; });
+    document.querySelectorAll('.admin-dropdown-email').forEach(el => { el.textContent = account.email || ''; });
+    document.querySelectorAll('.admin-dropdown-avatar, .operator-avatar').forEach(el => { el.textContent = initials; });
     const avatar = document.getElementById('admin-avatar-trigger');
-    if (avatar) avatar.title = `${name} (click for menu)`;
+    if (avatar) avatar.title = `${name} (account menu)`;
   }
 
   // Re-reads this admin's own account row: their facility or role may have changed (they registered or joined one,
@@ -952,7 +952,7 @@ class AdminApp {
     });
 
     // Divs acting as buttons activate with Enter / Space
-    ['global-search-trigger', 'admin-avatar-trigger'].forEach(id => {
+    ['global-search-trigger'].forEach(id => {
       document.getElementById(id)?.addEventListener('keydown', (e) => {
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault();
