@@ -397,7 +397,8 @@ class AdminApp {
     const renderSigninTurnstile = () => renderTurnstile(el.loginTurnstile, [el.loginSubmit, el.googleBtn], 'admin-signin');
     const renderSignupTurnstile = () => renderTurnstile(el.signupTurnstile, [el.signupSubmit, el.signupGoogleBtn], 'admin-signup');
     const renderOtpTurnstile = () => renderTurnstile(el.otpTurnstile, null, 'admin-signup');
-    const renderRegisterTurnstile = () => renderTurnstile(el.registerTurnstile, el.registerSubmit, 'admin-register');
+    // The details form no longer has its own security check: the code step that follows has one
+    const renderRegisterTurnstile = () => { if (el.registerTurnstile) el.registerTurnstile.style.display = 'none'; if (el.registerSubmit) el.registerSubmit.disabled = false; };
 
     const goTab = (name) => {
       pendingError = null;
@@ -457,6 +458,8 @@ class AdminApp {
       }
 
       if (!account) {
+        // Entering the emailed code after Google: stay on that panel
+        if (currentPanel === 'otp' && pendingSignup && pendingSignup.google) return;
         prefillRegister(user);
         lockConsole('register');
         renderRegisterTurnstile();
@@ -501,6 +504,17 @@ class AdminApp {
     };
     el.googleBtn?.addEventListener('click', () => startGoogle(el.googleBtn, renderSigninTurnstile));
     el.signupGoogleBtn?.addEventListener('click', () => startGoogle(el.signupGoogleBtn, renderSignupTurnstile));
+
+    // Back from Google's page: the browser may bring this page back exactly as it was left, with the buttons
+    // disabled and "Redirecting to Google…" showing. Make the form usable again.
+    window.addEventListener('pageshow', (e) => {
+      const stuck = [el.googleBtn, el.signupGoogleBtn].some(b => b && b.disabled);
+      if (!e.persisted && !stuck) return;
+      sessionStorage.removeItem(FRESH_SIGNIN_KEY);
+      [el.googleBtn, el.signupGoogleBtn, el.loginSubmit, el.signupSubmit].forEach(b => { if (b) b.disabled = false; });
+      if (/redirecting to google/i.test((status && status.textContent) || '')) setStatus('');
+      if (currentPanel === 'signup') renderSignupTurnstile(); else if (currentPanel === 'signin') renderSigninTurnstile();
+    });
 
     // ---------- Log in: email + password ----------
     el.loginForm?.addEventListener('submit', async (e) => {
@@ -605,7 +619,9 @@ class AdminApp {
     // Going back keeps the typed details; the password is forgotten only when the page closes
     el.otpBack?.addEventListener('click', () => {
       clearInterval(resendTimer);
+      const wasGoogle = !!(pendingSignup && pendingSignup.google);
       pendingSignup = null;
+      if (wasGoogle) { setStatus(''); showPanel('register'); return; }
       goTab('signup');
     });
 
@@ -645,6 +661,31 @@ class AdminApp {
       el.otpVerify.disabled = true;
       setStatus('Verifying…');
       const { email, password, full_name, phone, position, birth_date } = pendingSignup;
+      if (pendingSignup.google) {
+        // Signed in with Google: admin-register checks the emailed code, then creates the account
+        const { error } = await this.supabase.functions.invoke('admin-register', {
+          body: { code, full_name, birth_date, position, phone }
+        });
+        el.otpVerify.disabled = false;
+        if (error) {
+          let message = error.message;
+          let expired = false;
+          try {
+            const details = await error.context.json();
+            if (details && details.error) message = details.error;
+            expired = !!(details && details.expired);
+          } catch {}
+          setStatus(message, true);
+          if (expired) { clearInterval(resendTimer); pendingSignup = null; showPanel('register'); setStatus(message, true); return; }
+          el.otpInput.select();
+          return;
+        }
+        clearInterval(resendTimer);
+        pendingSignup = null;
+        sessionStorage.setItem(FRESH_SIGNIN_KEY, '1');
+        resolveAccess();
+        return;
+      }
       const res = await callAdminOtp({ action: 'verify', email, code, password, full_name, phone, position, birth_date });
       el.otpVerify.disabled = false;
       if (!res.ok) {
@@ -696,9 +737,6 @@ class AdminApp {
       const user = session && session.user;
       if (!user) return resolveAccess();
 
-      const turnstileToken = await tokenFor(el.registerTurnstile.id);
-      if (!turnstileToken) return setStatus('Please complete the security check first.', true);
-
       const firstName = val('admin-register-first');
       const lastName = val('admin-register-last');
       const birthDate = val('admin-register-birth');
@@ -708,33 +746,34 @@ class AdminApp {
       if (!isAdult(birthDate)) return setStatus(`Admins must be at least ${MIN_AGE} years old.`, true);
       if (!validMobile(phone)) return setStatus('Please enter a valid Philippine mobile number (9XX XXX XXXX).', true);
 
-      if (el.registerSubmit) el.registerSubmit.disabled = true;
-      setStatus('Creating your account…');
-
-      // The admin-register Edge Function verifies Turnstile with Cloudflare, then creates the account;
-      // the signed-in user's identity, the age rule and the status are decided server-side
-      const { error } = await this.supabase.functions.invoke('admin-register', {
-        body: {
-          turnstileToken,
-          full_name: `${firstName} ${lastName}`.replace(/\s+/g, ' '),
-          birth_date: birthDate,
-          position: val('admin-register-position'),
-          phone
-        }
-      });
-
-      if (error) {
-        let message = error.message;
-        try {
-          const details = await error.context.json();
-          if (details && details.error) message = details.error;
-        } catch {}
-        setStatus(`Could not create your account: ${message}`, true);
-        renderRegisterTurnstile();
+      // Google already signed this person in, but they still confirm the 6-digit code emailed to that address
+      // before the account is created (the same step email sign-ups go through)
+      const email = (user.email || '').toLowerCase();
+      const attempt = pendingSignup = {
+        google: true, email, birth_date: birthDate, phone,
+        position: val('admin-register-position'),
+        full_name: `${firstName} ${lastName}`.replace(/\s+/g, ' ')
+      };
+      el.otpEmail.textContent = email;
+      el.otpInput.value = '';
+      showPanel('otp');
+      startResendCooldown(0);
+      renderOtpTurnstile();
+      const turnstileToken = await tokenFor(el.otpTurnstile.id); // shows "Finishing the security check…" while it runs
+      if (pendingSignup !== attempt) return;
+      if (!turnstileToken) return setStatus('Complete the security check, then tap "Send again".', true);
+      setStatus('Sending a code to your email…');
+      const sent = await callAdminOtp({ action: 'send', email, birth_date: birthDate, turnstileToken });
+      renderOtpTurnstile();
+      if (pendingSignup !== attempt) return;
+      if (!sent.ok) {
+        setStatus(sent.data.error || 'Could not send the code. Please try again.', true);
+        startResendCooldown(sent.data.retryAfter || 5);
         return;
       }
-      sessionStorage.setItem(FRESH_SIGNIN_KEY, '1');
-      resolveAccess();
+      setStatus('We sent a 6-digit code to your email.');
+      startResendCooldown(sent.data.resendInSeconds || 60);
+      el.otpInput?.focus();
     });
 
     screen?.querySelectorAll('[data-login-action]').forEach(btn => {

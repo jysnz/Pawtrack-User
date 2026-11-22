@@ -1,5 +1,7 @@
 // New guardian sign-up with an emailed one-time code. The account is created only after the code is entered.
 //   { action: 'send',   email, turnstileToken }                       emails a 6-digit code through Brevo
+//   { action: 'verify_google', email, code }  (signed in with Google)     checks the code for the signed-in Google account;
+//                                                                     the browser then saves the guardian profile
 //   { action: 'verify', email, code, password, full_name, phone }     checks the code, creates the account,
 //                                                                     and returns a token_hash the browser
 //                                                                     exchanges for a session (auth.verifyOtp)
@@ -158,6 +160,33 @@ Deno.serve(async (req) => {
       return json(502, { error: 'The email could not be sent right now. Please try again.' });
     }
     return json(200, { sent: true, expiresInSeconds: CODE_TTL_MS / 1000, resendInSeconds: RESEND_GAP_MS / 1000 });
+  }
+
+  // ---------- verify_google ----------
+  // A guardian who signed in with Google still confirms the emailed code. Only the signed-in person's own address counts.
+  if (body.action === 'verify_google') {
+    const accessToken = (req.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '');
+    const { data: who, error: whoError } = await admin.auth.getUser(accessToken);
+    if (whoError || !who || !who.user || !who.user.email || who.user.email.toLowerCase() !== email) {
+      return json(401, { error: 'Please sign in with Google again.' });
+    }
+    const code = text(body.code, 6);
+    if (!/^\d{6}$/.test(code)) return json(400, { error: 'Enter the 6-digit code from your email.' });
+    const { data: row } = await admin.from('signup_otps').select('*').eq('email', email).maybeSingle();
+    if (!row || new Date(row.expires_at).getTime() < Date.now()) {
+      return json(400, { error: 'That code has expired. Send a new one.', expired: true });
+    }
+    if (row.attempts >= MAX_ATTEMPTS) {
+      await admin.from('signup_otps').delete().eq('email', email);
+      return json(429, { error: 'Too many wrong codes. Send a new one.', expired: true });
+    }
+    if ((await hashCode(email, code)) !== row.code_hash) {
+      await admin.from('signup_otps').update({ attempts: row.attempts + 1 }).eq('email', email);
+      const left = MAX_ATTEMPTS - row.attempts - 1;
+      return json(400, { error: left > 0 ? `That code is incorrect. ${left} ${left === 1 ? 'try' : 'tries'} left.` : 'That code is incorrect. Send a new one.', expired: left <= 0 });
+    }
+    await admin.from('signup_otps').delete().eq('email', email); // a code works once
+    return json(200, { verified: true });
   }
 
   // ---------- verify ----------

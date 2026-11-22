@@ -23,6 +23,17 @@ function text(value: unknown, max: number) {
 }
 
 const PH_MOBILE = /^\+639\d{9}$/;
+const MAX_ATTEMPTS = 5;
+
+async function sha256(value: string): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value));
+  return Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+// Same scheme as admin-signup-otp, which emails the code and stores it in admin_signup_otps
+function hashCode(email: string, code: string): Promise<string> {
+  return sha256(`admin:${email}:${code}:${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`);
+}
 
 // Admins must be 18 or older, counted on the Philippine calendar date
 function isAdult(birthDate: string): boolean {
@@ -69,16 +80,23 @@ Deno.serve(async (req) => {
     return json(400, { error: 'Invalid request body' });
   }
 
-  const turnstileToken = text(body.turnstileToken, 4096);
-  if (!turnstileToken) return json(400, { error: 'Please complete the security check.' });
-  const remoteIp = (req.headers.get('x-forwarded-for') || '').split(',')[0].trim() || null;
-  try {
-    if (!(await verifyTurnstile(turnstileToken, remoteIp))) {
-      return json(400, { error: 'Security check failed. Please complete it again.' });
-    }
-  } catch (err) {
-    console.error('[admin-register] Turnstile error:', (err as Error).message);
-    return json(503, { error: 'Security check is unavailable right now. Please try again shortly.' });
+  // Signing in with Google proves the address, but the console still asks for the 6-digit code emailed to it
+  // (sent by admin-signup-otp after its own Turnstile check), so the code is what lets this request through.
+  const code = text(body.code, 6);
+  if (!/^\d{6}$/.test(code)) return json(400, { error: 'Enter the 6-digit code from your email.' });
+  const email = user.email.toLowerCase();
+  const { data: row } = await admin.from('admin_signup_otps').select('*').eq('email', email).maybeSingle();
+  if (!row || new Date(row.expires_at).getTime() < Date.now()) {
+    return json(400, { error: 'That code has expired. Send a new one.', expired: true });
+  }
+  if (row.attempts >= MAX_ATTEMPTS) {
+    await admin.from('admin_signup_otps').delete().eq('email', email);
+    return json(429, { error: 'Too many wrong codes. Send a new one.', expired: true });
+  }
+  if ((await hashCode(email, code)) !== row.code_hash) {
+    await admin.from('admin_signup_otps').update({ attempts: row.attempts + 1 }).eq('email', email);
+    const left = MAX_ATTEMPTS - row.attempts - 1;
+    return json(400, { error: left > 0 ? `That code is incorrect. ${left} ${left === 1 ? 'try' : 'tries'} left.` : 'That code is incorrect. Send a new one.', expired: left <= 0 });
   }
 
   const fullName = text(body.full_name, 120);
@@ -109,5 +127,6 @@ Deno.serve(async (req) => {
     console.error('[admin-register] Insert error:', insertError.message);
     return json(500, { error: 'Could not create your account. Please try again.' });
   }
+  await admin.from('admin_signup_otps').delete().eq('email', email); // a code works once
   return json(200, { account });
 });

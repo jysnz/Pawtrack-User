@@ -1043,11 +1043,11 @@ class App {
     let signupResendTimer = null;
     let pendingSignup = null;
 
-    const callSignupOtp = async (payload) => {
+    const callSignupOtp = async (payload, accessToken) => {
       try {
         const res = await fetch(`${config.url}/functions/v1/signup-otp`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', apikey: config.publishableKey },
+          headers: { 'Content-Type': 'application/json', apikey: config.publishableKey, ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}) },
           body: JSON.stringify(payload)
         });
         let data = {};
@@ -1071,7 +1071,7 @@ class App {
           sitekey: config.turnstileSiteKey,
           theme: turnstileTheme(),
           size: 'flexible',
-          callback: (token) => { signupOtpTurnstileToken = token; },
+          callback: (token) => { signupOtpTurnstileToken = token; autoSendGoogleCode(); },
           'expired-callback': () => { signupOtpTurnstileToken = null; },
           'error-callback': () => setStatus(signupOtpStatus, 'Security check failed to load. Please refresh and try again.', true)
         });
@@ -1095,10 +1095,31 @@ class App {
       signupResendTimer = setInterval(apply, 1000);
     };
 
+    // Signed in with Google: the code is emailed as soon as the security check passes (there is no password step before it)
+    const autoSendGoogleCode = async () => {
+      const pending = pendingSignup;
+      if (!pending || !pending.google || pending.sent || pending.sending || !signupOtpTurnstileToken) return;
+      pending.sending = true;
+      setStatus(signupOtpStatus, 'Sending a code to your email…');
+      const sent = await callSignupOtp({ action: 'send', email: pending.email, turnstileToken: signupOtpTurnstileToken });
+      resetSignupOtpTurnstile();
+      pending.sending = false;
+      if (pendingSignup !== pending) return;
+      if (!sent.ok) {
+        setStatus(signupOtpStatus, sent.data.error || 'Could not send the code. Please try again.', true);
+        startResendCooldown(sent.data.retryAfter || 5);
+        return;
+      }
+      pending.sent = true;
+      setStatus(signupOtpStatus, 'We sent a 6-digit code to your email.');
+      startResendCooldown(sent.data.resendInSeconds || 60);
+      signupOtpInput?.focus();
+    };
+
     const openSignupOtp = (resendSeconds) => {
       if (signupOtpEmail) signupOtpEmail.textContent = pendingSignup.email;
       if (signupOtpInput) signupOtpInput.value = '';
-      setStatus(signupOtpStatus, '');
+      setStatus(signupOtpStatus, pendingSignup.google ? 'Finishing the security check…' : '');
       window.notifManager.openModal('signup-otp-modal');
       startResendCooldown(resendSeconds);
       renderSignupOtpTurnstile();
@@ -1108,8 +1129,10 @@ class App {
     // Closing the dialog abandons the sign-up: nothing was created, and the password is forgotten
     const closeSignupOtp = () => {
       clearInterval(signupResendTimer);
+      const wasGoogle = !!(pendingSignup && pendingSignup.google);
       pendingSignup = null;
       window.notifManager.closeModal('signup-otp-modal');
+      if (wasGoogle) window.notifManager.openModal('register-dialog-modal');
     };
     document.getElementById('signup-otp-close-btn')?.addEventListener('click', closeSignupOtp);
     document.getElementById('signup-otp-back-btn')?.addEventListener('click', closeSignupOtp);
@@ -1152,6 +1175,30 @@ class App {
       setBtnLoading(signupOtpVerifyBtn, true);
       setStatus(signupOtpStatus, 'Verifying…');
       const { email, password, name, phone } = pendingSignup;
+      if (pendingSignup.google) {
+        const { data: sess } = await this.supabase.auth.getSession();
+        const token = sess && sess.session ? sess.session.access_token : '';
+        const checked = await callSignupOtp({ action: 'verify_google', email, code }, token);
+        if (!checked.ok) {
+          setBtnLoading(signupOtpVerifyBtn, false);
+          setStatus(signupOtpStatus, checked.data.error || 'Something went wrong. Please try again.', true);
+          signupOtpInput?.select();
+          return;
+        }
+        const pending = pendingSignup;
+        const saved = await saveGoogleGuardian(pending.user, name, phone);
+        setBtnLoading(signupOtpVerifyBtn, false);
+        if (!saved.ok) {
+          setStatus(signupOtpStatus, `Could not create your account: ${saved.message}`, true);
+          return;
+        }
+        pendingSignup = null;
+        clearInterval(signupResendTimer);
+        window.notifManager.closeModal('signup-otp-modal');
+        try { sessionStorage.setItem(NEW_ACCOUNT_KEY, '1'); } catch (err) {}
+        completeSignIn(saved.guardian, pending.user);
+        return;
+      }
       const res = await callSignupOtp({ action: 'verify', email, code, password, full_name: name, phone });
       if (!res.ok) {
         setBtnLoading(signupOtpVerifyBtn, false);
@@ -1430,6 +1477,16 @@ class App {
       }
     });
 
+    // Back from Google's page: the browser may bring this page back exactly as it was left, with the log in and
+    // create account tabs still disabled and "Redirecting to Google…" showing. Make the form usable again.
+    window.addEventListener('pageshow', (e) => {
+      if (!e.persisted && !(loginGoogleBtn && loginGoogleBtn.disabled)) return;
+      try { sessionStorage.removeItem(FRESH_SIGNIN_KEY); } catch (err) {}
+      setBusy(false);
+      if (loginStatus && /redirecting to google/i.test(loginStatus.textContent)) setStatus(loginStatus, '');
+      resetLoginTurnstile();
+    });
+
     registerForm?.addEventListener('submit', async (e) => {
       e.preventDefault();
       const user = session && session.user;
@@ -1452,23 +1509,25 @@ class App {
         return;
       }
 
-      if (registerSubmit) registerSubmit.disabled = true;
-      setStatus(registerStatus, 'Creating your account…');
+      // Google already signed this person in, but they still confirm the 6-digit code emailed to that address before
+      // the account is created (the same step email sign-ups go through)
+      setStatus(registerStatus, '');
+      pendingSignup = { google: true, user, email: (user.email || '').toLowerCase(), name, phone, sent: false, sending: false };
+      window.notifManager.closeModal('register-dialog-modal');
+      openSignupOtp(0);
+    });
+
+    // Saves the guardian profile for a Google sign-up once its code is confirmed
+    const saveGoogleGuardian = async (user, name, phone) => {
       const meta = user.user_metadata || {};
       const { data: guardian, error } = await this.supabase
         .from('guardians')
         .insert({ id: user.id, email: user.email, full_name: name, phone, avatar_url: meta.avatar_url || meta.picture || null })
         .select('*')
         .single();
-      if (registerSubmit) registerSubmit.disabled = false;
-      if (error) {
-        setStatus(registerStatus, `Could not create your account: ${error.message}`, true);
-        return;
-      }
-      setStatus(registerStatus, '');
-      try { sessionStorage.setItem(NEW_ACCOUNT_KEY, '1'); } catch (err) {}
-      completeSignIn(guardian, user);
-    });
+      if (error) return { ok: false, message: error.message };
+      return { ok: true, guardian };
+    };
 
     // Live password requirements for the reset form
     const passwordRules = {
