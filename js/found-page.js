@@ -44,6 +44,7 @@ const FOUND_STRINGS = {
     privacy: 'Your number is shared only with the owner. The owner\'s details stay private.',
     vaccinesTitle: 'Vaccinations',
     vaccinesSub: 'Records kept by the owner.',
+    vaxNone: 'No vaccination records have been added for this pet yet.',
     vaxGiven: 'Given {date}',
     vaxOverdue: 'Overdue by {n} {unit}',
     vaxDueToday: 'Due today',
@@ -100,6 +101,7 @@ const FOUND_STRINGS = {
     privacy: 'Ang numero mo ay makikita lamang ng may-ari. Pribado ang detalye ng may-ari.',
     vaccinesTitle: 'Mga bakuna',
     vaccinesSub: 'Mga talang iningatan ng may-ari.',
+    vaxNone: 'Wala pang talaan ng bakuna para sa alagang ito.',
     vaxGiven: 'Naibigay noong {date}',
     vaxOverdue: 'Lampas na ng {n} {unit}',
     vaxDueToday: 'Ngayon ang susunod',
@@ -171,10 +173,12 @@ class FoundPage {
     if (this.source === 'db') {
       try {
         this.vaccines = await this.fetchVaccines(this.tag);
+        this.vaccinesLoaded = true;
         // Insert the card in place so anything the finder has started typing is kept
-        if (this.vaccines.length && !this.sent && !this.root.querySelector('#fp-vaccines')) {
-          this.root.querySelector('#fp-notify')?.insertAdjacentHTML('afterend', this.vaccinesHtml());
-          this.icons();
+        const slot = this.root.querySelector('#fp-vax-slot');
+        if (slot && !this.sent && !slot.querySelector('#fp-vaccines')) {
+          const html = this.vaccinesHtml(this.pet && this.pet.status !== 'missing');
+          if (html) { slot.innerHTML = html; this.icons(); }
         }
       } catch (err) {
         console.warn('[Found page] vaccinations unavailable', err);
@@ -207,12 +211,21 @@ class FoundPage {
     return { cls: 'ok', label: this.s('vaxNextDue', { date: this.fmtDate(nextDue) }) };
   }
 
-  vaccinesHtml() {
-    if (!this.vaccines || !this.vaccines.length) return '';
+  vaccinesHtml(showEmpty = false) {
+    if (!this.vaccines || !this.vaccines.length) {
+      if (!showEmpty) return '';
+      return `
+        <section class="fp-card" id="fp-vaccines">
+          <h2><i data-lucide="syringe" class="fp-h-icon"></i>${this.s('vaccinesTitle')}</h2>
+          <p class="fp-sub">${this.s('vaxNone')}</p>
+        </section>`;
+    }
     const rows = this.vaccines.map((v) => {
       const st = this.vaxStatus(v.next_due_date);
       return `<li class="fp-vax-item">
-          <div><strong>${this.esc(v.vaccine_name)}</strong><span>${this.s('vaxGiven', { date: this.fmtDate(v.date_given) })}</span></div>
+          <div><strong>${this.esc(v.vaccine_name)}</strong>
+            <span>${this.s('vaxGiven', { date: this.fmtDate(v.date_given) })}</span>
+            ${v.next_due_date ? `<span>${this.s('vaxNextDue', { date: this.fmtDate(v.next_due_date) })}</span>` : ''}</div>
           ${st ? `<span class="fp-vax-chip is-${st.cls}">${this.esc(st.label)}</span>` : ''}
         </li>`;
     }).join('');
@@ -338,6 +351,7 @@ class FoundPage {
     const photo = p.photo
       ? `<img src="${this.esc(p.photo)}" alt="${this.esc(p.name)}" />`
       : `<div style="height:100%;display:grid;place-items:center;color:var(--primary)"><i data-lucide="paw-print" style="width:64px;height:64px"></i></div>`;
+    const missing = p.status === 'missing';
     const registered = p.registered ? new Date(p.registered).toLocaleDateString([], { dateStyle: 'medium' }) : '';
 
     const html = `
@@ -352,9 +366,9 @@ class FoundPage {
               <p>${this.esc([p.breed, p.species].filter(Boolean).join(' · '))}</p>
             </div>
           </div>
-          <div class="fp-hero-cta">
+          ${missing ? `<div class="fp-hero-cta">
             <button type="button" class="fp-btn fp-btn-primary fp-btn-block" id="fp-scroll-cta"><i data-lucide="heart-handshake"></i>${this.s('iFound')}</button>
-          </div>
+          </div>` : ''}
         </section>
 
         ${p.status === 'missing' ? `<div class="fp-banner" role="alert"><i data-lucide="triangle-alert"></i><div>${this.s('missingBanner')}</div></div>` : ''}
@@ -375,24 +389,24 @@ class FoundPage {
         </div>
 
         <div class="fp-col fp-col-b">
-        <section class="fp-card fp-notify" id="fp-notify">
+        ${missing ? `<section class="fp-card fp-notify" id="fp-notify">
           ${showSent && this.sent ? this.sentHtml() : this.formHtml()}
-        </section>
+        </section>` : ''}
 
-        ${this.vaccinesHtml()}
+        <div id="fp-vax-slot">${this.vaccinesHtml(!missing && this.vaccinesLoaded)}</div>
 
-        <section class="fp-card fp-tips-card">
+        ${missing ? `<section class="fp-card fp-tips-card">
           <h2>${this.s('tipsTitle')}</h2>
           <div class="fp-tips">
             ${[1, 2, 3].map((n) => `<div class="fp-tip"><span class="fp-tip-num">${n}</span><div><strong>${this.s('tip' + n)}</strong>${this.s('tip' + n + 'd')}</div></div>`).join('')}
           </div>
-        </section>
+        </section>` : ''}
         </div>
 
         <p class="fp-foot"><a href="privacy.html">${this.s('privacyLink')}</a> &middot; <a href="./">${this.s('home')}</a></p>
       </main>`;
 
-    this.mount(html, !showSent);
+    this.mount(html, missing && !showSent);
     this.bindPet();
   }
 
