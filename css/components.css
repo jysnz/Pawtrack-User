@@ -42,7 +42,8 @@
 .toast.toast-success {
   border-left: 4px solid var(--success);
 }
-.toast.toast-danger {
+.toast.toast-danger,
+.toast.toast-error {
   border-left: 4px solid var(--danger);
 }
 .toast.toast-warning {

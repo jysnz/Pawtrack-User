@@ -1,8 +1,8 @@
-// PawTrack admin console: request access with email + password, verified by an emailed one-time code.
-// The account and the (pending) access request are created only after the code is entered.
+// PawTrack admin console: create an account with email + password, verified by an emailed one-time code.
+// The account is created only after the code is entered.
 //   { action: 'send',   email, turnstileToken, birth_date }                              emails a 6-digit code through Brevo
 //   { action: 'verify', email, code, password, full_name, phone, position,               checks the code, creates the account and
-//                       birth_date }                                                     the pending admin_accounts row, and returns a
+//                       birth_date }                                                     the admin_accounts row, and returns a
 //                                                                                        token_hash the browser exchanges for a session
 // Secrets: BREVO_API_KEY, BREVO_SENDER_EMAIL (verified in Brevo), BREVO_SENDER_NAME (optional), TURNSTILE_SECRET_KEY.
 // Table: public.admin_signup_otps (service role only). Approval is still decided by an administrator.
@@ -79,9 +79,9 @@ async function sendCodeEmail(to: string, code: string) {
   const html = `
     <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 520px; margin: 0 auto; padding: 28px; border: 1px solid #e2e8f0; border-radius: 14px; background: #ffffff; color: #1e293b;">
       <h2 style="margin: 0 0 6px; font-size: 20px; color: #0f172a;">Verify your email</h2>
-      <p style="margin: 0 0 18px; font-size: 14px; line-height: 1.6; color: #334155;">Use this code to continue your PawTrack admin console access request for <strong>${esc(to)}</strong>:</p>
+      <p style="margin: 0 0 18px; font-size: 14px; line-height: 1.6; color: #334155;">Use this code to create your PawTrack admin console account for <strong>${esc(to)}</strong>:</p>
       <div style="font-size: 34px; font-weight: 800; letter-spacing: 10px; text-align: center; color: #ba3820; background: #fff4f1; padding: 16px 12px; border-radius: 10px; border: 1px dashed #f0b3a6;">${esc(code)}</div>
-      <p style="margin: 18px 0 0; font-size: 13px; line-height: 1.6; color: #64748b;">The code expires in 10 minutes. After you verify, an administrator still has to approve your request before you can use the console. If you did not request access, you can ignore this email and nothing will be created.</p>
+      <p style="margin: 18px 0 0; font-size: 13px; line-height: 1.6; color: #64748b;">The code expires in 10 minutes. If you did not try to create an account, you can ignore this email and nothing will be created.</p>
       <p style="margin: 20px 0 0; padding-top: 14px; border-top: 1px solid #f1f5f9; font-size: 11px; color: #94a3b8; text-align: center;">PawTrack Admin Console</p>
     </div>`;
   const res = await fetch('https://api.brevo.com/v3/smtp/email', {
@@ -136,7 +136,7 @@ Deno.serve(async (req) => {
     }
 
     const { data: existing } = await admin.from('admin_accounts').select('id').eq('email', email).maybeSingle();
-    if (existing) return json(409, { error: 'This email already has an admin request. Try logging in instead.' });
+    if (existing) return json(409, { error: 'This email already has an admin account. Try logging in instead.' });
 
     const now = Date.now();
     const { data: row } = await admin.from('admin_signup_otps').select('*').eq('email', email).maybeSingle();
@@ -220,7 +220,7 @@ Deno.serve(async (req) => {
     if (createError || !created || !created.user) {
       const message = (createError && createError.message) || '';
       if (/already|registered|exists/i.test(message)) {
-        return json(409, { error: 'This email already has a PawTrack account. Log in with it instead, and you will be asked to finish your admin request.' });
+        return json(409, { error: 'This email already has a PawTrack account. Log in with it instead, and you will be asked to finish setting up your admin account.' });
       }
       if ((createError as { code?: string } | null)?.code === 'weak_password' || /password/i.test(message)) {
         return json(400, { error: 'That password is too weak or has appeared in a data breach. Please choose a different one.', expired: true });
@@ -229,7 +229,7 @@ Deno.serve(async (req) => {
       return json(500, { error: 'Could not create your account. Please try again.' });
     }
 
-    // The status (pending, or approved for bootstrap admins) and the age rule are enforced by the database trigger
+    // The status (approved) and the age rule are enforced by the database trigger
     const { error: insertError } = await admin.from('admin_accounts').insert({
       id: created.user.id,
       email,
@@ -241,10 +241,10 @@ Deno.serve(async (req) => {
     if (insertError) {
       console.error('[admin-signup-otp] admin_accounts insert error:', insertError.message);
       await admin.auth.admin.deleteUser(created.user.id); // leave nothing half-created; the person can simply try again
-      return json(500, { error: 'Could not save your request. Please try again.' });
+      return json(500, { error: 'Could not create your account. Please try again.' });
     }
 
-    // A one-time token the browser exchanges for a session, so the new admin lands signed in (and sees the pending notice)
+    // A one-time token the browser exchanges for a session, so the new admin lands signed in (straight into the console)
     const { data: link, error: linkError } = await admin.auth.admin.generateLink({ type: 'magiclink', email });
     const tokenHash = link && link.properties && link.properties.hashed_token;
     if (linkError || !tokenHash) {

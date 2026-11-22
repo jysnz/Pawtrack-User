@@ -34,7 +34,15 @@ function testQCDistrictsBehavior() {
 
   // 2. Verify incidents exist for every single QC district
   console.log('\n--- Checking Incident Records per District ---');
-  ['District 1', 'District 2', 'District 3', 'District 4', 'District 5', 'District 6'].forEach(d => {
+  // The map plots real reports from the store: put one report at the centre of each district and check that the
+  // district filter finds exactly that one
+  const districtNames = ['District 1', 'District 2', 'District 3', 'District 4', 'District 5', 'District 6'];
+  virtualWindow.adminStore = {
+    getCases: () => districtNames.map((d, i) => ({ id: `c${i + 1}`, petName: `Pet in ${d}`, species: 'Dog', status: 'lost', coords: HV.qcDistricts[d].center, createdAt: new Date().toISOString(), location: `${d}, Quezon City` })),
+    getSightings: () => []
+  };
+  HV.incidentsData = HV.buildIncidents();
+  districtNames.forEach(d => {
     HV.selectedDistrict = d;
     const filtered = HV.getFilteredIncidents();
     if (filtered.length > 0) {

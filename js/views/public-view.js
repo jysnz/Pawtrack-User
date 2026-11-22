@@ -436,20 +436,20 @@ class PublicView {
         const sLat = (s.lat || 14.6360);
         const sLng = (s.lng || 121.0370);
         return `
-          <div class="glass-card" style="padding:0.9rem; display:flex; flex-direction:column; gap:0.6rem; border-left:3px solid ${MAP_COLORS.sighting}; cursor:pointer;" onclick="window.publicView.focusCoordsOnMap(${sLat}, ${sLng}, 'Sighting: ${s.breed || 'Pet'}')">
+          <div class="glass-card" style="padding:0.9rem; display:flex; flex-direction:column; gap:0.6rem; border-left:3px solid ${MAP_COLORS.sighting}; cursor:pointer;" onclick="window.publicView.focusCoordsOnMap(${Number(sLat)}, ${Number(sLng)}, 'Sighting: ${this.jsArg(s.breed || 'Pet')}')">
             <div style="display:flex; gap:0.85rem; align-items:center;">
-              <img src="${s.photoUrl || 'https://images.unsplash.com/photo-1543466835-00a7907e9de1?auto=format&fit=crop&w=300&q=80'}" style="width:58px; height:58px; border-radius:var(--radius-md); object-fit:cover; border:2px solid #ea9d1e; flex-shrink:0; cursor:zoom-in;" onclick="event.stopPropagation(); window.pawApp.openLightbox('${s.photoUrl}', 'Community Pet Sighting', '${s.breed || 'Stray Pet'} · ${s.location}')" />
+              <img src="${this.escapeHtml(/^https:\/\//.test(s.photoUrl || '') ? s.photoUrl : 'https://images.unsplash.com/photo-1543466835-00a7907e9de1?auto=format&fit=crop&w=300&q=80')}" style="width:58px; height:58px; border-radius:var(--radius-md); object-fit:cover; border:2px solid #ea9d1e; flex-shrink:0; cursor:zoom-in;" onclick="event.stopPropagation(); window.pawApp.openLightbox('${this.jsArg(s.photoUrl)}', 'Community Pet Sighting', '${this.jsArg((s.breed || 'Stray Pet') + ' · ' + (s.location || ''))}')" />
               <div style="flex:1; min-width:0;">
                 <div style="display:flex; justify-content:space-between; align-items:center; gap:0.5rem; margin-bottom:2px;">
-                  <h4 style="font-size:0.95rem; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin:0;">${s.breed || 'Spotted Pet'}</h4>
+                  <h4 style="font-size:0.95rem; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin:0;">${this.escapeHtml(s.breed || 'Spotted Pet')}</h4>
                   <span class="badge" style="background:${MAP_COLORS.sighting}22; color:${MAP_COLORS.sighting}; border:1px solid ${MAP_COLORS.sighting}66; font-size:0.68rem; flex-shrink:0;">SIGHTED</span>
                 </div>
-                <div style="font-size:0.78rem; color:var(--text-muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-bottom:2px;">Location: ${s.location}</div>
+                <div style="font-size:0.78rem; color:var(--text-muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-bottom:2px;">Location: ${this.escapeHtml(s.location)}</div>
                 <div style="font-size:0.72rem; color:var(--primary); font-weight:700;">Seen: ${this.formatSightingDate(s.dateTimeSeen || s.createdAt)}</div>
               </div>
             </div>
             <div class="sighting-comment-clamp" style="font-size:0.76rem; color:var(--text-muted); border-top:1px solid var(--border-subtle); padding-top:6px;">
-              <strong>Comments:</strong> ${s.comments || s.notes || 'No comments provided.'}
+              <strong>Comments:</strong> ${this.escapeHtml(s.comments || s.notes || 'No comments provided.')}
             </div>
             <div style="display:flex; gap:6px; border-top:1px solid var(--border-subtle); padding-top:6px;">
               <a href="https://www.google.com/maps/dir/?api=1&destination=${sLat},${sLng}" target="_blank" rel="noopener" class="btn btn-outline btn-sm" style="flex:1; padding:4px 8px; font-size:0.75rem; justify-content:center; text-decoration:none;" onclick="event.stopPropagation();">
@@ -559,9 +559,9 @@ class PublicView {
       const tooltipContent = `
         <div class="shelter-hover-content">
           <div class="shelter-tooltip-header">Official Animal Facility</div>
-          <div class="shelter-tooltip-title">${s.name}</div>
-          <div class="shelter-tooltip-addr">${s.address}</div>
-          <div class="shelter-tooltip-phone">Hotline: ${s.phone}</div>
+          <div class="shelter-tooltip-title">${this.escapeHtml(s.name)}</div>
+          <div class="shelter-tooltip-addr">${this.escapeHtml(s.address)}</div>
+          <div class="shelter-tooltip-phone">Hotline: ${this.escapeHtml(s.phone)}</div>
           <div class="shelter-tooltip-hint">Click pin for directions & photos</div>
         </div>
       `;
@@ -1072,7 +1072,8 @@ class PublicView {
   }
 
   jsArg(value) {
-    return String(value ?? '').replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+    return String(value ?? '').replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/[\r\n]+/g, ' ')
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
 
   getTimeAgo(value) {

@@ -20,6 +20,10 @@
     html.booting::after { content: ""; position: fixed; top: 50%; left: 50%; width: 34px; height: 34px; margin: -17px 0 0 -17px; border-radius: 50%; border: 3px solid rgba(234, 157, 30, 0.25); border-top-color: #ea9d1e; animation: boot-spin 0.8s linear infinite; }
     @keyframes boot-spin { to { transform: rotate(360deg); } }
   </style>
+  <!-- Error monitoring: loaded first so it also catches errors thrown while the other scripts start -->
+  <script src="js/vendor/sentry.browser.8.55.0.min.js"></script>
+  <script src="js/sentry-config.js"></script>
+  <script src="js/sentry-init.js"></script>
   <title>PawTrack | Pet Recovery & Impoundment Notification System</title>
   <link rel="stylesheet" href="css/splash.css" />
   <script src="js/splash.js" data-logo="owner" data-target=".logo-icon-box"></script>
@@ -39,7 +43,7 @@
   <link
     href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap"
     rel="stylesheet" />
-  <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="https://unpkg.com/lucide@0.469.0/dist/umd/lucide.min.js"></script>
 
   <!-- Leaflet Map CSS & JS -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"

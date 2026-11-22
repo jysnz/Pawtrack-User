@@ -1,5 +1,8 @@
 const fs = require('fs');
 const path = require('path');
+let problems = 0;
+const realConsoleError = console.error;
+console.error = (...a) => { problems++; realConsoleError(...a); };
 
 console.log('===============================================================');
 console.log('  PawTrack Comprehensive Element & Button Verification');
@@ -15,11 +18,12 @@ const appJs = fs.readFileSync(path.join(__dirname, 'js', 'app.js'), 'utf8');
 const notifJs = fs.readFileSync(path.join(__dirname, 'js', 'notifications.js'), 'utf8');
 const ownerJs = fs.readFileSync(path.join(__dirname, 'js', 'views', 'owner-view.js'), 'utf8');
 const publicJs = fs.readFileSync(path.join(__dirname, 'js', 'views', 'public-view.js'), 'utf8');
-const casesJs = fs.readFileSync(path.join(__dirname, 'js', 'views', 'cases-view.js'), 'utf8');
-const hwJs = fs.readFileSync(path.join(__dirname, 'js', 'views', 'hardware-view.js'), 'utf8');
+// every page under js/views (pages come and go, so read the folder instead of a fixed list)
+const viewsDir = path.join(__dirname, 'js', 'views');
+const viewsJs = fs.readdirSync(viewsDir).filter((f) => f.endsWith('.js')).map((f) => fs.readFileSync(path.join(viewsDir, f), 'utf8')).join('\n');
 const reportJs = fs.readFileSync(path.join(__dirname, 'js', 'report-manager.js'), 'utf8');
 
-const allJs = i18nJs + '\n' + storeJs + '\n' + appJs + '\n' + notifJs + '\n' + ownerJs + '\n' + publicJs + '\n' + casesJs + '\n' + hwJs + '\n' + reportJs;
+const allJs = i18nJs + '\n' + storeJs + '\n' + appJs + '\n' + notifJs + '\n' + ownerJs + '\n' + publicJs + '\n' + viewsJs + '\n' + reportJs;
 const allHtmlAndJs = indexHtml + '\n' + allJs;
 
 // Check 1: Modals Defined in index.html
@@ -36,7 +40,6 @@ const expectedModals = [
   'guardian-profile-modal',
   'portal-settings-modal',
   'ai-match-modal',
-  'case-dossier-modal',
   'claiming-verification-modal',
   'owner-guide-modal'
 ];
@@ -79,7 +82,7 @@ console.log(`  ✓ ${passedFunctions} handler methods verified in JS code.`);
 
 // Check 3: Role Tabs & Router Views
 console.log('\n[Check 3] Verifying Router Views & Role Tabs:');
-const expectedViews = ['owner', 'cases', 'impounded', 'sightings'];
+const expectedViews = ['pets', 'owner', 'sightings', 'found', 'report', 'impound', 'violations', 'settings'];
 expectedViews.forEach(v => {
   const inNav = indexHtml.includes(`data-view="${v}"`);
   const inRouter = appJs.includes(`${v}: window.`);
@@ -137,5 +140,10 @@ expectedClasses.forEach(cls => {
 });
 
 console.log('\n===============================================================');
+if (problems) {
+  realConsoleError(`  ${problems} problem(s) found: see the lines marked with a cross above.`);
+  console.log('===============================================================');
+  process.exit(1);
+}
 console.log('  All Checks Complete. Project Elements & Buttons are Healthy!');
 console.log('===============================================================');

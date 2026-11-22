@@ -17,6 +17,10 @@
   </script>
   <meta name="theme-color" content="#f6f4f1" />
   <link rel="stylesheet" href="../css/splash.css" />
+  <!-- Error monitoring: loaded first so it also catches errors thrown while the other scripts start -->
+  <script src="../js/vendor/sentry.browser.8.55.0.min.js"></script>
+  <script src="../js/sentry-config.js"></script>
+  <script src="../js/sentry-init.js"></script>
   <script src="../js/splash.js" data-label="Admin Console" data-target=".brand-badge"></script>
   <meta name="description" content="Municipal Pet Recovery & Impoundment Administration Gateway — Connected to PawTrack" />
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA2NCIgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0Ij4KICA8Y2lyY2xlIGN4PSIzMiIgY3k9IjMyIiByPSIzMCIgZmlsbD0iIzAwMDAwMCIgc3Ryb2tlPSIjZmZmZmZmIiBzdHJva2Utd2lkdGg9IjIiLz4KICA8Y2lyY2xlIGN4PSIzMiIgY3k9IjMyIiByPSIyNi41IiBmaWxsPSJub25lIiBzdHJva2U9InJnYmEoMjU1LDI1NSwyNTUsMC4yNSkiIHN0cm9rZS13aWR0aD0iMSIgc3Ryb2tlLWRhc2hhcnJheT0iMywyIi8+CiAgPGcgZmlsbD0iI2ZmZmZmZiI+CiAgICA8ZWxsaXBzZSBjeD0iMzIiIGN5PSIxOCIgcng9IjQuMiIgcnk9IjUuOCIvPgogICAgPGVsbGlwc2UgY3g9IjIwLjUiIGN5PSIyMy41IiByeD0iNCIgcnk9IjUuMiIgdHJhbnNmb3JtPSJyb3RhdGUoLTIwIDIwLjUgMjMuNSkiLz4KICAgIDxlbGxpcHNlIGN4PSI0My41IiBjeT0iMjMuNSIgcng9IjQiIHJ5PSI1LjIiIHRyYW5zZm9ybT0icm90YXRlKDIwIDQzLjUgMjMuNSkiLz4KICAgIDxwYXRoIGQ9Ik0zMiAzMCBDMjQuNSAzMCAxOC41IDM1IDE4LjUgNDEuNSBDMTguNSA0Ni44IDIyLjggNTAuNSAyNy41IDUwLjUgQzMwLjIgNTAuNSAzMS40IDQ4LjQgMzIgNDguNCBDMzIuNiA0OC40IDMzLjggNTAuNSAzNi41IDUwLjUgQzQxLjIgNTAuNSA0NS41IDQ2LjggNDUuNSA0MS41IEM0NS41IDM1IDM5LjUgMzAgMzIgMzAgWiIvPgogIDwvZz4KPC9zdmc+" />
@@ -161,11 +165,6 @@
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
               <span>Settings</span>
             </button>
-            <button type="button" class="user-dropdown-item" id="menu-btn-access-requests">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6"/></svg>
-              <span>Access Requests</span>
-              <span class="admin-access-count" id="admin-access-count" hidden></span>
-            </button>
           </div>
 
           <div class="user-dropdown-divider"></div>
@@ -281,16 +280,16 @@
             <span class="al-brand-name">PawTrack</span>
           </div>
 
-          <!-- Log in / Request access tabs (shown on the first two panels only) -->
+          <!-- Log in / Create account tabs (shown on the first two panels only) -->
           <div class="al-tabs" id="admin-tabs" role="tablist" aria-label="Admin access" hidden>
             <button type="button" role="tab" class="al-tab" id="admin-tab-signin" data-admin-tab="signin" aria-selected="true">Log in</button>
-            <button type="button" role="tab" class="al-tab" id="admin-tab-signup" data-admin-tab="signup" aria-selected="false">Request access</button>
+            <button type="button" role="tab" class="al-tab" id="admin-tab-signup" data-admin-tab="signup" aria-selected="false">Create account</button>
           </div>
 
           <!-- Panel 1: Log in with email + password (or Google). Turnstile first. -->
           <div class="admin-login-panel" data-login-panel="signin" hidden>
-            <h1 class="al-title">Admin sign in</h1>
-            <p class="al-sub">For LGU animal welfare staff. Log in with the email and password you registered, or continue with Google.</p>
+            <h1 class="al-title">Welcome back</h1>
+            <p class="al-sub">Log in to manage impounds, claims and reports for your facility.</p>
 
             <form id="admin-login-form" class="auth-dialog-form al-form" autocomplete="on" novalidate>
               <div class="auth-field-box">
@@ -326,10 +325,10 @@
             </button>
           </div>
 
-          <!-- Panel 2: Request access with email + password. The account is created only after the emailed code is entered. -->
+          <!-- Panel 2: Create an account with email + password. The account is created only after the emailed code is entered. -->
           <div class="admin-login-panel" data-login-panel="signup" hidden>
-            <h1 class="al-title">Request admin access</h1>
-            <p class="al-sub">Fill in your details, verify your email, and an administrator will review your request. You must be 18 or older.</p>
+            <h1 class="al-title">Create your admin account</h1>
+            <p class="al-sub">Fill in your details and verify your email. You must be 18 or older.</p>
 
             <form id="admin-signup-form" class="auth-dialog-form al-form" autocomplete="off" novalidate>
               <p class="al-section">About you</p>
@@ -406,13 +405,13 @@
           <!-- Panel 3: Enter the emailed 6-digit code -->
           <form class="admin-login-panel auth-dialog-form al-form" data-login-panel="otp" id="admin-otp-form" novalidate hidden>
             <h1 class="al-title">Verify your email</h1>
-            <p class="al-sub">We sent a 6-digit code to <strong id="admin-otp-email"></strong>. Enter it to submit your request. It expires in 10 minutes.</p>
+            <p class="al-sub">We sent a 6-digit code to <strong id="admin-otp-email"></strong>. Enter it to create your account. It expires in 10 minutes.</p>
 
             <div class="auth-field-box">
               <label for="admin-otp" class="auth-field-label">VERIFICATION CODE</label>
               <input type="text" id="admin-otp" class="auth-field-input auth-otp-input" autocomplete="one-time-code" inputmode="numeric" maxlength="6" placeholder="000000" required />
             </div>
-            <button type="submit" id="admin-otp-verify-btn" class="auth-dialog-submit-btn">Verify and submit request</button>
+            <button type="submit" id="admin-otp-verify-btn" class="auth-dialog-submit-btn">Verify and create account</button>
             <div id="admin-otp-turnstile" class="auth-turnstile auth-turnstile-below"></div>
             <div class="auth-forgot-row" style="justify-content: center; gap: 6px;">
               <span class="al-hint" style="margin: 0;">Didn't get a code?</span>
@@ -423,10 +422,10 @@
             </div>
           </form>
 
-          <!-- Panel 4: Signed in without an admin request yet (Google, or an email that already has a PawTrack login). Details are pre-filled where we know them. -->
+          <!-- Panel 4: Signed in without an admin account yet (Google, or an email that already has a PawTrack login). Details are pre-filled where we know them. -->
           <form class="admin-login-panel auth-dialog-form al-form" data-login-panel="register" id="admin-register-form" autocomplete="off" novalidate hidden>
-            <h1 class="al-title">Request admin access</h1>
-            <p class="al-sub">Signed in as <strong id="admin-register-email"></strong>. We filled in what we could. Check it, add the rest, and an administrator will review your request.</p>
+            <h1 class="al-title">Finish setting up your account</h1>
+            <p class="al-sub">Signed in as <strong id="admin-register-email"></strong>. We filled in what we could. Check it and add the rest.</p>
 
             <div class="auth-name-row">
               <div class="auth-field-box">
@@ -456,13 +455,13 @@
 
             <div id="admin-register-turnstile" class="auth-turnstile auth-turnstile-below"></div>
 
-            <button type="submit" class="auth-dialog-submit-btn" disabled>Submit access request</button>
+            <button type="submit" class="auth-dialog-submit-btn" disabled>Create account</button>
             <div class="auth-forgot-row" style="justify-content: center;">
               <button type="button" class="auth-text-btn" data-login-action="signout">Use a different account</button>
             </div>
           </form>
 
-          <!-- Panel 5: Pending / rejected / suspended -->
+          <!-- Panel 5: Suspended account / access check failed -->
           <div class="admin-login-panel auth-dialog-form al-form" data-login-panel="status" hidden>
             <h1 class="al-title" id="admin-access-title"></h1>
             <p class="al-sub" id="admin-access-message"></p>

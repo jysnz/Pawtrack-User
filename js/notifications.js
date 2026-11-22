@@ -53,7 +53,7 @@ class NotificationManager {
 
     let icon = 'info';
     if (type === 'success') icon = 'check-circle';
-    if (type === 'danger') icon = 'alert-triangle';
+    if (type === 'danger' || type === 'error') icon = 'alert-triangle';
     if (type === 'warning') icon = 'alert-circle';
 
     toast.innerHTML = `
@@ -61,7 +61,7 @@ class NotificationManager {
         <i data-lucide="${icon}"></i>
       </div>
       <div style="flex:1;">
-        <div style="font-size:0.875rem; font-weight:500;">${message}</div>
+        <div style="font-size:0.875rem; font-weight:500;">${this.escHtml(message)}</div>
       </div>
       <button style="color:var(--text-muted); font-size:1.1rem; line-height:1; padding:4px;" onclick="this.parentElement.remove()" aria-label="Close">&times;</button>
     `;
@@ -646,11 +646,11 @@ class NotificationManager {
     if (bodyElem) {
       bodyElem.innerHTML = `
         <div style="font-weight:700; color:#ea9d1e; margin-bottom:6px; letter-spacing:0.02em;">OFFICIAL NOTICE: PET IMPOUNDMENT</div>
-        Your registered pet <strong>"${data.petName}"</strong> (NFC: <code>${data.nfcTag}</code>) has been logged at <strong>${data.shelterName}</strong>.<br><br>
-        <strong>Facility Address:</strong> ${data.shelterAddress}<br>
-        <strong>Holding Bay:</strong> ${data.cageNumber || 'Bay 01'}<br>
+        Your registered pet <strong>"${this.escHtml(data.petName)}"</strong> (NFC: <code>${this.escHtml(data.nfcTag)}</code>) has been logged at <strong>${this.escHtml(data.shelterName)}</strong>.<br><br>
+        <strong>Facility Address:</strong> ${this.escHtml(data.shelterAddress)}<br>
+        <strong>Holding Bay:</strong> ${this.escHtml(data.cageNumber || 'Bay 01')}<br>
         <strong>Claim Window:</strong> 72 Hours from intake.<br><br>
-        Please present a Valid ID and Pet Vaccination Book upon claiming. Contact: ${data.shelterPhone || '+63 (2) 8988-4242'}.
+        Please present a Valid ID and Pet Vaccination Book upon claiming. Contact: ${this.escHtml(data.shelterPhone || '+63 (2) 8988-4242')}.
       `;
     }
 

@@ -17,14 +17,16 @@ const container = {
 global.document = { getElementById: () => null, createElement: () => ({}), addEventListener() {}, removeEventListener() {} };
 const MAIN = { id: 'MAIN', name: 'Main Shelter', capacity: 10 }, SUB = { id: 'SUB', name: 'Sub One', parentId: 'MAIN' };
 const imps = [{ id: 'a', shelterId: 'SUB', status: 'active_impounded', petName: 'Rex', intakeDate: new Date().toISOString(), claimDeadline: new Date(Date.now() + 3600e3 * 30).toISOString(), shelterName: 'Sub One' }];
+let activeFacility = 'MAIN';
 window.adminStore = {
+  getActiveFacilityId: () => activeFacility, setActiveFacility: (id) => { activeFacility = id; },
   getMyShelter: () => MAIN, myShelterId: () => 'MAIN', getMyFacilityIds: () => ['MAIN', 'SUB'], getShelters: () => [MAIN, SUB, { id: 'OTHER', name: 'Elsewhere' }],
   getImpoundments: () => imps, getMyImpoundments: () => imps, hasFacility: () => true, isFacilityManager: () => true, isMainFacility: () => true,
   getManagedShelterIds: () => ['MAIN', 'SUB'], getMainFacility: () => null, getSubFacilities: () => [SUB], getIncomingTransfers: () => [], getTicketForImpound: () => null,
   getRfidTags: () => [], currentAdmin: () => ({ full_name: 'Officer' }), getMainFacilities: () => [MAIN], isDbId: () => true
 };
 const rendered = [];
-window.adminApp = { currentRoute: 'shelters', renderView: (r) => rendered.push(r), showToast() {} };
+window.adminApp = { updateFacilityChip() {}, currentRoute: 'shelters', renderView: (r) => rendered.push(r), showToast() {} };
 global.location = { hash: '#shelters' };
 Object.defineProperty(global, 'window', { value: global, writable: true });
 window.location = global.location;
@@ -50,7 +52,7 @@ const check = (n, ok, x) => { console.log(`${ok ? '[PASS]' : '[FAIL]'} ${n}${!ok
   const page = { innerHTML: '', querySelector: () => null, querySelectorAll: () => [] };
   I.render(page);
   const p = page.innerHTML;
-  check('the page says it shows only that facility, with a way back to all', /Showing only <b>Sub One<\/b>/.test(p) && /id="imp-show-all"/.test(p));
+  check('the facility chooser has that facility selected', /<option value="SUB" selected>Sub One<\/option>/.test(p) && /<option value="MAIN" >Main Shelter<\/option>/.test(p));
   check('it has a Facilities button and a Scan & intake button', /id="btn-facilities"[\s\S]*Facilities/.test(p) && /Scan &amp; intake/.test(p) && /href="#shelters"/.test(p));
   check('it shows that facility\'s pet', /Rex/.test(p));
   check('plain column names, no jargon', /<th>Claim window \(72h\)<\/th>/.test(p) && /<th[^>]*>Actions<\/th>/.test(p) && !/Operations|Condition \/ Officer/.test(p));
@@ -81,7 +83,7 @@ const check = (n, ok, x) => { console.log(`${ok ? '[PASS]' : '[FAIL]'} ${n}${!ok
   global.document = { createElement: () => wrap, body: { appendChild: (n) => body.push(n) }, addEventListener: (ev, fn) => { keydown = fn; }, removeEventListener() {} };
   const src = read('../js/admin-app.js');
   const start = src.indexOf('  confirmDialog(');
-  const end = src.indexOf('  closeModal() {');
+  const end = src.indexOf('  // A dialog can ask to be confirmed');
   const fn = eval('(function(){ return { ' + src.slice(start, end).trim().replace(/,\s*$/, '') + ' } })()').confirmDialog;
   let p1 = fn({ title: 'Leave <b>?', message: 'm', confirmLabel: 'Go', danger: true });
   check('the dialog is added to the page, escapes its text and marks danger', body.length === 1 && /Leave &lt;b&gt;\?/.test(wrap.innerHTML) && /btn-danger/.test(wrap.innerHTML));

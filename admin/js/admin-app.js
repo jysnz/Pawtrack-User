@@ -110,7 +110,6 @@ class AdminApp {
     const avatarTrigger = document.getElementById('admin-avatar-trigger');
     const dropdown = document.getElementById('admin-user-dropdown');
     const configBtn = document.getElementById('menu-btn-config');
-    const accessBtn = document.getElementById('menu-btn-access-requests');
     const logoutBtn = document.getElementById('admin-logout-btn');
 
     if (!avatarTrigger || !dropdown) return;
@@ -134,11 +133,6 @@ class AdminApp {
     configBtn?.addEventListener('click', () => {
       close();
       window.location.hash = '#settings';
-    });
-
-    accessBtn?.addEventListener('click', () => {
-      close();
-      this.openAccessRequests();
     });
 
     logoutBtn?.addEventListener('click', () => {
@@ -187,12 +181,13 @@ class AdminApp {
     window.open('/', '_blank');
   }
 
-  // Admin sign-in via Supabase Auth. Console access needs an approved row in admin_accounts, which Row Level
-  // Security enforces, so every path below ends in the same place: a signed-in user is looked up and either let in,
-  // asked to request access, or told their request is pending.
+  // Admin sign-in via Supabase Auth, laid out like the guardian app: Log in / Create account tabs. Console access
+  // needs a row in admin_accounts, which Row Level Security enforces, so every path below ends in the same place:
+  // a signed-in user is looked up and either let in, or asked to finish setting up their account. There is no
+  // approval step: a new account is active as soon as it is created.
   //   - Log in: email + password (Turnstile first), or Google
-  //   - Request access: details incl. birth date (18+), email + password, then an emailed 6-digit code (admin-signup-otp)
-  //   - Signed in without a request (Google, or an existing PawTrack login): the same details form, pre-filled (admin-register)
+  //   - Create account: details incl. birth date (18+), email + password, then an emailed 6-digit code (admin-signup-otp)
+  //   - Signed in without an admin account (Google, or an existing PawTrack login): the same details form, pre-filled (admin-register)
   initAdminGate() {
     const $ = (id) => document.getElementById(id);
     const screen = $('admin-login-screen');
@@ -427,7 +422,7 @@ class AdminApp {
       const user = session && session.user;
 
       if (!user) {
-        // Someone filling in the request form or entering a code must not be bounced by a background auth event
+        // Someone filling in the sign-up form or entering a code must not be bounced by a background auth event
         if (currentPanel === 'signup' || currentPanel === 'otp') return;
         lockConsole('signin');
         setStatus(pendingError ? `Google sign-in failed: ${pendingError}` : '', !!pendingError);
@@ -467,13 +462,7 @@ class AdminApp {
         return;
       }
 
-      if (account.status === 'pending') {
-        showAccessStatus('Access request sent', `Thanks, ${account.full_name}. An administrator needs to approve ${account.email} before you can use the console. Check back once you've been told it's approved.`);
-      } else if (account.status === 'rejected') {
-        showAccessStatus('Access request declined', `The request for ${account.email} was not approved. Contact your PawTrack administrator if you think this is a mistake.`);
-      } else {
-        showAccessStatus('Access suspended', `Console access for ${account.email} has been suspended. Contact your PawTrack administrator to restore it.`);
-      }
+      showAccessStatus('Access suspended', `Console access for ${account.email} has been suspended. Contact your PawTrack administrator to restore it.`);
     };
 
     // ---------- Log in: Google ----------
@@ -520,7 +509,7 @@ class AdminApp {
       // onAuthStateChange takes it from here
     });
 
-    // ---------- Request access: details -> emailed code -> pending request ----------
+    // ---------- Create account: details -> emailed code -> signed in ----------
     const callAdminOtp = async (payload) => {
       try {
         const res = await fetch(`${config.url}/functions/v1/admin-signup-otp`, {
@@ -574,7 +563,7 @@ class AdminApp {
       setStatus('Sending a verification code to your email…');
       const sent = await callAdminOtp({ action: 'send', email, birth_date: birthDate, turnstileToken });
       if (sent.status === 409) {
-        setStatus(sent.data.error || 'This email already has an admin request. Try logging in instead.', true);
+        setStatus(sent.data.error || 'This email already has an admin account. Try logging in instead.', true);
         renderSignupTurnstile();
         return;
       }
@@ -645,7 +634,7 @@ class AdminApp {
       if (!res.ok) {
         setStatus(res.data.error || 'Something went wrong. Please try again.', true);
         if (res.status === 409) {
-          // Already has a PawTrack login: logging in will lead to the pre-filled request form
+          // Already has a PawTrack login: logging in will lead to the pre-filled details form
           clearInterval(resendTimer);
           pendingSignup = null;
           goTab('signin');
@@ -665,7 +654,7 @@ class AdminApp {
         return;
       }
 
-      // The account and the request exist now: exchange the one-time token for a session
+      // The account exists now: exchange the one-time token for a session
       clearInterval(resendTimer);
       pendingSignup = null;
       el.signupForm?.reset();
@@ -680,12 +669,12 @@ class AdminApp {
         sessionStorage.removeItem(FRESH_SIGNIN_KEY);
         goTab('signin');
         if (el.loginEmail) el.loginEmail.value = email;
-        setStatus('Your request was submitted. Log in to check its status.');
+        setStatus('Your account was created. Log in to continue.');
       }
-      // When signedIn, onAuthStateChange shows the "Access request sent" notice
+      // When signedIn, onAuthStateChange lets the new admin straight into the console
     });
 
-    // ---------- Signed in without a request yet: details form (pre-filled) ----------
+    // ---------- Signed in without an admin account yet: details form (pre-filled) ----------
     el.registerForm?.addEventListener('submit', async (e) => {
       e.preventDefault();
       const user = session && session.user;
@@ -704,10 +693,10 @@ class AdminApp {
       if (!validMobile(phone)) return setStatus('Please enter a valid Philippine mobile number (9XX XXX XXXX).', true);
 
       if (el.registerSubmit) el.registerSubmit.disabled = true;
-      setStatus('Submitting your request…');
+      setStatus('Creating your account…');
 
-      // The admin-register Edge Function verifies Turnstile with Cloudflare, then files the request;
-      // the signed-in user's identity, the age rule and the approval status are decided server-side
+      // The admin-register Edge Function verifies Turnstile with Cloudflare, then creates the account;
+      // the signed-in user's identity, the age rule and the status are decided server-side
       const { error } = await this.supabase.functions.invoke('admin-register', {
         body: {
           turnstileToken,
@@ -724,7 +713,7 @@ class AdminApp {
           const details = await error.context.json();
           if (details && details.error) message = details.error;
         } catch {}
-        setStatus(`Could not submit your request: ${message}`, true);
+        setStatus(`Could not create your account: ${message}`, true);
         renderRegisterTurnstile();
         return;
       }
@@ -741,6 +730,7 @@ class AdminApp {
 
     this.supabase.auth.onAuthStateChange((event, newSession) => {
       session = newSession;
+      if (window.pawSentry) window.pawSentry.setUser(newSession && newSession.user ? newSession.user.id : null);
       if (event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') return;
       // Coming back to the tab makes Supabase announce the same session again: nothing changed, so leave the
       // console alone (re-checking access would rebuild the page and reload every list under the admin)
@@ -768,7 +758,6 @@ class AdminApp {
 
     this.updateFacilityLabel();
     this.startTopbarClock();
-    this.refreshAccessRequestCount();
     if (isFreshSignIn) this.showToast(`Signed in as ${name}`, 'success');
     // Views hold their loading skeleton until the account is known: tell them it is (once, not on every re-check)
     if (!alreadyIn && window.adminStore && typeof window.adminStore.notify === 'function') window.adminStore.notify('account_ready');
@@ -845,81 +834,6 @@ class AdminApp {
 
   esc(value) {
     return String(value).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-  }
-
-  async refreshAccessRequestCount() {
-    const badge = document.getElementById('admin-access-count');
-    if (!badge || !this.supabase || !this.currentAdmin) return;
-    const { count, error } = await this.supabase
-      .from('admin_accounts')
-      .select('id', { count: 'exact', head: true })
-      .eq('status', 'pending');
-    if (error) return;
-    badge.textContent = count;
-    badge.hidden = !count;
-  }
-
-  // Approved admins review console access requests (the database rejects anyone else)
-  async openAccessRequests() {
-    if (!this.supabase || !this.currentAdmin) return;
-    const box = this.openModalContent(`
-      <div class="modal-header">
-        <h3 style="margin: 0; font-size: 16px; font-weight: 700; color: var(--ink-primary);">Access Requests</h3>
-        <button class="btn btn-sm btn-secondary" onclick="window.adminApp.closeModal()">&times;</button>
-      </div>
-      <div class="modal-body"><div class="admin-access-list">Loading accounts…</div></div>
-    `);
-    const list = box.querySelector('.admin-access-list');
-
-    const { data, error } = await this.supabase
-      .from('admin_accounts')
-      .select('id, email, full_name, office, position, phone, status, created_at')
-      .order('created_at', { ascending: false });
-    if (error) {
-      list.textContent = `Could not load accounts: ${error.message}`;
-      return;
-    }
-
-    const order = { pending: 0, approved: 1, suspended: 2, rejected: 3 };
-    data.sort((a, b) => order[a.status] - order[b.status]);
-
-    const actionsFor = (acc) => {
-      if (acc.id === this.currentAdmin.id) return '<span class="admin-access-status">You</span>';
-      const btn = (status, label, cls) => `<button class="btn btn-sm ${cls}" data-access-id="${acc.id}" data-access-status="${status}">${label}</button>`;
-      if (acc.status === 'pending') return btn('approved', 'Approve', 'btn-primary') + btn('rejected', 'Reject', 'btn-secondary');
-      if (acc.status === 'approved') return btn('suspended', 'Suspend', 'btn-danger');
-      return btn('approved', 'Approve', 'btn-secondary');
-    };
-
-    list.innerHTML = data.length ? data.map(acc => `
-      <div class="admin-access-row">
-        <div class="admin-access-info">
-          <strong>${this.esc(acc.full_name)}</strong>
-          ${this.esc(acc.email)}${acc.phone ? ` · ${this.esc(acc.phone)}` : ''}<br>
-          ${this.esc(acc.office || 'Office not assigned')}${acc.position ? ` · ${this.esc(acc.position)}` : ''} · requested ${new Date(acc.created_at).toLocaleDateString()}
-        </div>
-        <span class="admin-access-status${acc.status === 'pending' ? ' is-pending' : ''}">${acc.status}</span>
-        <div class="admin-access-actions">${actionsFor(acc)}</div>
-      </div>
-    `).join('') : 'No accounts yet.';
-
-    list.querySelectorAll('[data-access-id]').forEach(btn => {
-      btn.addEventListener('click', async () => {
-        btn.disabled = true;
-        const { error: updateError } = await this.supabase
-          .from('admin_accounts')
-          .update({ status: btn.dataset.accessStatus })
-          .eq('id', btn.dataset.accessId);
-        if (updateError) {
-          btn.disabled = false;
-          this.showToast(`Could not update access: ${updateError.message}`, 'error');
-          return;
-        }
-        this.showToast(`Access ${btn.dataset.accessStatus}.`, 'success');
-        this.refreshAccessRequestCount();
-        this.openAccessRequests();
-      });
-    });
   }
 
   initEventListeners() {

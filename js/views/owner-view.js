@@ -7,6 +7,17 @@ class OwnerView {
     this.timerInterval = null;
   }
 
+  // Text that goes into the page (shelter names and pet names are typed by people)
+  esc(v) {
+    return String(v == null ? '' : v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  }
+
+  // Text that goes inside a quoted JavaScript string in an onclick="..." attribute
+  jsArg(v) {
+    return String(v == null ? '' : v).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/[\r\n]+/g, ' ')
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
   render(container) {
     const t = (k, d) => (window.pawI18n ? window.pawI18n.t(k, d) : d);
     const pets = window.pawStore.getPets();
@@ -72,20 +83,20 @@ class OwnerView {
               <li><i data-lucide="check" style="width:13px; height:13px;"></i> Standard Daily Care Fee</li>
             </ul>
             <div style="margin-top: 0.85rem; display:flex; gap:0.65rem; flex-wrap:wrap;">
-              <button class="btn btn-primary btn-sm" onclick="window.ownerView.openDirections('${activeImpoundment.shelterAddress}')">
+              <button class="btn btn-primary btn-sm" onclick="window.ownerView.openDirections('${this.jsArg(activeImpoundment.shelterAddress)}')">
                 <i data-lucide="navigation"></i> ${t('owner.heroDirectionsBtn', 'Directions')}
               </button>
-              <button class="btn btn-secondary btn-sm" onclick="window.ownerView.simulateClaim('${activeImpoundment.id}', '${impoundedPet.name}')">
+              <button class="btn btn-secondary btn-sm" onclick="window.ownerView.simulateClaim('${this.jsArg(activeImpoundment.id)}', '${this.jsArg(impoundedPet.name)}')">
                 <i data-lucide="check-circle-2"></i> ${t('owner.heroRedeemBtn', 'Confirm Claim')}
               </button>
               <button class="btn btn-outline btn-sm" onclick="window.notifManager.showSmsSimulation({
-                ownerPhone: '${impoundedPet.owner ? impoundedPet.owner.phone : '+63 917 555 3829'}',
-                petName: '${impoundedPet.name}',
-                nfcTag: '${impoundedPet.nfcTag}',
-                shelterName: '${activeImpoundment.shelterName}',
-                shelterAddress: '${activeImpoundment.shelterAddress}',
-                shelterPhone: '${activeImpoundment.shelterPhone}',
-                cageNumber: '${activeImpoundment.cageNumber}'
+                ownerPhone: '${this.jsArg(impoundedPet.owner ? impoundedPet.owner.phone : '+63 917 555 3829')}',
+                petName: '${this.jsArg(impoundedPet.name)}',
+                nfcTag: '${this.jsArg(impoundedPet.nfcTag)}',
+                shelterName: '${this.jsArg(activeImpoundment.shelterName)}',
+                shelterAddress: '${this.jsArg(activeImpoundment.shelterAddress)}',
+                shelterPhone: '${this.jsArg(activeImpoundment.shelterPhone)}',
+                cageNumber: '${this.jsArg(activeImpoundment.cageNumber)}'
               })">
                 <i data-lucide="smartphone"></i> View SMS Alert
               </button>
@@ -149,7 +160,7 @@ class OwnerView {
           ${heroLeftHtml}
         </div>
         <div class="${statsGridClass}">
-          ${this.renderHeroStatCards(pets, t, showAlerts('lost'))}
+          ${this.renderHeroStatCards(pets, t, showAlerts('lost'), mapPets)}
         </div>
       </div>
     ` : summaryHtml;
@@ -271,7 +282,7 @@ class OwnerView {
   }
 
   // Stat cards shown beside the impoundment notice
-  renderHeroStatCards(pets, t, showAlerts) {
+  renderHeroStatCards(pets, t, showAlerts, mapPets = pets) {
     return `
           <div class="stat-card glass-card" data-label="${t('owner.statTotalPets', 'Total Registered Pets')}" title="Click to view all registered pets in Sightings" style="cursor:pointer;" onclick="window.location.hash='#sightings';">
             <div class="stat-icon" style="background:linear-gradient(135deg, #ea9d1e, #b85410); color:#180d07;">
@@ -342,13 +353,13 @@ class OwnerView {
       badgeText = t('owner.statusReunited', 'Reunited');
     }
 
-    const safePetName = (pet.name || 'Pet').replace(/'/g, "\\'");
-    const safeCaption = `${pet.breed} · ${pet.species} | NFC: ${pet.nfcTag}`.replace(/'/g, "\\'");
+    const safePetName = this.jsArg(pet.name || 'Pet');
+    const safeCaption = this.jsArg(`${pet.breed} · ${pet.species} | NFC: ${pet.nfcTag}`);
 
     return `
       <div class="pet-card glass-card ${matchingSighting ? 'pet-card-matched-pending' : ''}">
-        <div class="pet-card-image-wrap" onclick="window.pawApp.openLightbox('${pet.photoUrl}', '${safePetName}', '${safeCaption}')" title="Click to view full photo of ${safePetName}" style="cursor:zoom-in;">
-          <img src="${pet.photoUrl || window.PET_PHOTO_PLACEHOLDER}" alt="${pet.name}" class="pet-card-img" onerror="this.src='https://images.unsplash.com/photo-1543466835-00a7907e9de1?auto=format&fit=crop&w=600&q=80'" />
+        <div class="pet-card-image-wrap" onclick="window.pawApp.openLightbox('${this.jsArg(pet.photoUrl)}', '${safePetName}', '${safeCaption}')" title="Click to view full photo of ${this.esc(pet.name || 'Pet')}" style="cursor:zoom-in;">
+          <img src="${this.esc(pet.photoUrl || window.PET_PHOTO_PLACEHOLDER)}" alt="${this.esc(pet.name)}" class="pet-card-img" onerror="this.src='https://images.unsplash.com/photo-1543466835-00a7907e9de1?auto=format&fit=crop&w=600&q=80'" />
           <div class="pet-img-zoom-hint">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <polyline points="15 3 21 3 21 9"/>
@@ -368,11 +379,11 @@ class OwnerView {
         <div class="pet-card-body">
           <div class="pet-card-header">
             <div>
-              <h3 class="pet-name">${pet.name}</h3>
-              <div class="pet-meta">${pet.breed} · ${pet.gender} · ${pet.species}</div>
+              <h3 class="pet-name">${this.esc(pet.name)}</h3>
+              <div class="pet-meta">${this.esc(pet.breed)} · ${this.esc(pet.gender)} · ${this.esc(pet.species)}</div>
             </div>
             <div style="text-align:right;">
-              <span class="badge badge-outline" style="font-family:var(--font-mono); font-size:0.75rem;">${pet.nfcTag}</span>
+              <span class="badge badge-outline" style="font-family:var(--font-mono); font-size:0.75rem;">${this.esc(pet.nfcTag)}</span>
             </div>
           </div>
 

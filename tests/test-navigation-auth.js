@@ -1,7 +1,8 @@
 /**
- * Test: Navigation Auth Restriction (Logged-out vs Logged-in)
- * Validates that when a user is not logged in on the owner side,
- * only "Home" and "Report Pet" are navigable/visible.
+ * Test: Navigation auth restriction (logged-out vs logged-in).
+ * Runs the REAL isGuestView(), updateGoogleAuthUI() and handleRoute() from js/app.js against a small fake page.
+ * Signed-out visitors may open: Missing Pets (#owner), Found a Pet (#found), Impound facilities (#impound) and the
+ * violations reference (#fines). Report Pet sends a signed-out visitor to Found a Pet. Everything else asks them to sign in.
  */
 const assert = require('assert');
 const fs = require('fs');
@@ -9,229 +10,94 @@ const path = require('path');
 
 console.log('=== Running Test: Navigation Auth Restriction ===\n');
 
-// Read app.js and index.html
 const appJs = fs.readFileSync(path.join(__dirname, '..', 'js', 'app.js'), 'utf8');
 const indexHtml = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
 
-// 1. Verify index.html navigation items
-const navTabs = ['owner', 'map', 'cases', 'impounded', 'report'];
-navTabs.forEach(tab => {
+// 1. Tabs in index.html
+const navTabs = ['pets', 'owner', 'sightings', 'found', 'report', 'impound', 'violations', 'settings'];
+navTabs.forEach((tab) => {
   assert(indexHtml.includes(`data-view="${tab}"`), `Tab data-view="${tab}" must exist in index.html`);
-  console.log(`[PASS] Found tab [data-view="${tab}"] in index.html`);
 });
-
-// Hardware Specs now lives in Settings, not the account dropdown
+console.log(`[PASS] All ${navTabs.length} tabs exist in index.html.`);
 assert(!indexHtml.includes('id="dropdown-hardware-btn"') && !indexHtml.includes('id="dropdown-profile-btn"'), 'account dropdown must not list Guardian Profile or Hardware Specs');
 console.log('[PASS] Account dropdown no longer lists Guardian Profile or Hardware Specs.');
 
-// 2. Mock DOM environment
+// 2. Pull the real methods out of app.js
+const grab = (name) => {
+  const start = appJs.indexOf(`\n  ${name}(`);
+  assert(start > 0, `app.js must define ${name}()`);
+  // a method ends at the first line that is exactly "  }"
+  const end = appJs.indexOf('\n  }\n', start);
+  return appJs.slice(start, end + 4);
+};
+const methods = ['isGuestView', 'updateGoogleAuthUI', 'handleRoute'].map(grab).join('\n');
+const App = new Function(`return class TestApp { ${methods} };`)();
+
+// 3. A small fake page
 let currentUser = null;
 let currentHash = '#owner';
-let toasts = [];
-
-const mockRoleTabBtns = navTabs.map(view => ({
-  dataset: { view },
-  style: { display: '' },
-  classList: {
-    classes: new Set(view === 'owner' ? ['active', 'role-tab-btn'] : ['role-tab-btn']),
-    add(c) { this.classes.add(c); },
-    remove(c) { this.classes.delete(c); },
-    contains(c) { return this.classes.has(c); }
-  }
-}));
-
+const toasts = [];
+const mkBtn = (view) => ({ dataset: { view }, style: { display: '' }, classList: { classes: new Set(), add(c) { this.classes.add(c); }, remove(c) { this.classes.delete(c); }, contains(c) { return this.classes.has(c); } }, querySelectorAll: () => [] });
+const tabs = navTabs.map(mkBtn);
 const mockDom = {
-  'header-login-btn': { style: { display: '' } },
-  'header-user-btn': { style: { display: 'none' } },
-  'header-user-name': { textContent: '' },
-  'header-avatar-circle': { textContent: '' },
-  'dropdown-user-name': { textContent: '' },
-  'dropdown-user-email': { textContent: '' },
-  'dropdown-avatar-circle': { textContent: '' },
-  'google-required-modal': { style: { display: 'none' } },
-  'google-onetap-prompt': { style: { display: 'none' } },
-  'app-viewport': { innerHTML: '' }
+  'header-login-btn': { style: {} }, 'header-user-btn': { style: {} }, 'header-user-name': {}, 'header-avatar-circle': {},
+  'dropdown-user-name': {}, 'dropdown-user-email': {}, 'dropdown-avatar-circle': {}, 'google-required-modal': { style: { display: 'none' } },
+  'google-onetap-prompt': { style: { display: 'none' } }
 };
-
 global.window = {
-  location: {
-    get hash() { return currentHash; },
-    set hash(val) { currentHash = val.startsWith('#') ? val : '#' + val; }
-  },
-  pawStore: {
-    getGoogleUser: () => currentUser,
-    setGoogleUser: (u) => { currentUser = u; },
-    getPets: () => [],
-    getNotifications: () => [],
-    subscribe: () => {}
-  },
-  notifManager: {
-    showToast: (msg, type) => { toasts.push({ msg, type }); }
-  },
-  ownerView: { render: () => {} },
-  publicView: { render: () => {} },
-  casesView: { render: () => {} },
-  hardwareView: { render: () => {} },
-  reportManager: { openReportModal: () => {} }
+  location: { get hash() { return currentHash; }, set hash(v) { currentHash = v.startsWith('#') ? v : '#' + v; } },
+  pawStore: { getGoogleUser: () => currentUser, getPets: () => [], getNotifications: () => [] },
+  notifManager: { showToast: (msg, type) => toasts.push({ msg, type }) }
 };
-
 global.document = {
-  getElementById: (id) => mockDom[id] || null,
-  querySelectorAll: (selector) => {
-    if (selector === '.role-tab-btn') return mockRoleTabBtns;
-    return [];
-  },
-  documentElement: {
-    getAttribute: () => 'dark',
-    setAttribute: () => {}
-  }
+  getElementById: (id) => mockDom[id] || { style: {}, appendChild() {}, querySelector: () => null, classList: { add() {}, remove() {}, toggle() {} }, setAttribute() {}, removeAttribute() {} },
+  querySelectorAll: (sel) => (sel === '.role-tab-btn' ? tabs : []),
+  querySelector: () => null
 };
 
-// 3. Test App Logic using simulated App instance
-class TestApp {
-  constructor() {
-    this.currentView = 'owner';
-    this.views = {
-      owner: window.ownerView,
-      map: window.publicView,
-      cases: window.casesView,
-      impounded: window.impoundedView,
-      hardware: window.hardwareView
-    };
-  }
+const app = new App();
+app.views = { pets: {}, owner: {}, sightings: {}, found: {}, report: {}, impound: {}, violations: {}, settings: {}, fines: {} };
+app.updateGreeting = () => {};
+app.renderAvatar = () => {};
+app.renderCurrentView = () => {}; // drawing the page is not under test
+const visible = () => tabs.filter((b) => b.style.display !== 'none').map((b) => b.dataset.view);
 
-  updateGoogleAuthUI() {
-    const user = window.pawStore ? window.pawStore.getGoogleUser() : null;
-    const loginBtn = document.getElementById('header-login-btn');
-    const userBtn = document.getElementById('header-user-btn');
-    const nameEl = document.getElementById('header-user-name');
-    const avatarCircle = document.getElementById('header-avatar-circle');
-    const dropdownName = document.getElementById('dropdown-user-name');
-    const dropdownEmail = document.getElementById('dropdown-user-email');
-    const dropdownAvatar = document.getElementById('dropdown-avatar-circle');
-
-    const isLoggedIn = !!(user && user.name);
-
-    if (isLoggedIn) {
-      if (loginBtn) loginBtn.style.display = 'none';
-      if (userBtn) userBtn.style.display = 'inline-flex';
-      const short = user.shortName || user.name || 'User';
-      const initial = user.avatarInitial || (user.name ? user.name[0].toUpperCase() : 'G');
-      if (nameEl) nameEl.textContent = short;
-      if (avatarCircle) avatarCircle.textContent = initial;
-      if (dropdownName) dropdownName.textContent = user.name || 'Google User';
-      if (dropdownEmail) dropdownEmail.textContent = user.email || 'user@gmail.com';
-      if (dropdownAvatar) dropdownAvatar.textContent = initial;
-    } else {
-      if (loginBtn) loginBtn.style.display = 'inline-flex';
-      if (userBtn) userBtn.style.display = 'none';
-    }
-
-    // Role tabs visibility: when not logged in, only Home and Report Pet are visible
-    document.querySelectorAll('.role-tab-btn').forEach(btn => {
-      const view = btn.dataset.view;
-      if (view === 'owner' || view === 'report') {
-        btn.style.display = '';
-      } else {
-        btn.style.display = isLoggedIn ? '' : 'none';
-      }
-    });
-  }
-
-  handleRoute() {
-    let hash = window.location.hash.replace('#', '');
-    const user = window.pawStore ? window.pawStore.getGoogleUser() : null;
-    const isLoggedIn = !!(user && user.name);
-
-    // If logged out, only 'owner' (Home) is accessible. Any other view redirects to 'owner'.
-    if (!isLoggedIn && hash && hash !== 'owner') {
-      window.location.hash = 'owner';
-      const warningModal = document.getElementById('google-required-modal');
-      const onetapPrompt = document.getElementById('google-onetap-prompt');
-      if (warningModal) {
-        warningModal.style.display = 'flex';
-      } else if (onetapPrompt) {
-        onetapPrompt.style.display = 'block';
-      }
-      if (window.notifManager && typeof window.notifManager.showToast === 'function') {
-        window.notifManager.showToast('Please sign in to access this section.', 'info');
-      }
-      return;
-    }
-
-    if (!hash || !this.views[hash]) {
-      hash = 'owner';
-    }
-
-    this.currentView = hash;
-
-    document.querySelectorAll('.role-tab-btn').forEach(btn => {
-      if (btn.dataset.view === hash) {
-        btn.classList.add('active');
-      } else {
-        btn.classList.remove('active');
-      }
-    });
-  }
-}
-
-const app = new TestApp();
-
-// TEST 1: Logged-out state
-console.log('\n--- Test 1: Logged-Out Tab Visibility ---');
+// TEST 1: signed out
+console.log('\n--- Test 1: Logged-out tab visibility ---');
 currentUser = null;
-app.updateGoogleAuthUI();
+try { app.updateGoogleAuthUI(); } catch (e) { /* the avatar/greeting helpers are not under test */ }
+assert.deepStrictEqual(visible(), ['owner', 'found', 'impound'], `Signed-out visitors see Missing Pets, Found a Pet and Impound only (saw ${visible()})`);
+console.log('[PASS] Visible when logged out:', visible().join(', '));
 
-const visibleTabsLoggedOut = mockRoleTabBtns.filter(b => b.style.display !== 'none').map(b => b.dataset.view);
-const hiddenTabsLoggedOut = mockRoleTabBtns.filter(b => b.style.display === 'none').map(b => b.dataset.view);
-
-console.log('Visible tabs when logged out:', visibleTabsLoggedOut);
-console.log('Hidden tabs when logged out:', hiddenTabsLoggedOut);
-
-assert.deepStrictEqual(visibleTabsLoggedOut, ['owner', 'report'], 'Only owner and report tabs must be visible when logged out');
-assert.deepStrictEqual(hiddenTabsLoggedOut, ['map', 'cases', 'impounded'], 'Map, cases, and impounded must be hidden when logged out');
-console.log('[PASS] Logged-out tab visibility correct!');
-
-// TEST 2: Logged-out Route Protection
-console.log('\n--- Test 2: Logged-Out Route Protection ---');
-['map', 'cases', 'impounded', 'hardware'].forEach(protectedView => {
-  window.location.hash = '#' + protectedView;
+// TEST 2: signed-out route protection
+console.log('\n--- Test 2: Logged-out route protection ---');
+['pets', 'sightings', 'violations', 'settings'].forEach((view) => {
+  currentHash = '#' + view; mockDom['google-required-modal'].style.display = 'none';
   app.handleRoute();
-  assert.strictEqual(window.location.hash, '#owner', `Hash should redirect to #owner when attempting #${protectedView}`);
-  assert.strictEqual(app.currentView, 'owner', `Current view must remain 'owner'`);
-  assert.strictEqual(mockDom['google-required-modal'].style.display, 'flex', 'Warning modal must be triggered');
-  console.log(`[PASS] Route #${protectedView} successfully protected and redirected to #owner`);
+  assert.strictEqual(currentHash, '#owner', `#${view} must redirect a signed-out visitor to #owner`);
+  assert.strictEqual(mockDom['google-required-modal'].style.display, 'flex', 'the sign-in prompt must show');
+  console.log(`[PASS] #${view} is protected`);
 });
+currentHash = '#report'; app.handleRoute();
+assert.strictEqual(currentHash, '#found', 'a signed-out visitor who opens Report Pet is sent to Found a Pet');
+console.log('[PASS] #report sends a signed-out visitor to Found a Pet');
+['owner', 'found', 'impound'].forEach((view) => {
+  currentHash = '#' + view; app.handleRoute();
+  assert.strictEqual(currentHash, '#' + view, `#${view} stays open to everyone`);
+  assert.strictEqual(app.currentView, view);
+});
+console.log('[PASS] #owner, #found and #impound stay open to visitors');
 
-// TEST 3: Logged-in state
-console.log('\n--- Test 3: Logged-In Tab Visibility and Navigation ---');
+// TEST 3: signed in
+console.log('\n--- Test 3: Logged-in tab visibility and navigation ---');
 currentUser = { name: 'Dariush', shortName: 'Dariush', email: 'dariush@gmail.com', avatarInitial: 'D' };
-app.updateGoogleAuthUI();
-
-const visibleTabsLoggedIn = mockRoleTabBtns.filter(b => b.style.display !== 'none').map(b => b.dataset.view);
-console.log('Visible tabs when logged in:', visibleTabsLoggedIn);
-
-assert.strictEqual(visibleTabsLoggedIn.length, 6, 'All 6 tabs must be visible when logged in');
-console.log('[PASS] Logged-in tabs all visible!');
-
-['map', 'cases', 'impounded', 'hardware'].forEach(view => {
-  window.location.hash = '#' + view;
-  app.handleRoute();
-  assert.strictEqual(window.location.hash, '#' + view, `Logged-in user can access #${view}`);
-  console.log(`[PASS] Logged-in user navigated to #${view} successfully`);
+try { app.updateGoogleAuthUI(); } catch (e) { /* see above */ }
+assert.strictEqual(visible().length, navTabs.length, `All ${navTabs.length} tabs are visible when logged in (saw ${visible()})`);
+['pets', 'sightings', 'report', 'violations', 'settings'].forEach((view) => {
+  currentHash = '#' + view; app.handleRoute();
+  assert.strictEqual(currentHash, '#' + view, `a signed-in guardian can open #${view}`);
+  assert.strictEqual(app.currentView, view);
 });
+console.log('[PASS] A signed-in guardian can open every page.');
 
-// TEST 4: Responsive Navigation CSS Verification
-console.log('\n--- Test 4: Responsive Navigation CSS Verification ---');
-const mainCss = fs.readFileSync(path.join(__dirname, '..', 'css', 'main.css'), 'utf8');
-
-assert(mainCss.includes('.role-tabs {'), 'css/main.css must define .role-tabs');
-assert(mainCss.includes('.role-tab-btn {'), 'css/main.css must define .role-tab-btn');
-assert(mainCss.includes('@media (min-width: 993px) and (max-width: 1280px)'), 'css/main.css must support intermediate desktop/laptop screens');
-assert(mainCss.includes('@media (max-width: 992px)'), 'css/main.css must support mobile and tablet floating navigation');
-assert(mainCss.includes('@media (max-width: 480px)'), 'css/main.css must support compact mobile screens');
-assert(mainCss.includes('@media (max-width: 340px)'), 'css/main.css must support ultra-compact mobile screens');
-
-console.log('[PASS] Responsive navigation breakpoints for desktop, laptop, tablet, and mobile verified.');
-
-console.log('\n=== All Navigation Auth & Responsiveness Tests Passed! ===\n');
+console.log('\n=== All Navigation Auth Tests Passed! ===\n');

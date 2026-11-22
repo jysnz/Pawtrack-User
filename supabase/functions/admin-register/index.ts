@@ -1,4 +1,4 @@
-// PawTrack admin console: files an access request after a server-side Cloudflare Turnstile check.
+// PawTrack admin console: creates the admin account after a server-side Cloudflare Turnstile check.
 // Browsers cannot insert into admin_accounts directly; this function is the only way in.
 import { createClient } from 'npm:@supabase/supabase-js@2.45.4';
 
@@ -89,7 +89,7 @@ Deno.serve(async (req) => {
   if (!PH_MOBILE.test(phone)) return json(400, { error: 'Please enter a valid Philippine mobile number.' });
   if (!isAdult(birthDate)) return json(400, { error: 'Admins must be at least 18 years old. Please check your birth date.' });
 
-  // Status (pending, or approved for bootstrap admins) is decided by the database trigger
+  // The status (approved) and the age rule are enforced by the database trigger
   const { data: account, error: insertError } = await admin
     .from('admin_accounts')
     .insert({
@@ -105,9 +105,9 @@ Deno.serve(async (req) => {
     .single();
 
   if (insertError) {
-    if (insertError.code === '23505') return json(409, { error: 'You have already requested access.' });
+    if (insertError.code === '23505') return json(409, { error: 'This account is already set up. Log in to continue.' });
     console.error('[admin-register] Insert error:', insertError.message);
-    return json(500, { error: 'Could not save your request. Please try again.' });
+    return json(500, { error: 'Could not create your account. Please try again.' });
   }
   return json(200, { account });
 });

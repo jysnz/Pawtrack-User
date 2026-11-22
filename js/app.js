@@ -1608,6 +1608,7 @@ class App {
 
     this.supabase.auth.onAuthStateChange((event, newSession) => {
       session = newSession;
+      if (window.pawSentry) window.pawSentry.setUser(newSession && newSession.user ? newSession.user.id : null);
       if (!newSession) this._resolvedUserId = null;
       if (event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') return;
       // Coming back to the tab makes Supabase announce the same session again: nothing changed, so leave the page alone

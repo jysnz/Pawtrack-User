@@ -196,7 +196,6 @@
     'Veterinarian': 'Beterinaryo',
     'Clinic': 'Klinika',
     'Report as missing': 'I-ulat bilang nawawala',
-    'Mark as found': 'Markahan bilang natagpuan',
     'Report a missing pet': 'Mag-ulat ng nawawalang alaga',
     'Which pet is missing? *': 'Aling alaga ang nawawala? *',
     'Condition of the pet before it went missing *': 'Kondisyon ng alaga bago ito nawala *',

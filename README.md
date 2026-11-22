@@ -55,6 +55,25 @@ Every commit pushed to the `main` branch will automatically trigger a new deploy
 
 ---
 
+## 🚨 Error Monitoring (Sentry)
+
+Errors thrown in a visitor's browser (guardian app and admin console), unhandled promise rejections and failed database loads are sent to [Sentry](https://sentry.io), so you hear about a production break without waiting for a user report.
+
+1. Create a **Browser JavaScript** project in Sentry and copy its **DSN** (Project Settings -> Client Keys).
+2. Paste it into `js/sentry-config.js` (`dsn: '...'`) and deploy. The DSN is public by design; it can only send events.
+3. In Sentry: **Alerts -> Create Alert -> Issues**, "A new issue is created" -> notify by email (or Slack). Add a second rule for "issue changes state to regressed".
+
+The SDK is self-hosted in `js/vendor/` (no third-party CDN), runs only on non-localhost hosts, sends no cookies, emails or typed text, and reports the same failure at most once a minute. `window.pawSentry.report(err)` sends a handled error.
+
+## 📈 Running with many users
+
+- The app is static files on Vercel's CDN (cached at the edge, see `vercel.json`) plus Supabase, so page loads scale with the CDN.
+- Every device refreshes its data on a jittered 30 s timer that backs off (up to 5 min) when the database struggles, and pauses in hidden tabs.
+- Large admin lists are read in pages (Supabase returns at most 1000 rows per request).
+- Run `supabase/migrations/20261134_scale_indexes.sql` so those refresh queries stay fast as tables grow.
+
+---
+
 ## 🔄 Automatic Git Commit & Cloud Sync
 
 To have your local edits automatically committed and pushed to GitHub as you code:

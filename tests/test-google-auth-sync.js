@@ -26,7 +26,8 @@ console.log('[PASS] Google authorization security notification API is present.')
 
 // Real sign-in: Supabase Auth (email + password with Turnstile captcha, or Google) and the guardians table
 assert(indexHtml.includes('@supabase/supabase-js@') && indexHtml.includes('js/supabase-config.js'), 'index.html must load supabase-js and its config');
-assert(appJs.includes('auth.signInWithPassword') && appJs.includes('auth.signUp'), 'js/app.js must support email + password sign-in and sign-up');
+// Sign-up is verified by an emailed 6-digit code (the signup-otp Edge Function) before the account is created
+assert(appJs.includes('auth.signInWithPassword') && appJs.includes('signup-otp'), 'js/app.js must support email + password sign-in and code-verified sign-up');
 assert(appJs.includes('signInWithOAuth') && appJs.includes("provider: 'google'"), 'js/app.js must offer Continue with Google');
 assert(appJs.includes('auth.resetPasswordForEmail') && appJs.includes('PASSWORD_RECOVERY'), 'js/app.js must support password reset');
 assert((appJs.match(/captchaToken/g) || []).length >= 3, 'js/app.js must pass the Turnstile token to Supabase for sign-in, sign-up and reset');
@@ -53,9 +54,9 @@ console.log('[PASS] Sign-in, registration, and policy modals are present in inde
 assert(compCss.includes('.auth-dialog-card'), 'components.css must define .auth-dialog-card styling');
 assert(compCss.includes('.auth-turnstile'), 'components.css must define .auth-turnstile styling');
 assert(indexHtml.includes('id="login-turnstile"'), 'index.html must include #login-turnstile');
-// Layout order: email/password form, Log in button, Turnstile, then Continue with Google
-const order = ['id="login-email"', 'id="login-password"', 'id="login-forgot-btn"', 'id="login-submit-btn"', 'id="login-turnstile"', 'id="login-google-btn"'].map(m => indexHtml.indexOf(m));
-assert(order.every(i => i > 0) && order.every((i, n) => n === 0 || i > order[n - 1]), 'sign-in form must be ordered: email, password, forgot password, Log in, Turnstile, Google');
+// Layout order: email/password form, Turnstile, Log in button, then Continue with Google
+const order = ['id="login-email"', 'id="login-password"', 'id="login-forgot-btn"', 'id="login-turnstile"', 'id="login-submit-btn"', 'id="login-google-btn"'].map(m => indexHtml.indexOf(m));
+assert(order.every(i => i > 0) && order.every((i, n) => n === 0 || i > order[n - 1]), 'sign-in form must be ordered: email, password, forgot password, Turnstile, Log in, Google');
 assert(indexHtml.includes('id="register-email"'), 'index.html must include #register-email');
 assert(indexHtml.includes('id="register-name"'), 'index.html must include #register-name');
 assert(indexHtml.includes('id="register-phone"'), 'index.html must include #register-phone');

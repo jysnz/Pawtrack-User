@@ -18,7 +18,7 @@ assert(nfcScannerJs.includes('scanAndReportTag'), 'nfc-scanner.js must include s
 assert(hardwareViewJs.includes('scanAndReport'), 'hardware-view.js must include scanAndReport');
 assert(appJs.includes('checkHardwareScanUrl'), 'app.js must include checkHardwareScanUrl');
 assert(appJs.includes('pawtrack:hardware-scan'), 'app.js must listen for pawtrack:hardware-scan');
-assert(reportManagerJs.includes('openReportModal(type = \'found\', petId = null, prefill = {})'), 'reportManager.openReportModal must accept prefill');
+assert(reportManagerJs.includes('openReportModal(type = \'missing\', petId = null, prefill = {})'), 'reportManager.openReportModal must accept prefill');
 
 console.log('[PASS] All required functions and event listeners found in source code.');
 
