@@ -459,6 +459,10 @@ class Store {
       healthCondition: i.health_condition || '',
       shelterId: i.shelter_id,
       shelterName: shelter ? shelter.name : 'Animal facility',
+      // The owner's impound notice shows where to go and who to call; these come from the facility record
+      shelterAddress: shelter ? shelter.address : '',
+      shelterPhone: shelter ? shelter.phone : '',
+      cageNumber: i.kennel || '',
       intakeDate: i.intake_at,
       claimDeadline: i.claim_deadline,
       status: i.status === 'in_holding' ? 'active_impounded' : i.status
