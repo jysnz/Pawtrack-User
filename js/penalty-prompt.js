@@ -42,12 +42,17 @@
   function onKey(e) { if (e.key === 'Escape') { e.stopPropagation(); removeModal(); } }
 
   function showBanner(tickets) {
-    removeBanner();
-    if (!tickets.length) return;
+    if (!tickets.length) { removeBanner(); return; }
     var total = tickets.reduce(function (a, t) { return a + Number(t.amount_php || 0); }, 0);
+    // Same tickets as the banner already on screen: leave it alone (rebuilding it every poll makes it flash)
+    var key = tickets.length + ':' + total;
+    var existing = document.getElementById('pt-penalty-banner');
+    if (existing && existing.getAttribute('data-key') === key) return;
+    removeBanner();
     var b = document.createElement('button');
     b.type = 'button';
     b.id = 'pt-penalty-banner';
+    b.setAttribute('data-key', key);
     b.className = 'pt-penalty-banner';
     b.innerHTML = '<span class="pt-penalty-dot" aria-hidden="true"></span><span>' +
       (tickets.length === 1 ? '1 unpaid penalty ticket' : tickets.length + ' unpaid penalty tickets') +

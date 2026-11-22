@@ -460,9 +460,10 @@ class AdminApp {
       if (account.status === 'approved') {
         const isFresh = sessionStorage.getItem(FRESH_SIGNIN_KEY) === '1';
         sessionStorage.removeItem(FRESH_SIGNIN_KEY);
+        const wasIn = !!this.currentAdmin && this.currentAdmin.id === account.id && !document.body.classList.contains('auth-locked');
         this.onAdminSignedIn(account, isFresh);
         // An approved admin sees every row: load the full data from Supabase now
-        if (window.adminStore) window.adminStore.syncFromSupabase();
+        if (!wasIn && window.adminStore) window.adminStore.syncFromSupabase();
         return;
       }
 
@@ -741,6 +742,9 @@ class AdminApp {
     this.supabase.auth.onAuthStateChange((event, newSession) => {
       session = newSession;
       if (event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') return;
+      // Coming back to the tab makes Supabase announce the same session again: nothing changed, so leave the
+      // console alone (re-checking access would rebuild the page and reload every list under the admin)
+      if (event === 'SIGNED_IN' && newSession && newSession.user && this.currentAdmin && newSession.user.id === this.currentAdmin.id) return;
       if (event === 'INITIAL_SESSION' && (params.has('code') || params.has('error'))) {
         ['code', 'error', 'error_code', 'error_description', 'state'].forEach(key => params.delete(key));
         const query = params.toString();
@@ -752,6 +756,7 @@ class AdminApp {
   }
 
   onAdminSignedIn(account, isFreshSignIn) {
+    const alreadyIn = !!this.currentAdmin && this.currentAdmin.id === account.id && !document.body.classList.contains('auth-locked');
     this.currentAdmin = account;
     const screen = document.getElementById('admin-login-screen');
     if (screen) screen.style.display = 'none';
@@ -765,8 +770,8 @@ class AdminApp {
     this.startTopbarClock();
     this.refreshAccessRequestCount();
     if (isFreshSignIn) this.showToast(`Signed in as ${name}`, 'success');
-    // Views hold their loading skeleton until the account is known: tell them it is
-    if (window.adminStore && typeof window.adminStore.notify === 'function') window.adminStore.notify('account_ready');
+    // Views hold their loading skeleton until the account is known: tell them it is (once, not on every re-check)
+    if (!alreadyIn && window.adminStore && typeof window.adminStore.notify === 'function') window.adminStore.notify('account_ready');
   }
 
   // The sidebar and account menu show who is signed in; call again after the account is edited
