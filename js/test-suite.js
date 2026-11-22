@@ -77,7 +77,6 @@ const requiredIds = [
   'register-name',
   'register-phone',
   'register-submit-btn',
-  'theme-toggle-btn',
   'notif-bell-btn',
   'notif-count-badge',
   'notif-dropdown-panel',

@@ -43,7 +43,6 @@ class SettingsView {
     const t = (k, d) => this.t(k, d);
     const user = (window.pawStore && window.pawStore.getGoogleUser()) || {};
     const lang = window.pawI18n ? window.pawI18n.getLang() : 'en';
-    const theme = window.pawApp ? window.pawApp.getThemePreference() : 'dark';
     const parts = this.splitName(user.name);
     const initial = user.avatarInitial || (user.name ? user.name[0].toUpperCase() : 'G');
     const avatar = user.picture
@@ -62,7 +61,7 @@ class SettingsView {
       <div class="view-header">
         <div class="view-title-group">
           <h1>${t('settings.title', 'Settings')}</h1>
-          <div class="view-subtitle">${t('settings.subtitle', 'Manage your account, language and appearance.')}</div>
+          <div class="view-subtitle">${t('settings.subtitle', 'Manage your account and language.')}</div>
         </div>
       </div>
 
@@ -140,20 +139,6 @@ class SettingsView {
               ${seg('lang', lang, [
                 { value: 'en', label: 'English', icon: 'languages' },
                 { value: 'fil', label: 'Tagalog', icon: 'languages' }
-              ])}
-            </div>
-          </div>
-
-          <div class="settings-row">
-            <div class="settings-row-label">
-              <label>${t('settings.appearance', 'Appearance')}</label>
-              <span>${t('settings.appearanceHint', 'System default follows your device setting.')}</span>
-            </div>
-            <div class="settings-row-control">
-              ${seg('theme', theme, [
-                { value: 'light', label: t('settings.themeLight', 'Light'), icon: 'sun' },
-                { value: 'dark', label: t('settings.themeDark', 'Dark'), icon: 'moon' },
-                { value: 'system', label: t('settings.themeSystem', 'System default'), icon: 'monitor' }
               ])}
             </div>
           </div>
@@ -245,16 +230,6 @@ class SettingsView {
     container.querySelectorAll('[data-pref-lang]').forEach((btn) => {
       btn.addEventListener('click', () => {
         if (window.pawI18n && window.pawI18n.getLang() !== btn.dataset.prefLang) window.pawI18n.setLang(btn.dataset.prefLang, true);
-      });
-    });
-    container.querySelectorAll('[data-pref-theme]').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        window.pawApp.setThemePreference(btn.dataset.prefTheme);
-        container.querySelectorAll('[data-pref-theme]').forEach((b) => {
-          const on = b === btn;
-          b.classList.toggle('is-active', on);
-          b.setAttribute('aria-checked', String(on));
-        });
       });
     });
 
@@ -374,7 +349,7 @@ class SettingsView {
       }
       this.turnstileId = window.turnstile.render(el, {
         sitekey: key,
-        theme: document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light',
+        theme: 'auto', // follows the browser, like the page
         size: 'flexible',
         callback: (token) => { this.turnstileToken = token; },
         'expired-callback': () => { this.turnstileToken = null; },

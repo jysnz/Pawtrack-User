@@ -187,33 +187,22 @@ class App {
     }
   }
 
-  // The saved preference is 'light', 'dark' or 'system' (follow the device); data-theme is always light or dark
-  resolveTheme(pref) {
-    if (pref === 'system') {
-      return window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
-    }
-    return pref === 'light' ? 'light' : 'dark';
+  // The theme is always the browser's own: light or dark, whichever the device asks for (and it follows changes live)
+  resolveTheme() {
+    return window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
   }
 
   getThemePreference() {
-    const saved = (window.pawStore && typeof window.pawStore.getTheme === 'function')
-      ? window.pawStore.getTheme()
-      : (localStorage.getItem('pawtrack_theme') || 'dark');
-    return ['light', 'dark', 'system'].includes(saved) ? saved : 'dark';
+    return 'system';
   }
 
-  setThemePreference(pref) {
-    if (!['light', 'dark', 'system'].includes(pref)) return;
-    if (window.pawStore && typeof window.pawStore.setTheme === 'function') {
-      window.pawStore.setTheme(pref);
-    } else {
-      localStorage.setItem('pawtrack_theme', pref);
-    }
+  // Kept so older callers do not break; the theme is no longer a choice
+  setThemePreference() {
     this.applyTheme();
   }
 
   applyTheme() {
-    const theme = this.resolveTheme(this.getThemePreference());
+    const theme = this.resolveTheme();
     document.documentElement.setAttribute('data-theme', theme);
     this.updateThemeIcon(theme);
   }
@@ -221,21 +210,11 @@ class App {
   initTheme() {
     this.applyTheme();
 
-    // "System default" follows the device while the page is open
     const media = window.matchMedia ? window.matchMedia('(prefers-color-scheme: light)') : null;
-    const onSystemChange = () => { if (this.getThemePreference() === 'system') this.applyTheme(); };
+    const onSystemChange = () => this.applyTheme();
     if (media) {
       if (media.addEventListener) media.addEventListener('change', onSystemChange);
       else if (media.addListener) media.addListener(onSystemChange);
-    }
-
-    // The header button flips between light and dark; Settings is where "System default" is chosen
-    const toggleBtn = document.getElementById('theme-toggle-btn');
-    if (toggleBtn) {
-      toggleBtn.addEventListener('click', () => {
-        const current = document.documentElement.getAttribute('data-theme') || 'dark';
-        this.setThemePreference(current === 'dark' ? 'light' : 'dark');
-      });
     }
   }
 
@@ -613,7 +592,8 @@ class App {
       });
     });
 
-    const turnstileTheme = () => document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
+    // 'auto' follows the browser's light/dark setting, the same one the page theme follows, and keeps following it
+    const turnstileTheme = () => 'auto';
 
     // Supabase error codes -> wording a pet owner understands
     const friendlyAuthError = (error) => {

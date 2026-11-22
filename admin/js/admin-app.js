@@ -368,7 +368,7 @@ class AdminApp {
         turnstileIds[key] = window.turnstile.render(container, {
           sitekey: config.turnstileSiteKey,
           action,
-          theme: 'light',
+          theme: 'auto', // follows the browser's light/dark setting, like the console
           size: 'flexible',
           callback: (token) => {
             turnstileTokens[key] = token;
@@ -1399,52 +1399,32 @@ class AdminApp {
     }
   }
 
-  // ----- Theme: light, dark, or follow the device. Saved in this browser; data-theme on <html> drives the colours. -----
+  // ----- Theme: always the browser's own light or dark setting (and it follows changes live). data-theme on <html> drives the colours. -----
   getThemePreference() {
-    let pref = 'light';
-    try { pref = localStorage.getItem('pawtrack_admin_theme') || 'light'; } catch (e) { /* private mode */ }
-    return ['light', 'dark', 'system'].includes(pref) ? pref : 'light';
+    return 'system';
   }
 
-  resolveTheme(pref) {
-    if (pref === 'system') return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-    return pref === 'dark' ? 'dark' : 'light';
+  resolveTheme() {
+    return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
   }
 
-  setThemePreference(pref) {
-    if (!['light', 'dark', 'system'].includes(pref)) return;
-    try { localStorage.setItem('pawtrack_admin_theme', pref); } catch (e) { /* not remembered */ }
+  // Kept so older callers do not break; the theme is no longer a choice
+  setThemePreference() {
     this.applyTheme();
   }
 
   applyTheme() {
-    const theme = this.resolveTheme(this.getThemePreference());
+    const theme = this.resolveTheme();
     document.documentElement.setAttribute('data-theme', theme);
     const meta = document.querySelector('meta[name="theme-color"]');
     if (meta) meta.setAttribute('content', theme === 'dark' ? '#14110f' : '#f6f4f1');
-    const btn = document.getElementById('theme-toggle-btn');
-    if (btn) {
-      const next = theme === 'dark' ? 'light' : 'dark';
-      btn.title = `Switch to ${next} mode`;
-      btn.setAttribute('aria-label', `Switch to ${next} mode`);
-    }
-    document.querySelectorAll('[data-theme-pref]').forEach((b) => {
-      const on = b.getAttribute('data-theme-pref') === this.getThemePreference();
-      b.classList.toggle('is-on', on);
-      b.setAttribute('aria-pressed', String(on));
-    });
   }
 
   initTheme() {
     this.applyTheme();
-    // "System default" follows the device while the console is open
     const media = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
-    const onSystemChange = () => { if (this.getThemePreference() === 'system') this.applyTheme(); };
+    const onSystemChange = () => this.applyTheme();
     if (media) { if (media.addEventListener) media.addEventListener('change', onSystemChange); else if (media.addListener) media.addListener(onSystemChange); }
-    // The topbar button flips between light and dark; Settings is where "System default" is chosen
-    document.getElementById('theme-toggle-btn')?.addEventListener('click', () => {
-      this.setThemePreference(document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark');
-    });
   }
 
   // Swipe down from the top of any page to refresh its data (touch screens)
