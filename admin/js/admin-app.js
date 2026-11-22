@@ -219,6 +219,7 @@ class AdminApp {
 
     // Google redirects back with ?code=… (or ?error=…); remember any error, then tidy the URL
     const params = new URLSearchParams(window.location.search);
+    if (!params.has('code') && !params.has('error')) sessionStorage.removeItem('pawtrack_oauth_return');
     let pendingError = params.get('error_description') || params.get('error');
 
     const setStatus = (message, isError = false) => {
@@ -484,20 +485,47 @@ class AdminApp {
       }
     };
 
+    // ---------- The sign-in form is never pre-filled ----------
+    // Browsers offer saved or generated credentials, and what was typed before signing out would otherwise still be
+    // there. The fields stay read-only until they are used, are emptied on sign-out, and anything a browser fills in
+    // by itself (as opposed to typing) is swept away.
+    const credFields = [el.loginEmail, el.loginPassword].filter(Boolean);
+    let credTyped = false;
+    credFields.forEach(f => {
+      f.addEventListener('input', (e) => { if (e.inputType === 'insertText' || e.inputType === 'insertFromPaste' || e.inputType === 'deleteContentBackward') credTyped = true; });
+      const unlock = () => f.removeAttribute('readonly');
+      f.addEventListener('focus', unlock);
+      f.addEventListener('pointerdown', unlock);
+    });
+    const sweepCredFields = () => { if (!credTyped) credFields.forEach(f => { if (f.value && document.activeElement !== f) f.value = ''; }); };
+    // The moment a browser autofills a field (see .auth-field-input:-webkit-autofill in the CSS), and then regularly
+    // while nothing has been typed
+    credFields.forEach(f => f.addEventListener('animationstart', (e) => { if (e.animationName === 'pt-autofill-detect' && !credTyped) f.value = ''; }));
+    setInterval(sweepCredFields, 1000);
+    const clearCredFields = () => { credTyped = false; credFields.forEach(f => { f.value = ''; f.setAttribute('readonly', ''); }); };
+    this.clearCredFields = clearCredFields;
+    [100, 500, 1200, 2500].forEach(ms => setTimeout(sweepCredFields, ms));
+    window.addEventListener('pageshow', () => setTimeout(sweepCredFields, 50));
+
     // ---------- Log in: Google ----------
     const startGoogle = async (button, rerender) => {
       button.disabled = true;
       setStatus('Redirecting to Google…');
       sessionStorage.setItem(FRESH_SIGNIN_KEY, '1');
+      // Supabase only sends people back to addresses on its allow list; when /admin/ is not on it they land on the owner
+      // app instead. So return through the site root, which always is, and mark the trip: the owner app hands it straight
+      // back to this page (see the script at the top of index.html).
+      sessionStorage.setItem('pawtrack_oauth_return', 'admin');
       const { error } = await this.supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: window.location.origin + window.location.pathname,
+          redirectTo: window.location.origin + '/',
           queryParams: { prompt: 'select_account' }
         }
       });
       if (error) {
         sessionStorage.removeItem(FRESH_SIGNIN_KEY);
+        sessionStorage.removeItem('pawtrack_oauth_return');
         setStatus(error.message, true);
         rerender();
       }
@@ -786,6 +814,7 @@ class AdminApp {
 
     this.supabase.auth.onAuthStateChange((event, newSession) => {
       session = newSession;
+      if (event === 'SIGNED_OUT') clearCredFields();
       if (window.pawSentry) window.pawSentry.setUser(newSession && newSession.user ? newSession.user.id : null);
       if (event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') return;
       // Coming back to the tab makes Supabase announce the same session again: nothing changed, so leave the

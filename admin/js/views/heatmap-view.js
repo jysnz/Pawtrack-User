@@ -185,10 +185,27 @@ window.HeatmapView = {
     if (!f) return null;
     const b = f.cityBounds;
     const ok = b && ['north', 'south', 'east', 'west'].every(k => Number.isFinite(+b[k]));
+    let bounds = ok ? { north: +b.north, south: +b.south, east: +b.east, west: +b.west } : null;
+    let fromPin = false;
+    if (!bounds) {
+      // No city boundary saved for this facility: its scope is the area around where it stands (about 5 km each way).
+      // A main facility's scope also covers its sub-facilities.
+      const R = 0.045;
+      const subs = (store.getShelters() || []).filter(s => s.parentId === f.id);
+      const pts = [f, ...subs].filter(s => Number.isFinite(+s.lat) && Number.isFinite(+s.lng) && s.lat !== null && s.lng !== null);
+      if (pts.length) {
+        bounds = {
+          north: Math.max(...pts.map(s => +s.lat)) + R, south: Math.min(...pts.map(s => +s.lat)) - R,
+          east: Math.max(...pts.map(s => +s.lng)) + R, west: Math.min(...pts.map(s => +s.lng)) - R
+        };
+        fromPin = true;
+      }
+    }
     return {
       facility: f,
       city: f.city || '',
-      bounds: ok ? { north: +b.north, south: +b.south, east: +b.east, west: +b.west } : null,
+      bounds,
+      fromPin,
       barangays: Array.isArray(f.coverage) ? f.coverage.map(x => String(x || '').trim()).filter(Boolean) : []
     };
   },
@@ -199,7 +216,7 @@ window.HeatmapView = {
 
   scopeLabel(scope) {
     if (!scope) return 'Quezon City';
-    if (scope.barangays.length) return `${scope.facility.name}'s coverage area`;
+    if (scope.barangays.length || scope.fromPin) return `${scope.facility.name}'s area`;
     return scope.city || `${scope.facility.name}'s area`;
   },
 
@@ -808,7 +825,33 @@ window.HeatmapView = {
     return true;
   },
 
-  // Keeps the map inside the facility's scope (its city) and draws that area's outline
+  // A zoom level that shows the whole scope, worked out from its size (not from the map's pixels)
+  scopeZoom(b) {
+    const span = Math.max(b.north - b.south, b.east - b.west, 0.005);
+    return Math.max(9, Math.min(16, Math.floor(Math.log2(360 / span))));
+  },
+
+  // Frames the map on the scope. Centre and zoom are set first, so the map can never be left showing the whole world
+  // (fitBounds on a map that has no size yet zooms all the way out); fitBounds then refines it once the map has a size.
+  frameScope(b, tries = 0) {
+    const g = this.gmap;
+    if (!g || !b) return;
+    const center = { lat: (b.north + b.south) / 2, lng: (b.east + b.west) / 2 };
+    const guess = this.scopeZoom(b);
+    g.setCenter(center);
+    g.setZoom(guess);
+    const el = g.getDiv();
+    if (el && el.clientWidth > 50 && el.clientHeight > 50) {
+      g.fitBounds(b, 20);
+      google.maps.event.addListenerOnce(g, 'idle', () => {
+        if (g.getZoom() < guess - 2) { g.setCenter(center); g.setZoom(guess); }
+      });
+    } else if (tries < 24) {
+      setTimeout(() => { if (this.gmap === g) this.frameScope(b, tries + 1); }, 250); // the page is still laying out
+    }
+  },
+
+  // Keeps the map inside the facility's scope (its city or the area around it); nothing is drawn on the map for it
   applyScopeToMap() {
     if (!this.gmap) return;
     const scope = this.scope();
@@ -817,12 +860,9 @@ window.HeatmapView = {
     this._scopeKey = key;
     this._scopeMap = this.gmap;
     if (this._scopeRect) { this._scopeRect.setMap(null); this._scopeRect = null; }
-    if (!scope || !scope.bounds) { this.gmap.setOptions({ restriction: null }); return; }
-    this.gmap.setOptions({ restriction: { latLngBounds: scope.bounds, strictBounds: false } });
-    this._scopeRect = new google.maps.Rectangle({
-      map: this.gmap, bounds: scope.bounds, clickable: false,
-      strokeColor: '#c2410c', strokeOpacity: 0.75, strokeWeight: 2, fillColor: '#c2410c', fillOpacity: 0.04
-    });
+    if (!scope || !scope.bounds) { this.gmap.setOptions({ restriction: null, minZoom: null }); return; }
+    // No zooming out past the scope: the world view is never reachable
+    this.gmap.setOptions({ restriction: { latLngBounds: scope.bounds, strictBounds: false }, minZoom: Math.max(8, this.scopeZoom(scope.bounds) - 3) });
     this._fitKey = ''; // frame the new scope
   },
 
@@ -833,9 +873,10 @@ window.HeatmapView = {
     const key = incidents.map(i => i.id).sort().join('|') + '#' + this.selectedDistrict + '#' + (this._scopeKey || '');
     if (!force && (key === this._fitKey || Date.now() < this._noFitUntil)) { this._fitKey = key; return; }
     this._fitKey = key;
+    const sc = this.scope();
+    // The map is based on the facility's scope: always framed on it, whatever the reports are
+    if (sc && sc.bounds) { this.frameScope(sc.bounds); return; }
     if (!incidents.length) {
-      const sc = this.scope();
-      if (sc && sc.bounds) { this.gmap.fitBounds(sc.bounds, 20); return; } // nothing to plot: show the whole scope
       const d = (this.qcDistricts && this.qcDistricts[this.selectedDistrict]) || this.qcDistricts['all'];
       this.gmap.panTo({ lat: d.center[0], lng: d.center[1] });
       this.gmap.setZoom(d.zoom);
@@ -992,7 +1033,9 @@ window.HeatmapView = {
     if (sc && sc.bounds && typeof L.latLngBounds === 'function') {
       const lb = L.latLngBounds([sc.bounds.south, sc.bounds.west], [sc.bounds.north, sc.bounds.east]);
       this.mapInstance.setMaxBounds(lb.pad(0.1));
-      this.mapInstance.fitBounds(lb);
+      this.mapInstance.setMinZoom(Math.max(8, this.scopeZoom(sc.bounds) - 3));
+      this.mapInstance.setView([(sc.bounds.north + sc.bounds.south) / 2, (sc.bounds.east + sc.bounds.west) / 2], this.scopeZoom(sc.bounds));
+      setTimeout(() => { try { this.mapInstance && this.mapInstance.invalidateSize(); } catch (e) {} }, 300);
     }
 
 

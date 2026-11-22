@@ -4,6 +4,19 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <!-- Returning from Google after signing in from the admin console: hand the sign-in back to the console untouched -->
+  <script>
+    (function () {
+      try {
+        var q = new URLSearchParams(location.search);
+        if (sessionStorage.getItem('pawtrack_oauth_return') === 'admin' && (q.has('code') || q.has('error'))) {
+          sessionStorage.removeItem('pawtrack_oauth_return');
+          window.__pawtrackHandOff = true;
+          location.replace('/admin/' + location.search + location.hash);
+        }
+      } catch (e) {}
+    })();
+  </script>
   <!-- Keep the page blank until the app has decided between dashboard and login (removed by App.endBoot) -->
   <script>
     (function () {

@@ -10550,3 +10550,7 @@ html[data-theme="light"] .gmap-layer-btn-light { display: none; }
   outline: none !important;
   box-shadow: none !important;
 }
+
+/* Lets the page notice a browser filling a field by itself (the sign-in form never keeps that) */
+@keyframes pt-autofill-detect { from { opacity: 1; } to { opacity: 1; } }
+.auth-field-input:-webkit-autofill { animation-name: pt-autofill-detect; animation-duration: 0.01s; }

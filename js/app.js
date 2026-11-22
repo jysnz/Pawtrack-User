@@ -618,6 +618,9 @@ class App {
       return;
     }
 
+    // The sign-in belongs to the admin console (it is being handed back there): do not read the code from the URL
+    if (window.__pawtrackHandOff) return;
+
     this.supabase = window.supabase.createClient(config.url, config.publishableKey, {
       auth: { flowType: 'pkce', persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
     });
@@ -851,6 +854,20 @@ class App {
       input.addEventListener('focus', () => input.removeAttribute('readonly'), { once: true });
       input.addEventListener('pointerdown', () => input.removeAttribute('readonly'), { once: true });
     });
+
+    // Anything a browser fills into the sign-in form by itself (saved or generated credentials, or what was there
+    // before signing out) is swept away; only what the person types stays
+    {
+      const fields = [loginEmailInput, loginPasswordInput].filter(Boolean);
+      let typed = false;
+      fields.forEach(f => f.addEventListener('input', (e) => { if (e.inputType === 'insertText' || e.inputType === 'insertFromPaste' || e.inputType === 'deleteContentBackward') typed = true; }));
+      const sweep = () => { if (!typed) fields.forEach(f => { if (f.value && document.activeElement !== f) f.value = ''; }); };
+      fields.forEach(f => f.addEventListener('animationstart', (e) => { if (e.animationName === 'pt-autofill-detect' && !typed) f.value = ''; }));
+      setInterval(sweep, 1000);
+      [100, 500, 1200, 2500].forEach(ms => setTimeout(sweep, ms));
+      window.addEventListener('pageshow', () => setTimeout(sweep, 50));
+      this.sweepLoginFields = () => { typed = false; sweep(); };
+    }
 
     loginModeToggle?.addEventListener('click', () => {
       setAuthMode(authMode === 'signin' ? 'signup' : 'signin');
@@ -1463,6 +1480,7 @@ class App {
       setBusy(true);
       setStatus(loginStatus, 'Redirecting to Google…');
       sessionStorage.setItem(FRESH_SIGNIN_KEY, '1');
+      try { sessionStorage.removeItem('pawtrack_oauth_return'); } catch (err) {} // this one is an owner sign-in
       const { error } = await this.supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
@@ -1730,6 +1748,7 @@ class App {
     this.setGuestMode(false);
     this.updateGoogleAuthUI();
     if (this.resetLoginForm) this.resetLoginForm();
+    if (this.sweepLoginFields) this.sweepLoginFields();
     this.openLoginDialog();
     if (window.location.hash && window.location.hash !== '#owner') {
       window.location.hash = '#owner';

@@ -1267,3 +1267,7 @@ body.auth-locked {
 }
 .dp-cell:hover:not(:disabled) { background: var(--auth-accent-ring); }
 .dp-cell.is-current { background: var(--auth-accent); color: var(--auth-on-accent); }
+
+/* Lets the page notice a browser filling a field by itself (the sign-in form never keeps that) */
+@keyframes pt-autofill-detect { from { opacity: 1; } to { opacity: 1; } }
+.auth-field-input:-webkit-autofill { animation-name: pt-autofill-detect; animation-duration: 0.01s; }

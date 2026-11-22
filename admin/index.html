@@ -289,12 +289,12 @@
             <form id="admin-login-form" class="auth-dialog-form al-form" autocomplete="on" novalidate>
               <div class="auth-field-box">
                 <label for="admin-login-email" class="auth-field-label">Email</label>
-                <input spellcheck="false" type="email" id="admin-login-email" class="auth-field-input" autocomplete="username" inputmode="email" placeholder="you@lgu.gov.ph" required />
+                <input spellcheck="false" type="email" id="admin-login-email" name="pt-admin-id" class="auth-field-input" autocomplete="off" inputmode="email" placeholder="you@lgu.gov.ph" readonly data-no-autofill required />
               </div>
               <div class="auth-field-box auth-password-box">
                 <label for="admin-login-password" class="auth-field-label">Password</label>
                 <div class="auth-password-row">
-                  <input spellcheck="false" type="password" id="admin-login-password" class="auth-field-input" autocomplete="current-password" required />
+                  <input spellcheck="false" type="password" id="admin-login-password" name="pt-admin-key" class="auth-field-input" autocomplete="new-password" readonly data-no-autofill required />
                   <button type="button" class="auth-password-toggle" data-toggle-for="admin-login-password" aria-label="Show password" aria-pressed="false">
                     <svg class="icon-eye" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg>
                     <svg class="icon-eye-off" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.94 17.94A10.94 10.94 0 0 1 12 19C5 19 1 12 1 12a18.5 18.5 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19M14.12 14.12a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
