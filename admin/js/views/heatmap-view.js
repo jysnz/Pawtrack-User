@@ -201,6 +201,12 @@ window.HeatmapView = {
         fromPin = true;
       }
     }
+    // A sub-facility's map is the barangays it covers: their areas, once looked up, replace the area around its pin
+    const names = Array.isArray(f.coverage) ? f.coverage.map(x => String(x || '').trim()).filter(Boolean) : [];
+    if (f.parentId && names.length && this._brgyBounds && this._brgyBounds.key === `${f.city}|${names.join('|')}`) {
+      bounds = this._brgyBounds.bounds;
+      fromPin = false;
+    }
     return {
       facility: f,
       city: f.city || '',
@@ -577,6 +583,7 @@ window.HeatmapView = {
     if (dsField) dsField.hidden = !showDistricts;
     if (!showDistricts && this.selectedDistrict !== 'all') this.selectedDistrict = 'all';
 
+    if (scope && scope.facility.parentId && scope.barangays.length) this.loadBarangayBounds();
     // A sub-facility that covers several barangays gets a dropdown to move the map between them
     const brgyField = root.querySelector('#hm-brgy-field');
     const brgySel = root.querySelector('#select-barangay-filter');
@@ -869,6 +876,55 @@ window.HeatmapView = {
     } else if (tries < 24) {
       setTimeout(() => { if (this.gmap === g) this.frameScope(b, tries + 1); }, 250); // the page is still laying out
     }
+  },
+
+  // Looks a barangay up (Google, else OpenStreetMap) -> { lat, lng, viewport } or null. Remembered.
+  async lookupBarangay(name, city) {
+    this._brgyCache = this._brgyCache || {};
+    const query = `${name}, ${city ? city + ', ' : ''}Philippines`;
+    if (this._brgyCache[query]) return this._brgyCache[query];
+    let spot = null;
+    try {
+      await window.PawGoogleMaps.load();
+      const { Geocoder } = await google.maps.importLibrary('geocoding');
+      const { results } = await new Geocoder().geocode({ address: query, region: 'ph' });
+      if (results && results[0]) {
+        const loc = results[0].geometry.location;
+        spot = { lat: loc.lat(), lng: loc.lng(), viewport: results[0].geometry.viewport ? results[0].geometry.viewport.toJSON() : null };
+      }
+    } catch (e) { /* fall through to the other lookup */ }
+    if (!spot) {
+      try {
+        const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(query)}`);
+        const hit = (await res.json())[0];
+        if (hit) spot = { lat: +hit.lat, lng: +hit.lon, viewport: null };
+      } catch (e) { /* offline */ }
+    }
+    if (spot) this._brgyCache[query] = spot;
+    return spot;
+  },
+
+  // Works out the area of all the barangays a sub-facility covers, then redraws the page limited to it
+  async loadBarangayBounds() {
+    const f = window.adminStore && window.adminStore.getActiveFacility && window.adminStore.getActiveFacility();
+    if (!f || !f.parentId) return;
+    const names = (f.coverage || []).map(x => String(x || '').trim()).filter(Boolean);
+    if (!names.length) return;
+    const key = `${f.city}|${names.join('|')}`;
+    if ((this._brgyBounds && this._brgyBounds.key === key) || this._brgyLoading === key) return;
+    this._brgyLoading = key;
+    const spots = (await Promise.all(names.map(n => this.lookupBarangay(n, f.city)))).filter(Boolean);
+    this._brgyLoading = null;
+    if (!spots.length) return;
+    const pad = 0.012;
+    const b = { north: -90, south: 90, east: -180, west: 180 };
+    spots.forEach((s) => {
+      const v = s.viewport || { north: s.lat + pad, south: s.lat - pad, east: s.lng + pad, west: s.lng - pad };
+      b.north = Math.max(b.north, v.north); b.south = Math.min(b.south, v.south); b.east = Math.max(b.east, v.east); b.west = Math.min(b.west, v.west);
+    });
+    this._brgyBounds = { key, bounds: b };
+    this._scopeKey = '';
+    if (window.adminApp && window.adminApp.currentRoute === 'heatmap') window.adminApp.renderView('heatmap');
   },
 
   // Moves the map to a covered barangay. The place is looked up once (Google, else OpenStreetMap) and remembered.

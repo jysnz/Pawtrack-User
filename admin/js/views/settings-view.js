@@ -39,20 +39,24 @@ window.SettingsView = {
 
       body = `
         <div class="acct-layout">
-          <aside class="nock-card acct-profile" aria-label="Profile summary">
+          <aside class="nock-card acct-hero" aria-label="Your profile">
             <div class="acct-avatar" id="acct-avatar" aria-hidden="true">${/^(https:\/\/|data:image\/)/.test(account.avatar_url || '') ? `<img src="${esc(account.avatar_url)}" alt="" />` : esc(this.initials(name))}</div>
-            <div id="acct-photo-slot" class="acct-photo-slot"></div>
-            <div class="acct-profile-name" id="acct-profile-name">${esc(name)}</div>
-            <div class="acct-profile-role" id="acct-profile-role">${esc(account.position || 'No position set')}</div>
-            <span class="status-pill ${status[1]}">${esc(status[0])}</span>
-            <dl class="acct-profile-facts">
+            <div class="acct-hero-main">
+              <div class="acct-hero-top">
+                <div class="acct-profile-name" id="acct-profile-name">${esc(name)}</div>
+                <span class="status-pill ${status[1]}">${esc(status[0])}</span>
+              </div>
+              <div class="acct-profile-role" id="acct-profile-role">${esc(account.position || 'No position set')}</div>
+              <div id="acct-photo-slot" class="acct-photo-slot"></div>
+            </div>
+            <dl class="acct-hero-facts">
               <div><dt>Email</dt><dd>${esc(account.email)}</dd></div>
               <div><dt>Member since</dt><dd>${esc(this.day(account.created_at))}</dd></div>
+              <div class="acct-hero-out"><button class="btn btn-secondary acct-signout" id="btn-account-signout">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg>
+              Sign out
+            </button></div>
             </dl>
-            <button class="btn btn-secondary acct-signout" id="btn-account-signout">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg>
-              Sign out
-            </button>
           </aside>
 
           <div class="acct-main">
@@ -255,6 +259,7 @@ window.SettingsView = {
         id: 'acct-photo',
         picture: account.avatar_url || '',
         initial: account.full_name || account.email,
+        compact: true,
         onSave: async (data) => {
           const { data: row, error } = await app.supabase.from('admin_accounts').update({ avatar_url: data || null }).eq('id', account.id).select('*').maybeSingle();
           if (error || !row) return false;

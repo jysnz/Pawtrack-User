@@ -455,6 +455,7 @@ class AdminStore {
       dateTimeSeen: s.seen_at,
       comments: s.notes || '',
       notes: s.notes || '',
+      paperAddress: s.paper_address || '',
       photoUrl: s.photo_url || '',
       photo: s.photo_url || '',
       reporterName: s.reporter_name || '',
@@ -531,7 +532,8 @@ class AdminStore {
     return {
       id: r.id, impoundId: r.impound_id, claimantId: r.claimant_id,
       name: r.claimant_name, email: r.claimant_email, phone: r.claimant_phone || '', message: r.message || '',
-      status: r.status, decidedAt: r.decided_at || null, note: r.decision_note || '', createdAt: r.created_at
+      status: r.status, decidedAt: r.decided_at || null, note: r.decision_note || '', createdAt: r.created_at,
+      photo: /^data:image\/jpeg;base64,/.test(r.evidence_photo || '') ? r.evidence_photo : ''
     };
   }
 
@@ -539,8 +541,11 @@ class AdminStore {
     try { return JSON.parse(localStorage.getItem(STORAGE_KEYS.CLAIMS)) || []; } catch { return []; }
   }
 
+  // Claims waiting for a decision on animals held by the facility being viewed
   getPendingClaimCount() {
-    return this.getClaims().filter((c) => c.status === 'pending').length;
+    const active = this.getActiveFacilityId();
+    const held = new Map(this.getImpoundments().map((i) => [String(i.id), i.shelterId]));
+    return this.getClaims().filter((c) => c.status === 'pending' && held.has(String(c.impoundId)) && (!active || held.get(String(c.impoundId)) === active)).length;
   }
 
   // Accepts or rejects a claim, then emails the owner (the email function checks this admin may decide it).
@@ -866,6 +871,18 @@ class AdminStore {
       this.notify('impoundment_claimed');
     }
     return imp;
+  }
+
+  // Removes an impound case for good (its penalty tickets and claims go with it in the database)
+  deleteImpoundment(impoundId) {
+    const list = this.getImpoundments();
+    const imp = list.find(i => i.id === impoundId);
+    if (!imp) return false;
+    localStorage.setItem(STORAGE_KEYS.IMPOUNDMENTS, JSON.stringify(list.filter(i => i.id !== impoundId)));
+    if (this.isDbId(impoundId)) this.write('Could not delete the impound case', (sb) => sb.from('impounded_pets').delete().eq('id', impoundId));
+    this.logAction('Deleted Impound', `Deleted impound case ${imp.id} (${imp.petName}).`);
+    this.notify('impound_deleted');
+    return true;
   }
 
   extendImpoundDeadline(impoundId, additionalHours = 24) {
@@ -1229,6 +1246,7 @@ class AdminStore {
         const subRow = shelterData.parentId ? { ...row, parent_id: shelterData.parentId } : row;
         this.write('Could not create the sub-facility', (sb) => sb.rpc('create_sub_facility', { p: subRow })).then(async (id) => {
           if (typeof id !== 'string') return finish(null); // the error was already shown
+          await this.syncFromSupabase();
           this.logAction('Created Sub-facility', `Created sub-facility ${shelterData.name}`);
           finish(id);
         });
@@ -1274,6 +1292,18 @@ class AdminStore {
 
   // Stores a facility's photo in the public "facility-photos" bucket (folder = the facility's id) and points the
   // facility at it. Pass null to clear the photo. Returns the new URL, '' when cleared, or null when it failed.
+  // The facility's address as written on its papers. Saved right after the facility exists; true on success.
+  async setFacilityPaperAddress(shelterId, value) {
+    const sb = this.client();
+    if (!sb || !this.isDbId(shelterId)) return false;
+    const { error } = await sb.from('shelters').update({ paper_address: String(value || '').trim() || null }).eq('id', shelterId);
+    if (error) { console.warn('[AdminStore] paper address:', error.message); return false; }
+    const list = this.getShelters();
+    const i = list.findIndex((s) => s.id === shelterId);
+    if (i >= 0) { list[i] = { ...list[i], paperAddress: String(value || '').trim() }; localStorage.setItem(STORAGE_KEYS.SHELTERS, JSON.stringify(list)); }
+    return true;
+  }
+
   async setFacilityPhoto(shelterId, blob) {
     const sb = this.client();
     if (!sb || !this.isDbId(shelterId)) { this.dbError('Could not save the facility photo', { message: 'the facility is not saved yet' }); return null; }

@@ -173,7 +173,7 @@ class FoundPage {
         this.vaccines = await this.fetchVaccines(this.tag);
         // Insert the card in place so anything the finder has started typing is kept
         if (this.vaccines.length && !this.sent && !this.root.querySelector('#fp-vaccines')) {
-          this.root.querySelector('#fp-notify')?.insertAdjacentHTML('beforebegin', this.vaccinesHtml());
+          this.root.querySelector('#fp-notify')?.insertAdjacentHTML('afterend', this.vaccinesHtml());
           this.icons();
         }
       } catch (err) {
@@ -277,7 +277,6 @@ class FoundPage {
           <i data-lucide="paw-print"></i>
           <span>PawTrack<small>${this.s('brandSub')}</small></span>
         </a>
-        <button type="button" class="fp-lang" id="fp-lang">${this.s('lang')}</button>
       </header>
       ${inner}
       ${withSticky ? `<div class="fp-sticky"><button type="button" class="fp-btn fp-btn-primary fp-btn-block" id="fp-sticky-cta"><i data-lucide="heart-handshake"></i>${this.s('iFound')}</button></div>` : ''}`;
@@ -343,6 +342,7 @@ class FoundPage {
 
     const html = `
       <main class="fp-main">
+        <div class="fp-col fp-col-a">
         <section class="fp-hero">
           <div class="fp-photo">
             ${photo}
@@ -365,26 +365,29 @@ class FoundPage {
           <dl class="fp-facts">
             ${this.fact(this.s('species'), p.species, 'paw-print')}
             ${this.fact(this.s('breed'), p.breed, 'dna')}
-            ${this.fact(this.s('gender'), p.gender, 'venus-and-mars')}
+            ${this.fact(this.s('gender'), p.gender, 'user')}
             ${this.fact(this.s('age'), p.age, 'cake')}
             ${this.fact(this.s('color'), p.color, 'palette', true)}
             ${this.fact(this.s('area'), p.area, 'map-pin')}
             ${this.fact(this.s('registeredOn'), registered, 'calendar-check')}
           </dl>
         </section>
+        </div>
 
-        ${this.vaccinesHtml()}
-
+        <div class="fp-col fp-col-b">
         <section class="fp-card fp-notify" id="fp-notify">
           ${showSent && this.sent ? this.sentHtml() : this.formHtml()}
         </section>
 
-        <section class="fp-card">
+        ${this.vaccinesHtml()}
+
+        <section class="fp-card fp-tips-card">
           <h2>${this.s('tipsTitle')}</h2>
           <div class="fp-tips">
             ${[1, 2, 3].map((n) => `<div class="fp-tip"><span class="fp-tip-num">${n}</span><div><strong>${this.s('tip' + n)}</strong>${this.s('tip' + n + 'd')}</div></div>`).join('')}
           </div>
         </section>
+        </div>
 
         <p class="fp-foot"><a href="privacy.html">${this.s('privacyLink')}</a> &middot; <a href="./">${this.s('home')}</a></p>
       </main>`;

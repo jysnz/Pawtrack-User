@@ -59,3 +59,10 @@
 }
 .settings-avatar-row { display: block; }
 .settings-avatar-slot { max-width: 420px; }
+.settings-card-head .settings-avatar { width: 68px; height: 68px; font-size: 1.6rem; box-shadow: 0 0 0 4px color-mix(in srgb, var(--primary) 18%, transparent); }
+.settings-card-head .settings-card-head-text { min-width: 0; }
+.settings-photo-actions { margin-top: 10px; }
+.settings-photo-actions .pav-btn { background: var(--bg-surface-elevated); border-color: var(--border-subtle); color: var(--text-main); }
+.settings-photo-actions .pav-btn:hover { border-color: var(--primary); color: var(--primary); }
+.settings-photo-actions .pav-btn.is-quiet { background: transparent; border-color: transparent; color: var(--text-muted); }
+.settings-photo-actions .pav-hint { color: var(--text-muted); }

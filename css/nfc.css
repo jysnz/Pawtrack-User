@@ -162,15 +162,6 @@ body.found-mode > #found-page { display: block; width: 100%; max-width: 100vw; m
   .fp-btn { padding: 0 14px; font-size: 0.9rem; }
   .fp-card { padding: 14px; }
 }
-@media (min-width: 960px) {
-  /* Wide screens: photo and summary stay in view on the left, the forms scroll on the right */
-  .fp-main { max-width: 1040px; grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); align-items: start; }
-  .fp-hero { grid-column: 1; grid-row: 1 / span 6; position: sticky; top: 76px; }
-  .fp-main > :not(.fp-hero) { grid-column: 2; }
-  .fp-main > .fp-foot { grid-column: 1 / -1; }
-  .fp-photo { aspect-ratio: 4 / 5; }
-  .fp-hero-cta { display: none; }
-}
 @media (min-width: 720px) {
   .fp-main { padding-top: 28px; }
   .fp-photo { aspect-ratio: 16 / 10; }
@@ -196,3 +187,35 @@ body.found-mode > #found-page { display: block; width: 100%; max-width: 100vw; m
 [data-theme="dark"] .fp-vax-chip.is-soon { color: #fbbf24; }
 
 .fp-desc { margin: 4px 0 12px; font-size: 0.92rem; line-height: 1.55; color: var(--text-muted); }
+
+/* Phone: the pet's details fill the card with no gaps - two tiles a row, an odd last tile spans the row */
+@media (max-width: 640px) {
+  .fp-facts { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; gap: 6px; margin-top: 10px; }
+  .fp-fact { padding: 8px 10px; }
+  .fp-fact dd { font-size: 0.88rem; margin-top: 1px; }
+  .fp-fact:last-child:nth-child(odd) { grid-column: 1 / -1; }
+}
+
+/* The pet's details, every screen size: two tiles a row, no gaps (an odd last tile spans the row) */
+.fp-facts { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; gap: 8px; }
+.fp-fact.wide { grid-column: auto; }
+.fp-fact:last-child:nth-child(odd) { grid-column: 1 / -1; }
+@media (min-width: 720px) {
+  .fp-card { padding: 22px 24px; box-shadow: 0 1px 2px rgba(28, 25, 23, 0.04), 0 8px 24px -16px rgba(28, 25, 23, 0.18); }
+  .fp-card h2 { font-size: 1.12rem; margin-bottom: 4px; }
+  .fp-fact { padding: 13px 16px; border: 1px solid var(--border-subtle); border-radius: 12px; }
+  .fp-fact dd { font-size: 1.02rem; }
+  .fp-hero { box-shadow: 0 2px 4px rgba(28, 25, 23, 0.05), 0 18px 40px -22px rgba(28, 25, 23, 0.35); }
+}
+
+/* Page layout: two columns on a laptop - who the pet is on the left, what to do on the right */
+.fp-col { display: grid; gap: 16px; min-width: 0; align-content: start; }
+.fp-main > .fp-foot { grid-column: 1 / -1; }
+@media (min-width: 960px) {
+  .fp-main { max-width: 1120px; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 24px; align-items: start; padding-top: 32px; }
+  .fp-col-a { position: sticky; top: 76px; }
+  .fp-hero { position: static; grid-column: auto; grid-row: auto; }
+  .fp-photo { aspect-ratio: 4 / 3; }
+  .fp-hero-cta { display: none; }
+  .fp-banner { margin: 0; }
+}

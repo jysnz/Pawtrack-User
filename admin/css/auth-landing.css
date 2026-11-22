@@ -1271,3 +1271,15 @@ body.auth-locked {
 /* Lets the page notice a browser filling a field by itself (the sign-in form never keeps that) */
 @keyframes pt-autofill-detect { from { opacity: 1; } to { opacity: 1; } }
 .auth-field-input:-webkit-autofill { animation-name: pt-autofill-detect; animation-duration: 0.01s; }
+
+/* ---------- Profile picture field on the admin create-account pages ---------- */
+#admin-login-screen .pav { gap: 6px; }
+#admin-login-screen .pav-label { padding-left: 2px; }
+#admin-login-screen .pav-row { padding: 12px 14px; gap: 14px; border: 1px solid var(--auth-field-border); border-style: solid; border-radius: 10px; background: var(--auth-field-bg); transition: border-color 0.15s, box-shadow 0.15s, background 0.15s; }
+#admin-login-screen .pav-row:hover { border-color: var(--auth-accent); background: var(--auth-surface); }
+#admin-login-screen .pav-preview { width: 58px; height: 58px; font-size: 22px; box-shadow: 0 0 0 3px var(--auth-surface), 0 0 0 4px var(--auth-field-border); }
+#admin-login-screen .pav-text { flex: 1; gap: 6px; }
+#admin-login-screen .pav-btn { padding: 7px 14px; border-radius: 8px; font-size: 12.5px; }
+#admin-login-screen .pav-btn:not(.is-quiet) { background: var(--auth-accent); border-color: var(--auth-accent); color: var(--auth-on-accent); }
+#admin-login-screen .pav-btn:not(.is-quiet):hover { background: var(--auth-accent-hover); color: var(--auth-on-accent); }
+#admin-login-screen .pav-hint { font-size: 11.5px; }

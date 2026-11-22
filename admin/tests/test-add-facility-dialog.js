@@ -26,7 +26,7 @@ const form = {
 let shownHtml = '';
 let closed = false;
 const modal = { isConnected: true, querySelector(sel) { return sel === '#shelter-form' ? form : mkEl(sel); }, querySelectorAll: () => [] };
-window.adminApp = { showToast() {}, closeModal() { closed = true; }, openModalContent(html) { shownHtml = html; return modal; } };
+window.adminApp = { showToast() {}, showDialog() { return Promise.resolve(); }, closeModal() { closed = true; }, openModalContent(html) { shownHtml = html; return modal; } };
 global.FormData = class { constructor(f) { this.f = f; } get(k) { const e = fields[k] || registry['f:' + k]; return e ? (k === 'isSub' ? (e.checked ? 'on' : null) : e.value) : null; } };
 
 window.FacilityPhoto = { fieldHtml: () => '<div id="fp-root"></div>', bind: () => ({ has: () => true, blob: () => null, removed: () => false, nudge() {} }) };
@@ -72,7 +72,7 @@ const resetDom = () => { Object.keys(registry).forEach(k => delete registry[k]);
 
   // fill the form
   const set = (k, v) => { mkEl('f:' + k).value = v; };
-  set('name', 'New Place'); set('address', '1 Road'); set('city', 'QC'); set('phone', '9171234567'); set('capacity', '20');
+  set('name', 'New Place'); set('address', '1 Road'); set('paperAddress', '1 Road, City Hall'); set('city', 'QC'); set('phone', '9171234567'); set('capacity', '20');
   mkEl('#fm-type-other').disabled = true; // the "other facility type" box stays off while a listed type is chosen
 
   // No city picked yet: nothing is saved
@@ -103,7 +103,7 @@ const resetDom = () => { Object.keys(registry).forEach(k => delete registry[k]);
   closed = false; created = null; resetDom();
   V.openShelterModal(null, { chooseType: true, onCreated: (id) => { created = id; } });
   await new Promise(r => setTimeout(r, 10));
-  set('name', 'New Sub'); set('address', '2 Road'); set('city', 'QC'); mkEl('#fm-type-other').disabled = true;
+  set('name', 'New Sub'); set('address', '2 Road'); set('paperAddress', '2 Road, City Hall'); set('city', 'QC'); mkEl('#fm-type-other').disabled = true;
   cityCtl.set(QC);
   pin = { lat: 14.6, lng: 121 }; // choosing the city clears an old pin, so drop a new one
   const box = mkEl('f:isSub'); box.checked = true; box.change();

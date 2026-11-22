@@ -513,7 +513,7 @@ window.SheltersView = {
             <label class="form-label" for="fm-region">Region *</label>
             <select class="form-control" id="fm-region" disabled><option value="">Loading regions…</option></select>
           </div>
-          <div class="form-group form-full">
+          <div class="form-group form-full" id="fm-city-wrap">
             <label class="form-label" for="fm-city">City / municipality *</label>
             <input type="text" class="form-control" id="fm-city" name="city" value="${val('city')}" placeholder="Search for a city" autocomplete="off" required />
             <div class="fm-hint" id="fm-city-hint"></div>
@@ -524,6 +524,10 @@ window.SheltersView = {
             <div class="fm-hint" id="fm-cov-hint" aria-live="polite"></div>
           </div>
 
+          <div class="form-group form-full">
+            <label class="form-label" for="fm-paper-address">Address on paper ${isEdit ? '' : '*'} <span class="fm-sub">As it is written on the facility's official papers</span></label>
+            <input type="text" class="form-control" id="fm-paper-address" name="paperAddress" value="${val('paperAddress')}" maxlength="300" placeholder="e.g. Unit 2, City Hall Compound, Elliptical Rd, Diliman, Quezon City 1100" autocomplete="off" ${isEdit ? '' : 'required'} />
+          </div>
           <div class="form-group form-full">
             <label class="form-label" for="fm-address">Physical address *</label>
             <div class="fm-address-row">
@@ -795,6 +799,8 @@ window.SheltersView = {
       cityInput.disabled = locked;
       cityInput.placeholder = locked ? 'Choose a region first' : 'Search for a city';
       regionWrap.hidden = regionsFailed || subNow();
+      // A sub-facility has no region step: its facility type and its city share one row
+      modal.querySelector('#fm-city-wrap')?.classList.toggle('form-full', !subNow());
     };
     regionSel.addEventListener('change', () => {
       cityCtl.setRegion(regionSel.value);
@@ -978,6 +984,7 @@ window.SheltersView = {
       if (chooseType && isSubNow && !parentSel.value) { showError('Choose the main facility this sub-facility belongs to.', parentSel); parentSel.focus(); return; }
       if (!subNow() && !regionsFailed && !regionSel.value) { showError('Choose the region first, then pick the city.', regionSel); regionSel.focus(); return; }
       if (!cityInfo) { showError('Pick the facility\'s city from the list first.', cityInput); cityInput.focus(); return; }
+      if (!isEdit && !String(form.elements.paperAddress.value || '').trim()) { showError('Enter the address as it is written on the facility\'s official papers.', form.elements.paperAddress); form.elements.paperAddress.focus(); return; }
       if (subNow() && !covValue().length) { showError('Choose at least one barangay this sub-facility covers.', covEl); covEl.scrollIntoView({ block: 'center' }); return; }
       const pin = picker && picker.getPin();
       if (pin && outsideCity(pin)) { showError(`The pin is outside ${cityInfo.name}. Move it inside the city.`, mapBox); return; }
@@ -1056,6 +1063,9 @@ window.SheltersView = {
             }
           }
         }
+        // The address on paper is saved with the facility (it is a separate column)
+        const paperValue = String(new FormData(form).get('paperAddress') || '').trim();
+        if (paperValue && typeof store.setFacilityPaperAddress === 'function') await store.setFacilityPaperAddress(dbId, paperValue);
         // The facility exists now, so its photo can be stored in its own folder
         let photoFailed = false;
         if (photoCtl.blob() || photoCtl.removed()) {
@@ -1085,6 +1095,8 @@ window.SheltersView = {
         } else {
           window.adminApp.showToast(isMainNow ? `Added main facility "${shelterData.name}". You manage it and can add its sub-facilities.` : `Registered "${shelterData.name}". You are its manager.`, 'success');
         }
+        // Show the new facility's data right away (every page redraws for it)
+        if (!isEdit && typeof store.setActiveFacility === 'function') store.setActiveFacility(dbId);
         if (typeof opts.onCreated === 'function' && !isEdit) opts.onCreated(dbId);
       });
     });

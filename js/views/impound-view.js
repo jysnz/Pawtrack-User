@@ -519,7 +519,16 @@ class ImpoundView {
           <form class="modal-body ip-claim-form" id="ip-claim-form" novalidate>
             <p class="ip-claim-note">Tell the facility how to reach you and how you know this is your pet. They review every claim before releasing an animal.</p>
             <div class="vax-field" id="ipc-phone-field"><label for="ipc-phone">Your mobile number *</label><input id="ipc-phone" inputmode="tel" maxlength="20" value="${this.esc((user && user.phone) || '')}" placeholder="0917 123 4567" /><span class="vax-error">Enter a valid Philippine mobile number.</span></div>
-            <div class="vax-field" id="ipc-msg-field"><label for="ipc-msg">How do you know it's yours? <span class="vax-opt">(optional)</span></label><textarea id="ipc-msg" maxlength="600" rows="4" placeholder="Name, markings, collar, where it was lost..."></textarea></div>
+            <div class="vax-field" id="ipc-photo-field">
+              <label for="ipc-photo">Photo of you with your pet *</label>
+              <label class="ipc-photo" id="ipc-photo-box" for="ipc-photo">
+                <span class="ipc-photo-empty" id="ipc-photo-empty"><i data-lucide="camera"></i><b>Add a photo</b><small>You and the pet together. JPG, PNG or WebP.</small></span>
+                <img class="ipc-photo-img" id="ipc-photo-img" alt="" hidden />
+              </label>
+              <input id="ipc-photo" type="file" accept="image/jpeg,image/png,image/webp" hidden />
+              <span class="vax-error" id="ipc-photo-error">Add a photo of you with your pet.</span>
+            </div>
+            <div class="vax-field" id="ipc-msg-field"><label for="ipc-msg">How do you know it's yours? <span class="vax-opt">(optional)</span></label><textarea id="ipc-msg" maxlength="600" rows="2" placeholder="Name, markings, collar, where it was lost..."></textarea></div>
             <div class="vax-msg" id="ipc-error" role="alert" hidden></div>
             <div class="modal-footer ip-claim-actions"><button type="button" class="btn btn-outline" id="ip-back">Back</button><button type="submit" class="btn btn-primary" id="ip-send">Send claim</button></div>
           </form>
@@ -527,6 +536,26 @@ class ImpoundView {
       overlay.querySelector('#ip-x').addEventListener('click', () => this.closePetModal());
       overlay.querySelector('#ip-back').addEventListener('click', () => this.renderPetModal(i));
       overlay.querySelector('#ip-claim-form').addEventListener('submit', (e) => { e.preventDefault(); this.sendClaim(i); });
+      this.claimPhoto = null;
+      overlay.querySelector('#ipc-photo').addEventListener('change', async (e) => {
+        const file = e.target.files && e.target.files[0];
+        e.target.value = '';
+        const field = overlay.querySelector('#ipc-photo-field');
+        const errBox = overlay.querySelector('#ipc-photo-error');
+        if (!file) return;
+        try {
+          this.claimPhoto = await this.prepareClaimPhoto(file);
+          overlay.querySelector('#ipc-photo-img').src = this.claimPhoto;
+          overlay.querySelector('#ipc-photo-img').hidden = false;
+          overlay.querySelector('#ipc-photo-empty').hidden = true;
+          field.classList.remove('has-error');
+        } catch (err) {
+          this.claimPhoto = null;
+          errBox.textContent = err.message;
+          field.classList.add('has-error');
+        }
+      });
+      if (window.lucide) window.lucide.createIcons({ root: overlay });
       return;
     }
 
@@ -546,6 +575,29 @@ class ImpoundView {
     if (window.lucide) window.lucide.createIcons({ root: overlay });
   }
 
+  // The photo is checked (a real image), shrunk to at most 1024 px on the long side and saved as a JPEG
+  async prepareClaimPhoto(file) {
+    if (!file || !file.size) throw new Error('That file is empty.');
+    if (file.size > 10 * 1024 * 1024) throw new Error('That photo is over 10 MB.');
+    const h = new Uint8Array(await file.slice(0, 16).arrayBuffer());
+    const ok = (h[0] === 0xFF && h[1] === 0xD8) || (h[0] === 0x89 && h[1] === 0x50) || (String.fromCharCode(h[0], h[1], h[2], h[3]) === 'RIFF');
+    if (!ok) throw new Error('Choose a JPG, PNG or WebP photo.');
+    let bmp;
+    try { bmp = await createImageBitmap(file); } catch (e) { throw new Error('That photo could not be read. Try another one.'); }
+    const scale = Math.min(1, 1024 / Math.max(bmp.width, bmp.height));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.round(bmp.width * scale); canvas.height = Math.round(bmp.height * scale);
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(bmp, 0, 0, canvas.width, canvas.height);
+    if (bmp.close) bmp.close();
+    for (const q of [0.82, 0.7, 0.55]) {
+      const data = canvas.toDataURL('image/jpeg', q);
+      if (data.length <= 560000) return data;
+    }
+    throw new Error('That photo is too large. Try a smaller one.');
+  }
+
   async sendClaim(i) {
     const overlay = document.getElementById('ip-pet-modal');
     const user = window.pawStore.getGoogleUser();
@@ -557,6 +609,14 @@ class ImpoundView {
     if (!ok) { phoneBox.focus(); return; }
     const err = overlay.querySelector('#ipc-error');
     err.hidden = true;
+    // A photo of the owner with the animal is required: the facility compares it with the animal it holds
+    if (!this.claimPhoto) {
+      const field = overlay.querySelector('#ipc-photo-field');
+      overlay.querySelector('#ipc-photo-error').textContent = 'Add a photo of you with your pet.';
+      field.classList.add('has-error');
+      field.scrollIntoView({ block: 'nearest' });
+      return;
+    }
     const btn = overlay.querySelector('#ip-send');
     btn.disabled = true;
     const { error } = await sb.from('impound_claims').insert({
@@ -565,7 +625,8 @@ class ImpoundView {
       claimant_name: user.name || 'PawTrack guardian',
       claimant_email: user.email,
       claimant_phone: phone,
-      message: overlay.querySelector('#ipc-msg').value.trim() || null
+      message: overlay.querySelector('#ipc-msg').value.trim() || null,
+      evidence_photo: this.claimPhoto
     });
     if (error) {
       btn.disabled = false;

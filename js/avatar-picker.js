@@ -33,7 +33,9 @@
     '.pav-btn.is-quiet { border-color: transparent; background: transparent; color: var(--auth-ink-muted, #6b7280); }' +
     '.pav-hint { font-size: 11.5px; color: var(--auth-ink-muted, #6b7280); }' +
     '.pav-hint.is-error { color: #dc2626; font-weight: 600; }' +
-    '.pav-btn[hidden] { display: none; }';
+    '.pav-btn[hidden] { display: none; }' +
+    '.pav.is-compact { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }' +
+    '.pav.is-compact .pav-btn { padding: 5px 12px; }';
   function ensureStyle() {
     if (document.getElementById('pav-style')) return;
     var s = document.createElement('style');
@@ -77,6 +79,18 @@
 
   function build(opts, editor) {
     var id = opts.id;
+    if (opts.compact) {
+      // Buttons and a hint only: the page already shows the current picture
+      return '<div class="pav is-compact" id="' + id + '-field">' +
+        '<div class="pav-btns">' +
+          '<button type="button" class="pav-btn" id="' + id + '-btn">' + (opts.picture ? 'Change photo' : 'Add photo') + '</button>' +
+          '<button type="button" class="pav-btn is-quiet" id="' + id + '-remove"' + (opts.picture ? '' : ' hidden') + '>Remove</button>' +
+        '</div>' +
+        '<span class="pav-hint" id="' + id + '-hint">JPG, PNG or WebP, up to 5 MB</span>' +
+        '<span id="' + id + '-preview" hidden></span>' +
+        '<input type="file" id="' + id + '-file" accept="image/jpeg,image/png,image/webp" hidden />' +
+      '</div>';
+    }
     return '<div class="pav" id="' + id + '-field">' +
       '<span class="pav-label">Profile picture' + (opts.optional === false ? '' : ' <span>(optional)</span>') + '</span>' +
       '<div class="pav-row">' +
@@ -99,7 +113,7 @@
     var initial = opts.initial;
     var say = function (text, bad) { hint.textContent = text; hint.classList.toggle('is-error', !!bad); };
     var paint = function (picture) {
-      preview.innerHTML = previewHtml(picture, initial);
+      if (!opts.compact) preview.innerHTML = previewHtml(picture, initial);
       btn.textContent = picture ? 'Change photo' : 'Add photo';
       remove.hidden = !picture;
     };
@@ -115,7 +129,7 @@
           return Promise.resolve(opts.onSave(data)).then(function (ok) {
             btn.disabled = false; remove.disabled = false;
             if (ok === false) { say('Could not save your photo. Try again.', true); return; }
-            paint(data); say('JPG, PNG or WebP, up to 5 MB. Saved when you choose it.');
+            paint(data); say(opts.compact ? 'Saved.' : 'JPG, PNG or WebP, up to 5 MB. Saved when you choose it.');
           });
         }
         values[id] = data; paint(data); say('Looks good.');

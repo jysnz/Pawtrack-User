@@ -642,3 +642,30 @@
   body.printing-claim-card .no-print { display: none !important; }
   body.printing-claim-card .claim-card { color: #000; border-color: #000; }
 }
+
+/* The animal's details fit in one frame: a small photo beside two columns of facts */
+.ip-pet-modal { max-width: 520px; max-height: calc(100dvh - 24px); display: flex; flex-direction: column; }
+.ip-pet-modal .modal-header { padding-top: 12px; padding-bottom: 10px; }
+.ip-pet-modal .modal-body { padding: 12px 18px 14px; overflow-y: auto; }
+.ip-pet-modal-photo { width: 100%; height: clamp(110px, 20dvh, 170px); max-height: none; min-height: 0; margin-bottom: 10px; }
+.ip-pet-modal-rows { grid-template-columns: 1fr 1fr; column-gap: 18px; padding: 0 14px; margin-bottom: 10px; }
+.ip-pet-modal-rows > div { flex-direction: column; gap: 1px; padding: 7px 0; font-size: 0.8rem; }
+.ip-pet-modal-rows dd { text-align: left; }
+@media (max-width: 480px) { .ip-pet-modal-rows { grid-template-columns: 1fr; } }
+.ip-claim-form { gap: 9px; }
+.ip-claim-form .ip-claim-note { font-size: 0.78rem; padding: 8px 10px; }
+.ip-claim-form textarea { min-height: 0; }
+.ipc-photo { display: grid; place-items: center; min-height: 92px; border: 1.5px dashed var(--border-glass); border-radius: var(--radius-md); background: var(--bg-main); cursor: pointer; overflow: hidden; transition: border-color 0.15s; }
+.ipc-photo:hover { border-color: var(--primary); }
+.vax-field.has-error .ipc-photo { border-color: var(--danger); }
+.ipc-photo-empty { display: grid; justify-items: center; gap: 2px; padding: 10px; text-align: center; color: var(--text-muted); }
+.ipc-photo-empty svg { width: 22px; height: 22px; color: var(--primary); }
+.ipc-photo-empty b { font-size: 0.86rem; color: var(--text-main); }
+.ipc-photo-empty small { font-size: 0.72rem; }
+.ipc-photo-img { width: 100%; max-height: 120px; object-fit: cover; display: block; }
+.ipc-photo-img[hidden], .ipc-photo-empty[hidden] { display: none; }
+
+/* Settings: the change-photo control sits in the account card's heading */
+.settings-photo-actions { margin-top: 8px; }
+/* The animal's whole picture is shown, never cropped */
+.ip-pet-modal-photo { object-fit: contain; background: var(--bg-surface-elevated); height: clamp(130px, 26dvh, 230px); }

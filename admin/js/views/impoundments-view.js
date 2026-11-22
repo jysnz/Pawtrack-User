@@ -584,6 +584,7 @@ window.ImpoundmentsView = {
         <button class="icon-btn-subtle" id="edit-close-btn">&times;</button>
       </div>
       <div class="modal-body">
+        ${/^https:\/\//.test(imp.photoUrl || '') ? `<div class="imp-edit-photo"><img src="${this.esc(imp.photoUrl)}" alt="Photo of ${this.esc(imp.petName)}" /></div>` : '<div class="imp-edit-photo is-empty">No photo was added for this animal</div>'}
         <form id="edit-impound-form" class="form-grid">
           <div class="form-group">
             <label class="form-label">Pet Name</label>
@@ -613,6 +614,7 @@ window.ImpoundmentsView = {
         </form>
       </div>
       <div class="modal-footer">
+        <button class="btn btn-danger" id="edit-delete-btn" style="margin-right:auto;">Delete</button>
         <button class="btn btn-secondary" id="edit-cancel-btn">Cancel</button>
         <button class="btn btn-primary" id="edit-save-btn">Save Changes</button>
       </div>
@@ -622,6 +624,22 @@ window.ImpoundmentsView = {
 
     modal.querySelector('#edit-close-btn')?.addEventListener('click', () => window.adminApp.closeModal());
     modal.querySelector('#edit-cancel-btn')?.addEventListener('click', () => window.adminApp.closeModal());
+
+    modal.querySelector('#edit-delete-btn')?.addEventListener('click', async () => {
+      // Close this dialog first so the confirmation is not stacked on top of it
+      window.adminApp.closeModal();
+      const ok = await window.adminApp.confirmDialog({
+        title: 'Delete this impound case?',
+        message: `${imp.petName || 'This animal'} (case ${imp.id}) will be removed for good, together with its penalty tickets and any claims on it. This cannot be undone.`,
+        confirmLabel: 'Delete case',
+        danger: true
+      });
+      if (!ok) { this.openEditModal(imp); return; }
+      if (window.adminStore.deleteImpoundment(imp.id)) {
+        window.adminApp.showToast(`Deleted impound case ${imp.id}`, 'success');
+        window.adminApp.renderView('impoundments');
+      }
+    });
 
     modal.querySelector('#edit-save-btn')?.addEventListener('click', () => {
       const form = modal.querySelector('#edit-impound-form');

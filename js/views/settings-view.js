@@ -72,10 +72,9 @@ class SettingsView {
             <div class="settings-card-head-text">
               <h2>${t('settings.account', 'Account')}</h2>
               <p>${t('settings.accountSub', 'Your sign-in and contact details.')}</p>
+              <div id="settings-avatar-slot" class="settings-photo-actions"></div>
             </div>
           </div>
-
-          <div class="settings-row settings-avatar-row"><div id="settings-avatar-slot" class="settings-avatar-slot"></div></div>
 
           <form class="settings-row" id="settings-name-form" novalidate>
             <div class="settings-row-label">
@@ -209,6 +208,7 @@ class SettingsView {
         id: 'settings-avatar',
         picture: user.picture && !/ui-avatars\.com/.test(user.picture) ? user.picture : '',
         initial: user.avatarInitial || user.name,
+        compact: true,
         onSave: (data) => this.savePicture(data)
       });
     }

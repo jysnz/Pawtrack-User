@@ -59,14 +59,48 @@ Deno.serve(async (req) => {
   const where = facility ? `${esc(facility.name)}${facility.address ? ', ' + esc(facility.address) : ''}` : 'the facility';
   let subject: string;
   let html: string;
+  const appUrl = (Deno.env.get('PAWTRACK_APP_URL') || '').startsWith('https://') ? Deno.env.get('PAWTRACK_APP_URL')! : '';
   if (claim.status === 'accepted') {
-    subject = `Your claim for ${petName} was accepted`;
-    html = card(`
-      <h2 style="margin:0 0 6px;font-size:20px;color:#0f172a;">Your claim was accepted</h2>
-      <p style="margin:0 0 14px;font-size:14px;line-height:1.6;color:#334155;">Hello ${esc(claim.claimant_name)}, <strong>${where}</strong> accepted your claim for <strong>${esc(petName)}</strong>.</p>
-      <p style="margin:0 0 14px;font-size:14px;line-height:1.6;color:#334155;"><strong>Next step:</strong> go to the facility to collect ${esc(petName)}. Open <strong>My Pets</strong> in PawTrack, find your approved claim and print the <strong>Digital NFC card</strong>. Bring it with a valid ID.</p>
-      ${facility && facility.hours ? `<p style="margin:0 0 6px;font-size:13px;color:#64748b;">Hours: ${esc(facility.hours)}</p>` : ''}
-      ${facility && facility.phone ? `<p style="margin:0;font-size:13px;color:#64748b;">Phone: ${esc(facility.phone)}</p>` : ''}`);
+    subject = `Good news: your claim for ${petName} was accepted`;
+    const step = (n: number, title: string, text: string) => `
+      <tr>
+        <td valign="top" style="padding:8px 12px 8px 0;width:30px;"><div style="width:26px;height:26px;border-radius:13px;background:#c2410c;color:#ffffff;font:700 13px/26px -apple-system,Segoe UI,Roboto,Arial,sans-serif;text-align:center;">${n}</div></td>
+        <td valign="top" style="padding:8px 0;font:14px/1.5 -apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#334155;"><strong style="color:#0f172a;">${title}</strong><br />${text}</td>
+      </tr>`;
+    const fact = (label: string, value: string) => value ? `
+      <tr>
+        <td valign="top" style="padding:4px 12px 4px 0;width:78px;font:600 11px -apple-system,Segoe UI,Roboto,Arial,sans-serif;letter-spacing:.06em;text-transform:uppercase;color:#94a3b8;">${label}</td>
+        <td valign="top" style="padding:4px 0;font:14px/1.45 -apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#1e293b;">${value}</td>
+      </tr>` : '';
+    html = `<div style="background:#f8fafc;padding:24px 12px;">
+      <div style="max-width:540px;margin:0 auto;border-radius:16px;overflow:hidden;background:#ffffff;border:1px solid #e2e8f0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#1e293b;">
+        <div style="background:#c2410c;padding:26px 28px;text-align:center;">
+          <div style="display:inline-block;padding:4px 12px;border-radius:999px;background:rgba(255,255,255,.2);color:#ffffff;font-size:11px;font-weight:700;letter-spacing:.08em;">CLAIM ACCEPTED</div>
+          <h1 style="margin:12px 0 0;font-size:24px;line-height:1.25;color:#ffffff;">${esc(petName)} is ready to go home</h1>
+        </div>
+        <div style="padding:26px 28px 8px;">
+          <p style="margin:0 0 16px;font-size:15px;line-height:1.6;color:#334155;">Hello ${esc(claim.claimant_name)}, <strong>${facility ? esc(facility.name) : 'the facility'}</strong> reviewed your claim and accepted it. Here is what to do next:</p>
+          <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:0 0 18px;">
+            ${step(1, 'Open My Pets in PawTrack', 'Your approved claim is at the top of the page.')}
+            ${step(2, 'Print your Digital NFC card', 'Tap <em>Digital NFC card</em>, then <em>Print card</em>. You can also show it on your phone.')}
+            ${step(3, 'Go to the facility', 'Bring the card and a valid ID to collect ' + esc(petName) + '.')}
+          </table>
+          ${appUrl ? `<div style="text-align:center;margin:0 0 22px;"><a href="${esc(appUrl)}/#pets" style="display:inline-block;padding:12px 26px;border-radius:10px;background:#c2410c;color:#ffffff;font-size:14px;font-weight:700;text-decoration:none;">Open My Pets</a></div>` : ''}
+          <div style="margin:0 0 22px;padding:16px 18px;border-radius:12px;background:#fff7ed;border:1px solid #fed7aa;">
+            <div style="margin:0 0 6px;font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#9a3412;">Where to go</div>
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+              ${fact('Facility', facility ? esc(facility.name) : '')}
+              ${fact('Address', facility && facility.address ? esc(facility.address) : '')}
+              ${fact('Hours', facility && facility.hours ? esc(facility.hours) : '')}
+              ${fact('Phone', facility && facility.phone ? esc(facility.phone) : '')}
+              ${fact('Animal', esc([petName, pet.species, pet.breed].filter(Boolean).join(' · ')))}
+            </table>
+          </div>
+          <p style="margin:0 0 20px;font-size:13px;line-height:1.6;color:#64748b;">The facility may ask to see the photo of you with ${esc(petName)} that you sent with your claim. If your plans change, call the facility so ${esc(petName)} is not held longer than needed.</p>
+        </div>
+        <div style="padding:14px 28px;border-top:1px solid #f1f5f9;background:#f8fafc;text-align:center;font-size:11px;color:#94a3b8;">PawTrack NFC Pet Recovery</div>
+      </div>
+    </div>`;
   } else {
     subject = `Your claim for ${petName} was not approved`;
     html = card(`
