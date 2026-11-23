@@ -298,6 +298,9 @@
                   </button>
                 </div>
               </div>
+              <div class="auth-forgot-row">
+                <button type="button" class="auth-text-btn" id="admin-forgot-btn">Forgot password?</button>
+              </div>
 
               <div id="admin-login-turnstile" class="auth-turnstile auth-turnstile-below"></div>
 
@@ -412,6 +415,92 @@
             </div>
             <div class="auth-forgot-row" style="justify-content: center;">
               <button type="button" class="auth-text-btn" id="admin-otp-back-btn">Back to the form</button>
+            </div>
+          </form>
+
+          <!-- Forgot password, step 1: the account email (+ security check) -->
+          <form class="admin-login-panel auth-dialog-form al-form" data-login-panel="forgot" id="admin-forgot-form" novalidate hidden>
+            <ol class="auth-steps" aria-label="Password reset progress">
+              <li class="is-active"><span>1</span>Email</li>
+              <li><span>2</span>Code</li>
+              <li><span>3</span>New password</li>
+            </ol>
+            <h1 class="al-title">Forgot your password?</h1>
+            <p class="al-sub">Enter your account email and we'll send you a 6-digit verification code.</p>
+            <div class="auth-field-box">
+              <label for="admin-forgot-email" class="auth-field-label">Email</label>
+              <input spellcheck="false" type="email" id="admin-forgot-email" class="auth-field-input" autocomplete="email" inputmode="email" placeholder="you@lgu.gov.ph" required />
+            </div>
+            <div id="admin-forgot-turnstile" class="auth-turnstile auth-turnstile-below"></div>
+            <button type="submit" id="admin-forgot-send-btn" class="auth-dialog-submit-btn">Send code</button>
+            <div class="auth-forgot-row" style="justify-content: center;">
+              <button type="button" class="auth-text-btn" data-forgot-back>Back to log in</button>
+            </div>
+          </form>
+
+          <!-- Forgot password, step 2: the emailed code -->
+          <form class="admin-login-panel auth-dialog-form al-form" data-login-panel="forgot-otp" id="admin-forgot-otp-form" novalidate hidden>
+            <ol class="auth-steps" aria-label="Password reset progress">
+              <li class="is-done"><span>&#10003;</span>Email</li>
+              <li class="is-active"><span>2</span>Code</li>
+              <li><span>3</span>New password</li>
+            </ol>
+            <h1 class="al-title">Check your email</h1>
+            <p class="al-sub">We sent a 6-digit code to <strong id="admin-forgot-otp-email"></strong>. It expires in 10 minutes.</p>
+            <div class="auth-field-box">
+              <label for="admin-forgot-otp" class="auth-field-label">VERIFICATION CODE</label>
+              <input spellcheck="false" type="text" id="admin-forgot-otp" class="auth-field-input auth-otp-input" autocomplete="one-time-code" inputmode="numeric" maxlength="6" placeholder="000000" required />
+            </div>
+            <button type="submit" id="admin-forgot-verify-btn" class="auth-dialog-submit-btn">Verify code</button>
+            <div class="auth-forgot-row" style="justify-content: center; gap: 6px;">
+              <span class="al-hint" style="margin: 0;">Didn't get a code?</span>
+              <button type="button" class="auth-text-btn" id="admin-forgot-resend-btn">Send again</button>
+            </div>
+            <div class="auth-forgot-row" style="justify-content: center;">
+              <button type="button" class="auth-text-btn" data-forgot-back>Back to log in</button>
+            </div>
+          </form>
+
+          <!-- Forgot password, step 3: choose a new password -->
+          <form class="admin-login-panel auth-dialog-form al-form" data-login-panel="forgot-reset" id="admin-forgot-reset-form" novalidate hidden>
+            <ol class="auth-steps" aria-label="Password reset progress">
+              <li class="is-done"><span>&#10003;</span>Email</li>
+              <li class="is-done"><span>&#10003;</span>Code</li>
+              <li class="is-active"><span>3</span>New password</li>
+            </ol>
+            <h1 class="al-title">Set a new password</h1>
+            <p class="al-sub">Code verified. Choose a new password for your PawTrack account.</p>
+            <div class="auth-field-box auth-password-box">
+              <label for="admin-reset-password" class="auth-field-label">New password</label>
+              <div class="auth-password-row">
+                <input spellcheck="false" type="password" id="admin-reset-password" class="auth-field-input" autocomplete="new-password" required />
+                <button type="button" class="auth-password-toggle" data-toggle-for="admin-reset-password" aria-label="Show password" aria-pressed="false">
+                  <svg class="icon-eye" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg>
+                  <svg class="icon-eye-off" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.94 17.94A10.94 10.94 0 0 1 12 19C5 19 1 12 1 12a18.5 18.5 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19M14.12 14.12a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                </button>
+              </div>
+            </div>
+            <ul class="auth-rules" id="admin-reset-rules" aria-live="polite">
+              <li data-rule="length">10+ characters</li>
+              <li data-rule="upper">Uppercase letter</li>
+              <li data-rule="lower">Lowercase letter</li>
+              <li data-rule="number">Number</li>
+              <li data-rule="symbol">Symbol (!@#$%&hellip;)</li>
+              <li data-rule="match">Both passwords match</li>
+            </ul>
+            <div class="auth-field-box auth-password-box">
+              <label for="admin-reset-confirm" class="auth-field-label">Confirm password</label>
+              <div class="auth-password-row">
+                <input spellcheck="false" type="password" id="admin-reset-confirm" class="auth-field-input" autocomplete="new-password" required />
+                <button type="button" class="auth-password-toggle" data-toggle-for="admin-reset-confirm" aria-label="Show password" aria-pressed="false">
+                  <svg class="icon-eye" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg>
+                  <svg class="icon-eye-off" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.94 17.94A10.94 10.94 0 0 1 12 19C5 19 1 12 1 12a18.5 18.5 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19M14.12 14.12a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                </button>
+              </div>
+            </div>
+            <button type="submit" id="admin-reset-submit" class="auth-dialog-submit-btn" disabled>Update password</button>
+            <div class="auth-forgot-row" style="justify-content: center;">
+              <button type="button" class="auth-text-btn" id="admin-reset-cancel">Cancel</button>
             </div>
           </form>
 

@@ -214,6 +214,7 @@ class AdminApp {
     let currentPanel = null;
     let pendingSignup = null;
     let resendTimer = null;
+    let recoveryActive = false; // the emailed reset code was verified: hold the console locked until a new password is set
     const turnstileIds = {};
     const turnstileTokens = {};
 
@@ -429,12 +430,14 @@ class AdminApp {
     };
 
     const resolveAccess = async () => {
+      // A verified reset code signs the person in temporarily: do not open the console until the new password is saved
+      if (recoveryActive) return;
       const run = ++resolveRun;
       const user = session && session.user;
 
       if (!user) {
         // Someone filling in the sign-up form or entering a code must not be bounced by a background auth event
-        if (currentPanel === 'signup' || currentPanel === 'otp') return;
+        if (['signup', 'otp', 'forgot', 'forgot-otp', 'forgot-reset'].includes(currentPanel)) return;
         // Already showing the sign-in form (an auth event after coming back to the tab): leave it, and its check, alone
         if (currentPanel === 'signin' && !pendingError && document.body.classList.contains('auth-locked')) return;
         lockConsole('signin');
@@ -575,6 +578,156 @@ class AdminApp {
       if (el.loginPassword) el.loginPassword.value = '';
       // onAuthStateChange takes it from here
     });
+
+    // ---------- Forgot password: email -> emailed 6-digit code -> new password ----------
+    const forgotForm = $('admin-forgot-form');
+    const forgotEmail = $('admin-forgot-email');
+    const forgotSend = $('admin-forgot-send-btn');
+    const forgotTurnstile = $('admin-forgot-turnstile');
+    const forgotOtpForm = $('admin-forgot-otp-form');
+    const forgotOtp = $('admin-forgot-otp');
+    const forgotOtpEmail = $('admin-forgot-otp-email');
+    const forgotVerify = $('admin-forgot-verify-btn');
+    const forgotResend = $('admin-forgot-resend-btn');
+    const resetForm = $('admin-forgot-reset-form');
+    const resetPassword = $('admin-reset-password');
+    const resetConfirm = $('admin-reset-confirm');
+    const resetSubmit = $('admin-reset-submit');
+    let forgotTimer = null;
+
+    const renderForgotTurnstile = () => renderTurnstile(forgotTurnstile, null, 'admin-forgot');
+
+    const openForgot = () => {
+      pendingError = null;
+      setStatus('');
+      if (forgotEmail) forgotEmail.value = val('admin-login-email');
+      showPanel('forgot');
+      renderForgotTurnstile();
+      setTimeout(() => forgotEmail?.focus(), 50);
+    };
+    $('admin-forgot-btn')?.addEventListener('click', openForgot);
+
+    const backToLogin = () => {
+      clearInterval(forgotTimer);
+      goTab('signin');
+    };
+    screen?.querySelectorAll('[data-forgot-back]').forEach(btn => btn.addEventListener('click', backToLogin));
+
+    const startForgotCooldown = (seconds) => {
+      clearInterval(forgotTimer);
+      let left = seconds;
+      const apply = () => {
+        if (!forgotResend) return;
+        forgotResend.disabled = left > 0;
+        forgotResend.textContent = left > 0 ? `Send again in ${left}s` : 'Send again';
+        if (left <= 0) clearInterval(forgotTimer);
+        left -= 1;
+      };
+      apply();
+      forgotTimer = setInterval(apply, 1000);
+    };
+
+    forgotForm?.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const email = (forgotEmail ? forgotEmail.value : '').trim().toLowerCase();
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { setStatus('Enter a valid email address.', true); forgotEmail?.focus(); return; }
+      const captchaToken = await tokenFor(forgotTurnstile.id);
+      if (!captchaToken) { setStatus('Please complete the security check first.', true); return; }
+      forgotSend.disabled = true;
+      setStatus('Sending code…');
+      const { error } = await this.supabase.auth.resetPasswordForEmail(email, { captchaToken });
+      forgotSend.disabled = false;
+      renderForgotTurnstile();
+      if (error) { setStatus(friendlyAuthError(error), true); return; }
+      if (forgotOtpEmail) forgotOtpEmail.textContent = email;
+      if (forgotOtp) forgotOtp.value = '';
+      setStatus('');
+      showPanel('forgot-otp');
+      startForgotCooldown(60);
+      setTimeout(() => forgotOtp?.focus(), 50);
+    });
+
+    // "Send again" goes back to the email step so the security check can be done again
+    forgotResend?.addEventListener('click', () => {
+      showPanel('forgot');
+      renderForgotTurnstile();
+      setStatus('Complete the security check, then tap "Send code" again.');
+    });
+
+    forgotOtp?.addEventListener('input', () => {
+      forgotOtp.value = forgotOtp.value.replace(/\D/g, '').slice(0, 6);
+      if (forgotOtp.value.length === 6) forgotOtpForm?.requestSubmit();
+    });
+
+    forgotOtpForm?.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const email = (forgotOtpEmail ? forgotOtpEmail.textContent : '').trim();
+      const token = (forgotOtp ? forgotOtp.value : '').trim();
+      if (!/^\d{6}$/.test(token)) { setStatus('Enter the 6-digit code from your email.', true); forgotOtp?.focus(); return; }
+      forgotVerify.disabled = true;
+      setStatus('Verifying…');
+      recoveryActive = true; // the session this creates must not open the console
+      const { error } = await this.supabase.auth.verifyOtp({ email, token, type: 'recovery' });
+      forgotVerify.disabled = false;
+      if (error) {
+        recoveryActive = false;
+        setStatus('That code is incorrect or has expired. Check the code or send a new one.', true);
+        forgotOtp?.select();
+        return;
+      }
+      clearInterval(forgotTimer);
+      if (forgotOtp) forgotOtp.value = '';
+      setStatus('');
+      if (resetPassword) resetPassword.value = '';
+      if (resetConfirm) resetConfirm.value = '';
+      updateResetRules();
+      showPanel('forgot-reset');
+      setTimeout(() => resetPassword?.focus(), 50);
+    });
+
+    const resetRules = { ...passwordRules, match: (pw, confirm) => pw.length > 0 && pw === confirm };
+    const updateResetRules = () => {
+      const pw = resetPassword ? resetPassword.value : '';
+      const confirm = resetConfirm ? resetConfirm.value : '';
+      let allMet = true;
+      $('admin-reset-rules')?.querySelectorAll('li[data-rule]').forEach(li => {
+        const met = resetRules[li.dataset.rule](pw, confirm);
+        li.classList.toggle('is-met', met);
+        if (!met) allMet = false;
+      });
+      if (resetSubmit) resetSubmit.disabled = !allMet;
+      return allMet;
+    };
+    resetPassword?.addEventListener('input', updateResetRules);
+    resetConfirm?.addEventListener('input', updateResetRules);
+
+    // Ends the temporary recovery session and returns to the log-in form
+    const finishRecovery = async (message) => {
+      await this.supabase.auth.signOut({ scope: 'local' });
+      session = null;
+      if (resetPassword) resetPassword.value = '';
+      if (resetConfirm) resetConfirm.value = '';
+      lockConsole('signin');
+      if (message) setStatus(message);
+      renderSigninTurnstile();
+      recoveryActive = false;
+    };
+
+    resetForm?.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      if (!updateResetRules()) { setStatus('Please meet all the password requirements.', true); return; }
+      resetSubmit.disabled = true;
+      setStatus('Updating your password…');
+      const { error } = await this.supabase.auth.updateUser({ password: resetPassword.value });
+      if (error) {
+        updateResetRules();
+        setStatus(friendlyAuthError(error), true);
+        return;
+      }
+      await finishRecovery('Password updated. Log in with your new password.');
+    });
+
+    $('admin-reset-cancel')?.addEventListener('click', () => finishRecovery('Password reset cancelled.'));
 
     // Profile picture fields on the sign-up and the finish-setting-up forms
     if (window.PawAvatar) {
