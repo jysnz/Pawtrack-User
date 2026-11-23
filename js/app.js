@@ -72,7 +72,9 @@ class App {
   // The Supabase session is the source of truth (see initSupabaseAuth); its first auth event
   // confirms or clears the cached profile, so here we only avoid flashing the app to signed-out visitors
   restoreSession() {
-    if (!window.pawStore.getGoogleUser()) this.showStartScreenIfNeeded();
+    // The landing page comes first for everyone opening the site, signed in or not
+    if (!this.isGuestMode() && this.wantsHomePage()) this.showHomePage();
+    else if (!window.pawStore.getGoogleUser()) this.showStartScreenIfNeeded();
   }
 
   isGuestMode() {
@@ -122,8 +124,10 @@ class App {
   showHomePage() {
     const home = document.getElementById('home-landing');
     if (!home) return;
+    this._homeHeld = true;
     home.classList.add('is-open');
     home.scrollTop = 0;
+    this.updateHomeAuthState();
     document.body.classList.add('auth-locked');
     const auth = document.getElementById('auth-landing');
     if (auth) auth.style.display = 'none';
@@ -132,14 +136,37 @@ class App {
 
   hideHomePage() {
     const home = document.getElementById('home-landing');
+    this._homeHeld = false;
     if (home) home.classList.remove('is-open');
     try { sessionStorage.setItem('pawtrack_past_home', '1'); } catch (e) {}
+  }
+
+  // A signed-in guardian sees "Go to dashboard" instead of the log in and sign up buttons
+  updateHomeAuthState() {
+    const home = document.getElementById('home-landing');
+    if (!home) return;
+    const signedIn = !!(window.pawStore.getGoogleUser() || {}).name;
+    home.querySelectorAll('[data-hl-login], [data-hl-signup]').forEach((b) => {
+      if (b.dataset.hlOrig === undefined) b.dataset.hlOrig = b.textContent;
+      b.textContent = signedIn ? 'Go to dashboard' : b.dataset.hlOrig;
+    });
+    home.querySelectorAll('.hl-nav-actions [data-hl-signup]').forEach((b) => { b.hidden = signedIn; });
   }
 
   initHomePage() {
     const home = document.getElementById('home-landing');
     if (!home) return;
+    window.pawStore.subscribe(() => this.updateHomeAuthState());
     const go = (signup) => {
+      // Already signed in: straight to the dashboard, not the login
+      if ((window.pawStore.getGoogleUser() || {}).name) {
+        this.hideHomePage();
+        this.landedOnPets = true;
+        this.hideStartScreen();
+        window.location.hash = '#pets';
+        this.renderCurrentView();
+        return;
+      }
       this.hideHomePage();
       this.openLoginDialog();
       const tab = document.getElementById(signup ? 'auth-tab-signup' : 'auth-tab-signin');
@@ -162,12 +189,106 @@ class App {
       const target = home.querySelector(a.getAttribute('href'));
       if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }));
+    // ---- Landing page motion: scroll progress, drifting paws, 3D hero, tilt cards ----
+    const reduceMotion = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+    const PAW = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 10.5c1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3 1.34 3 3 3zm-6 2c1.38 0 2.5-1.12 2.5-2.5S7.38 7.5 6 7.5 3.5 8.62 3.5 10s1.12 2.5 2.5 2.5zm12 0c1.38 0 2.5-1.12 2.5-2.5S19.38 7.5 18 7.5s-2.5 1.12-2.5 2.5 1.12 2.5 2.5 2.5zM12 12c-2.76 0-5 2.24-5 5 0 2.21 1.79 4 4 4 1.1 0 2-.9 2-2 0 1.1.9 2 2 2 2.21 0 4-1.79 4-4 0-2.76-2.24-5-5-5z"/></svg>';
+    const paws = (n, big) => Array.from({ length: n }, () => {
+      const sz = big ? 16 + Math.random() * 22 : 22 + Math.random() * 34;
+      return `<span style="--x:${(Math.random() * 100).toFixed(1)}%;--s:${sz.toFixed(0)}px;--d:${(big ? 5 : 16) + Math.random() * (big ? 4 : 14)}s;--dl:${(-Math.random() * 20).toFixed(1)}s;--dx:${(Math.random() * 120 - 60).toFixed(0)}px;--r0:${(Math.random() * 60 - 30).toFixed(0)}deg;--r1:${(Math.random() * 360 - 180).toFixed(0)}deg">${PAW}</span>`;
+    }).join('');
+    if (!reduceMotion) {
+      if (!home.querySelector('.hl-bg')) home.insertAdjacentHTML('afterbegin', `<div class="hl-bg" aria-hidden="true">${paws(14, false)}</div>`);
+      const bandEl = home.querySelector('.hl-band');
+      if (bandEl && !bandEl.querySelector('.hl-band-fx')) bandEl.insertAdjacentHTML('afterbegin', `<div class="hl-band-fx" aria-hidden="true">${paws(9, true)}</div>`);
+      const vis = home.querySelector('.hl-visual');
+      if (vis && !vis.querySelector('.hl-orb')) vis.insertAdjacentHTML('beforeend', '<span class="hl-orb b1"></span><span class="hl-orb b2"></span><span class="hl-orb b3"></span>');
+      const hero = home.querySelector('.hl-hero');
+      if (hero && vis) {
+        hero.addEventListener('pointermove', (e) => {
+          if (e.pointerType === 'touch') return;
+          const r = hero.getBoundingClientRect();
+          vis.classList.add('is-tilt');
+          vis.style.setProperty('--vy', (((e.clientX - r.left) / r.width - 0.5) * 22).toFixed(1) + 'deg');
+          vis.style.setProperty('--vx', ((0.5 - (e.clientY - r.top) / r.height) * 16).toFixed(1) + 'deg');
+        });
+        hero.addEventListener('pointerleave', () => { vis.style.setProperty('--vx', '0deg'); vis.style.setProperty('--vy', '0deg'); setTimeout(() => vis.classList.remove('is-tilt'), 260); });
+      }
+    }
+    home.addEventListener('scroll', () => {
+      const max = home.scrollHeight - home.clientHeight;
+      home.style.setProperty('--hl-p', max > 0 ? (home.scrollTop / max).toFixed(3) : 0);
+    }, { passive: true });
+    home.querySelectorAll('.hl-head, .hl-band, .hl-hero .hl-wrap > div:first-child').forEach((el) => el.classList.add('hl-reveal'));
+    if (!reduceMotion) {
+      home.querySelectorAll('.hl-step, .hl-band').forEach((card) => {
+        card.addEventListener('pointermove', (e) => {
+          if (e.pointerType === 'touch') return;
+          const r = card.getBoundingClientRect();
+          const x = (e.clientX - r.left) / r.width;
+          const y = (e.clientY - r.top) / r.height;
+          card.classList.add('is-tilting');
+          card.style.setProperty('--ry', ((x - 0.5) * 12).toFixed(2) + 'deg');
+          card.style.setProperty('--rx', ((0.5 - y) * 10).toFixed(2) + 'deg');
+          card.style.setProperty('--mx', (x * 100).toFixed(1) + '%');
+          card.style.setProperty('--my', (y * 100).toFixed(1) + '%');
+        });
+        card.addEventListener('pointerleave', () => {
+          card.classList.remove('is-tilting');
+          card.style.setProperty('--rx', '0deg');
+          card.style.setProperty('--ry', '0deg');
+        });
+      });
+    }
+    // Graphics reveal and animate as they scroll into view (and rest when they leave it)
+    const reveals = home.querySelectorAll('.hl-reveal');
+    if ('IntersectionObserver' in window) {
+      const io = new IntersectionObserver((entries) => {
+        entries.forEach((en) => en.target.classList.toggle('is-in', en.isIntersecting));
+      }, { root: home, threshold: 0.25 });
+      reveals.forEach((el, i) => { el.style.setProperty('--hl-i', i % 3); io.observe(el); });
+    } else {
+      reveals.forEach((el) => el.classList.add('is-in'));
+    }
+    // 3D tilt: feature cards lean toward the pointer
+    if (window.matchMedia && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      home.querySelectorAll('.hl-feature').forEach((card) => {
+        card.addEventListener('pointermove', (e) => {
+          if (e.pointerType === 'touch') return;
+          const r = card.getBoundingClientRect();
+          const x = (e.clientX - r.left) / r.width;
+          const y = (e.clientY - r.top) / r.height;
+          card.classList.add('is-tilting');
+          card.style.setProperty('--ry', ((x - 0.5) * 16).toFixed(2) + 'deg');
+          card.style.setProperty('--rx', ((0.5 - y) * 14).toFixed(2) + 'deg');
+          card.style.setProperty('--mx', (x * 100).toFixed(1) + '%');
+          card.style.setProperty('--my', (y * 100).toFixed(1) + '%');
+        });
+        card.addEventListener('pointerleave', () => {
+          card.classList.remove('is-tilting');
+          card.style.setProperty('--rx', '0deg');
+          card.style.setProperty('--ry', '0deg');
+        });
+      });
+    }
+    // 3D stage: the whole scene turns a little with the pointer
+    const stage = home.querySelector('.hl-stage');
+    if (stage && window.matchMedia && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      stage.addEventListener('pointermove', (e) => {
+        if (e.pointerType === 'touch') return;
+        const r = stage.getBoundingClientRect();
+        stage.style.setProperty('--sy', (((e.clientX - r.left) / r.width - 0.5) * 30).toFixed(1) + 'deg');
+        stage.style.setProperty('--sx', ((0.5 - (e.clientY - r.top) / r.height) * 18).toFixed(1) + 'deg');
+      });
+      stage.addEventListener('pointerleave', () => { stage.style.setProperty('--sx', '0deg'); stage.style.setProperty('--sy', '0deg'); });
+    }
     home.querySelector('.hl-brand')?.addEventListener('click', (e) => { e.preventDefault(); home.scrollTo({ top: 0, behavior: 'smooth' }); });
   }
 
   hideStartScreen() {
     const landing = document.getElementById('auth-landing');
     if (landing) landing.style.display = 'none';
+    // The landing page stays up until the visitor taps through it
+    if (this._homeHeld) { this.endBoot(true); return; }
     const home = document.getElementById('home-landing');
     if (home) home.classList.remove('is-open');
     document.body.classList.remove('auth-locked');
