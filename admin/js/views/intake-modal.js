@@ -336,6 +336,23 @@ window.IntakeModal = {
     const box = body.querySelector('.trm-photo2');
     const prev = body.querySelector('#in-photo-prev');
     const hasPhoto = () => !!(main.files && main.files[0]) || !!(registered && d.photoUrl);
+    // A photo is only taken when it really shows an animal (the same check the owner app uses)
+    const fileToDataUrl = (f) => new Promise((resolve, reject) => { const r = new FileReader(); r.onload = () => resolve(r.result); r.onerror = reject; r.readAsDataURL(f); });
+    const reject = (message) => {
+      main.value = ''; cam.value = '';
+      const err = body.querySelector('#in-photo-err');
+      err.textContent = message; err.hidden = false;
+      box.classList.add('is-invalid');
+    };
+    const verify = async (f) => {
+      if (!f || !/^image\//.test(f.type || '')) { reject('Choose a photo (JPG, PNG or WebP).'); return false; }
+      if (!window.petAI) return true;
+      try {
+        const verdict = await window.petAI.checkPetPhoto(await fileToDataUrl(f), { indicator: box });
+        if (!verdict.ok) { reject(verdict.reason); return false; }
+      } catch (e) { reject('That photo could not be read. Try another one.'); return false; }
+      return true;
+    };
     const showPhoto = (f) => {
       if (!f || !/^image\//.test(f.type || '')) return;
       if (prev._url) URL.revokeObjectURL(prev._url);
@@ -347,10 +364,15 @@ window.IntakeModal = {
       nm.textContent = f.name.length > 34 ? f.name.slice(0, 31) + '...' : f.name; nm.hidden = false;
       body.querySelector('#in-photo-err').hidden = true;
     };
-    main.addEventListener('change', () => showPhoto(main.files && main.files[0]));
-    cam.addEventListener('change', () => {
+    main.addEventListener('change', async () => {
+      const f = main.files && main.files[0];
+      if (!f) return;
+      if (await verify(f)) showPhoto(f);
+    });
+    cam.addEventListener('change', async () => {
       const f = cam.files && cam.files[0];
       if (!f) return;
+      if (!(await verify(f))) return;
       try { const dt = new DataTransfer(); dt.items.add(f); main.files = dt.files; } catch (e) { /* older browsers: keep the camera file only for the preview */ }
       showPhoto(f);
     });
@@ -358,7 +380,8 @@ window.IntakeModal = {
     this.photoRequired = () => {
       if (hasPhoto()) return true;
       box.classList.add('is-invalid');
-      body.querySelector('#in-photo-err').hidden = false;
+      const err = body.querySelector('#in-photo-err');
+      err.textContent = 'Add a photo of the pet to log the intake.'; err.hidden = false;
       body.querySelector('#in-photo-group').scrollIntoView({ block: 'center', behavior: 'smooth' });
       body.querySelector('#in-photo-cam-btn')?.focus({ preventScroll: true });
       return false;

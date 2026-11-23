@@ -2757,3 +2757,12 @@ tr.is-clickable:hover { background: var(--bg-hover); }
   .acct-hero-facts { grid-column: 1 / -1; border-left: 0; border-top: 1px solid var(--border-light); padding: 14px 0 0; min-width: 0; }
 }
 @media (max-width: 480px) { .acct-hero { grid-template-columns: 1fr; justify-items: start; } }
+
+/* "Verifying photo" while a pet photo is being checked */
+.photo-verifying { position: relative; }
+.photo-verify-overlay { position: absolute; inset: 0; z-index: 5; display: flex; align-items: center; justify-content: center; gap: 12px; padding: 12px; border-radius: inherit; background: color-mix(in srgb, var(--bg-card) 84%, transparent); backdrop-filter: blur(3px); }
+.photo-verify-spinner { flex: none; width: 24px; height: 24px; border-radius: 50%; border: 3px solid color-mix(in srgb, var(--brand-terracotta) 25%, transparent); border-top-color: var(--brand-terracotta); animation: photo-verify-spin 0.8s linear infinite; }
+.photo-verify-text { display: grid; gap: 1px; min-width: 0; }
+.photo-verify-text strong { font-size: 13px; color: var(--ink-primary); }
+.photo-verify-text small { font-size: 11.5px; color: var(--ink-muted); }
+@keyframes photo-verify-spin { to { transform: rotate(360deg); } }

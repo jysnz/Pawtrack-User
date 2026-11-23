@@ -1879,7 +1879,7 @@ class PublicView {
     const reader = new FileReader();
     reader.onload = () => {
       const img = new Image();
-      img.onload = () => {
+      img.onload = async () => {
         // Downscale before upload: smaller payload and fewer AI tokens per search
         const maxSide = 768;
         const scale = Math.min(1, maxSide / Math.max(img.width, img.height));
@@ -1887,7 +1887,15 @@ class PublicView {
         canvas.width = Math.round(img.width * scale);
         canvas.height = Math.round(img.height * scale);
         canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
-        this.photoMatchImage = canvas.toDataURL('image/jpeg', 0.85);
+        const candidate = canvas.toDataURL('image/jpeg', 0.85);
+        const zone = document.getElementById('photo-match-placeholder')?.parentElement;
+        const verdict = window.petAI ? await window.petAI.checkPetPhoto(candidate, { indicator: zone || null }) : { ok: true };
+        if (!verdict.ok) {
+          this.photoMatchImage = null;
+          window.notifManager?.showToast(verdict.reason, 'warning', 7000);
+          return;
+        }
+        this.photoMatchImage = candidate;
 
         const preview = document.getElementById('photo-match-preview');
         const placeholder = document.getElementById('photo-match-placeholder');

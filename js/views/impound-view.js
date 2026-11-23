@@ -544,7 +544,11 @@ class ImpoundView {
         const errBox = overlay.querySelector('#ipc-photo-error');
         if (!file) return;
         try {
-          this.claimPhoto = await this.prepareClaimPhoto(file);
+          const prepared = await this.prepareClaimPhoto(file);
+          // The photo must show a pet (the owner may be in it too)
+          const verdict = window.petAI ? await window.petAI.checkPetPhoto(prepared, { indicator: overlay.querySelector('#ipc-photo-box') }) : { ok: true };
+          if (!verdict.ok) throw new Error(verdict.reason);
+          this.claimPhoto = prepared;
           overlay.querySelector('#ipc-photo-img').src = this.claimPhoto;
           overlay.querySelector('#ipc-photo-img').hidden = false;
           overlay.querySelector('#ipc-photo-empty').hidden = true;

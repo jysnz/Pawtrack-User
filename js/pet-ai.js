@@ -103,7 +103,7 @@ class PetAI {
 
   // Is this a real picture of a pet? Stops screenshots and unrelated pictures being sent as evidence.
   // 1) the local screenshot check, 2) when `ai` is true, Gemini says whether an animal is in the photo.
-  // If the AI cannot be reached the photo is allowed (the local check still applied).
+  // If the AI cannot be reached the photo is NOT accepted: only photos of pets get through.
   // `indicator` is the element to cover with a "Verifying photo" overlay while the check runs
   async checkPetPhoto(photo, { ai = true, indicator = null } = {}) {
     const stop = indicator ? this.showVerifying(indicator) : () => {};
@@ -118,7 +118,9 @@ class PetAI {
           return { ok: false, reason: 'No pet was detected in this photo. Please choose a clear photo of the animal.' };
         }
       } catch (e) {
+        // Only photos of pets are accepted, so a photo that could not be checked is not accepted either
         console.warn('[PetAI] Could not verify the photo:', e.message || e);
+        return { ok: false, reason: 'We could not check this photo right now. Check your connection and try again.' };
       }
       return { ok: true };
     } finally {

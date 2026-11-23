@@ -41,6 +41,7 @@ class App {
     this.initGoogleAuth();
     this.initEventListeners();
     this.initModals();
+    this.initHomePage();
     this.initSidebar();
     this.initPhotoUpload();
     this.updateGoogleAuthUI();
@@ -101,13 +102,74 @@ class App {
     if (signedIn) {
       this.hideStartScreen();
     } else if (!this.isGuestMode()) {
-      this.openLoginDialog();
+      // A visitor who has not chosen yet lands on the home page; coming back from an email link or Google goes straight to sign-in
+      if (this.wantsHomePage()) this.showHomePage();
+      else this.openLoginDialog();
     }
+  }
+
+  // The home page is for a signed-out visitor opening the site, not for someone mid-way through signing in or resetting a password
+  wantsHomePage() {
+    if (!document.getElementById('home-landing')) return false;
+    try { if (sessionStorage.getItem('pawtrack_past_home') === '1') return false; } catch (e) {}
+    const q = new URLSearchParams(window.location.search);
+    if (['code', 'error', 'error_description', 'nfc', 'rfid', 'tag', 'scan', 'action'].some((k) => q.has(k))) return false;
+    if (/access_token|type=recovery|error=/.test(window.location.hash)) return false;
+    try { if (localStorage.getItem('pawtrack_password_recovery')) return false; } catch (e) {}
+    return true;
+  }
+
+  showHomePage() {
+    const home = document.getElementById('home-landing');
+    if (!home) return;
+    home.classList.add('is-open');
+    home.scrollTop = 0;
+    document.body.classList.add('auth-locked');
+    const auth = document.getElementById('auth-landing');
+    if (auth) auth.style.display = 'none';
+    this.endBoot(true);
+  }
+
+  hideHomePage() {
+    const home = document.getElementById('home-landing');
+    if (home) home.classList.remove('is-open');
+    try { sessionStorage.setItem('pawtrack_past_home', '1'); } catch (e) {}
+  }
+
+  initHomePage() {
+    const home = document.getElementById('home-landing');
+    if (!home) return;
+    const go = (signup) => {
+      this.hideHomePage();
+      this.openLoginDialog();
+      const tab = document.getElementById(signup ? 'auth-tab-signup' : 'auth-tab-signin');
+      if (tab) tab.click();
+      // The sign-in screen can go back to the home page
+      const close = document.getElementById('auth-landing-close');
+      if (close) close.style.display = '';
+      this._cameFromHome = true;
+    };
+    home.querySelectorAll('[data-hl-login]').forEach((b) => b.addEventListener('click', () => go(false)));
+    home.querySelectorAll('[data-hl-signup]').forEach((b) => b.addEventListener('click', () => go(true)));
+    home.querySelectorAll('[data-hl-found]').forEach((b) => b.addEventListener('click', () => {
+      this.hideHomePage();
+      this.setGuestMode(true);
+      this.hideStartScreen();
+      window.location.hash = 'found';
+    }));
+    home.querySelectorAll('[data-hl-scroll]').forEach((a) => a.addEventListener('click', (e) => {
+      e.preventDefault();
+      const target = home.querySelector(a.getAttribute('href'));
+      if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }));
+    home.querySelector('.hl-brand')?.addEventListener('click', (e) => { e.preventDefault(); home.scrollTo({ top: 0, behavior: 'smooth' }); });
   }
 
   hideStartScreen() {
     const landing = document.getElementById('auth-landing');
     if (landing) landing.style.display = 'none';
+    const home = document.getElementById('home-landing');
+    if (home) home.classList.remove('is-open');
     document.body.classList.remove('auth-locked');
     this.endBoot(true);
   }
@@ -441,7 +503,15 @@ class App {
     const authLandingClose = document.getElementById('auth-landing-close');
     const authLandingReport = document.getElementById('auth-landing-report-btn');
 
-    authLandingClose?.addEventListener('click', () => this.hideStartScreen());
+    authLandingClose?.addEventListener('click', () => {
+      if (this._cameFromHome && !this.isGuestMode() && !(window.pawStore.getGoogleUser() || {}).name) {
+        this._cameFromHome = false;
+        try { sessionStorage.removeItem('pawtrack_past_home'); } catch (e) {}
+        this.showHomePage();
+        return;
+      }
+      this.hideStartScreen();
+    });
 
     // Finders can report a found pet without an account
     authLandingReport?.addEventListener('click', () => {
@@ -612,6 +682,7 @@ class App {
       this.supabase = null;
       this.openLoginDialog = () => {
         if (authLanding) authLanding.style.display = 'flex';
+      document.getElementById('home-landing')?.classList.remove('is-open');
         document.body.classList.add('auth-locked');
         setStatus(loginStatus, 'Sign-in services did not load. Check your connection and refresh.', true);
       };
