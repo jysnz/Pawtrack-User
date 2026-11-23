@@ -6735,6 +6735,7 @@ body.auth-locked {
 
 /* Create account: "Continue with Google" comes first, then "or", then the form */
 .auth-landing.is-signup .al-main-inner > * { order: 4; }
+.auth-landing.is-signup .al-main-inner > .al-back,
 .auth-landing.is-signup .al-main-inner > .al-brand-mobile,
 .auth-landing.is-signup .al-main-inner > .al-tabs,
 .auth-landing.is-signup .al-main-inner > .al-title,
@@ -6760,6 +6761,16 @@ body.auth-locked {
   cursor: pointer;
   transition: background 0.15s, color 0.15s;
 }
+
+/* Way back to the public home page */
+.al-back { align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; margin: 0 0 var(--al-gap-sm, 14px) -10px; padding: 7px 12px 7px 10px; border: none; border-radius: 999px; background: transparent; color: var(--auth-ink-muted); font: 600 0.88rem var(--font-body); cursor: pointer; transition: background 0.15s, color 0.15s, transform 0.16s cubic-bezier(0.23, 1, 0.32, 1); }
+.al-back svg { transition: transform 0.2s cubic-bezier(0.23, 1, 0.32, 1); }
+.al-back:hover { background: var(--auth-field-bg); color: var(--auth-ink); }
+.al-back:hover svg { transform: translateX(-3px); }
+.al-back:active { transform: scale(0.97); }
+.al-back:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--auth-accent-ring); }
+.al-back[hidden] { display: none; }
+@media (prefers-reduced-motion: reduce) { .al-back, .al-back svg { transition: none; } }
 
 .al-close:hover { background: var(--auth-field-bg); color: var(--auth-ink); }
 .al-close:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--auth-accent-ring); }

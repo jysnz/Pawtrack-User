@@ -156,6 +156,69 @@ class App {
   initHomePage() {
     const home = document.getElementById('home-landing');
     if (!home) return;
+    const landingVideo = home.querySelector('.hl-video');
+    const soundButton = home.querySelector('.hl-video-sound');
+    const updateSoundButton = () => {
+      if (!landingVideo || !soundButton) return;
+      const speaker = '<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" fill="currentColor"/>';
+      const icon = soundButton.querySelector('.hl-video-sound-icon');
+      const label = soundButton.querySelector('.hl-video-sound-label');
+      if (icon) {
+        icon.innerHTML = landingVideo.muted
+          ? speaker + '<line x1="22" y1="9" x2="16" y2="15"/><line x1="16" y1="9" x2="22" y2="15"/>'
+          : speaker + '<path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M19 5a10 10 0 0 1 0 14"/>';
+      }
+      if (label) label.textContent = landingVideo.muted ? 'Volume off' : 'Volume on';
+      soundButton.setAttribute('aria-label', landingVideo.muted ? 'Turn video volume on' : 'Turn video volume off');
+      soundButton.setAttribute('aria-pressed', String(!landingVideo.muted));
+    };
+    if (landingVideo) {
+      landingVideo.muted = true; // browsers only allow autoplay when muted
+      landingVideo.loop = true;
+      landingVideo.addEventListener('ended', () => {
+        if (!home.classList.contains('is-open') || document.hidden) return;
+        landingVideo.currentTime = 0;
+        const replayAttempt = landingVideo.play();
+        if (replayAttempt?.catch) replayAttempt.catch(() => {});
+      });
+    }
+    if (landingVideo && soundButton) {
+      soundButton.addEventListener('click', () => {
+        landingVideo.muted = !landingVideo.muted;
+        updateSoundButton();
+        if (landingVideo.paused && home.classList.contains('is-open')) {
+          const playAttempt = landingVideo.play();
+          if (playAttempt?.catch) playAttempt.catch(() => {});
+        }
+      });
+      updateSoundButton();
+    }
+    if (landingVideo && 'IntersectionObserver' in window) {
+      const landingVideoObserver = new IntersectionObserver((entries) => {
+        for (const entry of entries) {
+          if (entry.target !== landingVideo) continue;
+          if (entry.isIntersecting && home.classList.contains('is-open') && !document.hidden) {
+            const playAttempt = landingVideo.play();
+            if (playAttempt?.catch) playAttempt.catch(() => {
+              landingVideo.muted = true;
+              updateSoundButton();
+              const mutedAttempt = landingVideo.play();
+              if (mutedAttempt?.catch) mutedAttempt.catch(() => {});
+            });
+          } else {
+            landingVideo.pause();
+          }
+        }
+      }, { root: home, threshold: 0.5 });
+      landingVideoObserver.observe(landingVideo);
+      document.addEventListener('visibilitychange', () => {
+        if (document.hidden) landingVideo.pause();
+        else if (home.classList.contains('is-open') && landingVideo.getBoundingClientRect().top < window.innerHeight && landingVideo.getBoundingClientRect().bottom > 0) {
+          const playAttempt = landingVideo.play();
+          if (playAttempt?.catch) playAttempt.catch(() => {});
+        }
+      });
+    }
     window.pawStore.subscribe(() => this.updateHomeAuthState());
     const go = (signup) => {
       // Already signed in: straight to the dashboard, not the login
@@ -258,8 +321,8 @@ class App {
           const x = (e.clientX - r.left) / r.width;
           const y = (e.clientY - r.top) / r.height;
           card.classList.add('is-tilting');
-          card.style.setProperty('--ry', ((x - 0.5) * 16).toFixed(2) + 'deg');
-          card.style.setProperty('--rx', ((0.5 - y) * 14).toFixed(2) + 'deg');
+          card.style.setProperty('--ry', ((x - 0.5) * 5).toFixed(2) + 'deg');
+          card.style.setProperty('--rx', ((0.5 - y) * 4).toFixed(2) + 'deg');
           card.style.setProperty('--mx', (x * 100).toFixed(1) + '%');
           card.style.setProperty('--my', (y * 100).toFixed(1) + '%');
         });
@@ -633,6 +696,18 @@ class App {
       }
       this.hideStartScreen();
     });
+
+    // "Back to home" on the sign-in screen returns to the public landing page
+    const authLandingBack = document.getElementById('auth-landing-back');
+    if (authLandingBack) {
+      if (!document.getElementById('home-landing')) authLandingBack.hidden = true;
+      authLandingBack.addEventListener('click', () => {
+        this._cameFromHome = false;
+        try { sessionStorage.removeItem('pawtrack_past_home'); } catch (e) {}
+        this.showHomePage();
+        document.getElementById('home-landing')?.scrollTo({ top: 0 });
+      });
+    }
 
     // Finders can report a found pet without an account
     authLandingReport?.addEventListener('click', () => {

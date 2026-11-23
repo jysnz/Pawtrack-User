@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Privacy Policy - PawTrack Pet Recovery System</title>
-  <meta name="description" content="PawTrack Privacy Policy - Explains our data collection, NFC pet transponder records, Google OAuth authentication, and 72-hour impound tracking." />
+  <meta name="description" content="PawTrack Privacy Policy - How we collect, use and protect guardian, pet and NFC tag data." />
   <link rel="icon" type="image/svg+xml" href="images/favicon.svg" />
   <link rel="icon" type="image/png" href="images/favicon.png" />
   <link rel="apple-touch-icon" href="images/favicon.png" />
@@ -13,82 +13,84 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="css/main.css" />
-  <link rel="stylesheet" href="css/components.css" />
-  <style>
-    body { background: var(--bg-base, #0d0e12); color: var(--text-main, #e2e8f0); font-family: 'Plus Jakarta Sans', sans-serif; line-height: 1.6; }
-    .policy-container { max-width: 860px; margin: 0 auto; padding: 40px 20px 80px; }
-    .policy-header { margin-bottom: 32px; padding-bottom: 24px; border-bottom: 1px solid var(--border-subtle, #2d3748); }
-    .policy-header h1 { font-family: 'Outfit', sans-serif; font-size: 2.2rem; font-weight: 800; color: #fff; margin-bottom: 8px; }
-    .policy-header .badge { display: inline-block; background: rgba(194,65,12,0.15); color: #ea580c; padding: 4px 10px; border-radius: 99px; font-size: 12px; font-weight: 700; }
-    .policy-section { margin-bottom: 28px; background: var(--bg-surface-elevated, #161922); padding: 24px; border-radius: 12px; border: 1px solid var(--border-subtle, #232733); }
-    .policy-section h2 { font-family: 'Outfit', sans-serif; font-size: 1.3rem; font-weight: 700; color: #f8fafc; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
-    .policy-section p { font-size: 14px; color: var(--text-muted, #94a3b8); margin-bottom: 12px; }
-    .policy-section ul { padding-left: 20px; font-size: 14px; color: var(--text-muted, #94a3b8); }
-    .policy-section li { margin-bottom: 6px; }
-    .back-btn { display: inline-flex; align-items: center; gap: 6px; color: #8ab4f8; text-decoration: none; font-weight: 600; font-size: 14px; margin-bottom: 20px; }
-    .back-btn:hover { text-decoration: underline; }
-  </style>
+  <link rel="stylesheet" href="css/policy.css" />
+  <script src="js/policy.js"></script>
 </head>
 <body>
-  <div class="policy-container">
-    <a href="index.html#owner" class="back-btn">&larr; Return to PawTrack Portal</a>
-    
-    <div class="policy-header">
-      <span class="badge">Legal &amp; Compliance</span>
+  <header class="pc-bar">
+    <div class="pc-bar-in">
+      <a class="pc-brand" href="index.html" aria-label="PawTrack home"><span class="pc-logo"><svg width="17" height="17" viewBox="0 0 24 24.75" fill="currentColor" aria-hidden="true"><path d="M12 10.5c1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3 1.34 3 3 3zm-6 2c1.38 0 2.5-1.12 2.5-2.5S7.38 7.5 6 7.5 3.5 8.62 3.5 10s1.12 2.5 2.5 2.5zm12 0c1.38 0 2.5-1.12 2.5-2.5S19.38 7.5 18 7.5s-2.5 1.12-2.5 2.5 1.12 2.5 2.5 2.5zM12 12c-2.76 0-5 2.24-5 5 0 2.21 1.79 4 4 4 1.1 0 2-.9 2-2 0 1.1.9 2 2 2 2.21 0 4-1.79 4-4 0-2.76-2.24-5-5-5z"/></svg></span><span>PawTrack</span></a>
+      <nav class="pc-switch" aria-label="Legal documents"><a href="terms.html">Terms</a><a href="privacy.html" aria-current="page">Privacy</a></nav>
+      <a class="pc-back" href="index.html#owner"><span>Back to portal</span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
+    </div>
+  </header>
+
+  <main>
+    <div class="pc-hero">
+      <span class="pc-eyebrow">Legal &amp; Compliance</span>
       <h1>PawTrack Privacy Policy</h1>
-      <p style="color: var(--text-muted); font-size: 13.5px;">Last Updated: September 6, 2026 &bull; Compliant with Philippine Data Privacy Act of 2012 (RA 10173), Animal Welfare Act (RA 8485 / RA 10631), and Google OAuth API Services User Data Policy.</p>
+      <p class="pc-lead">What we collect, why we collect it, and the control you keep over your data.</p>
+      <ul class="pc-meta"><li><b>Last updated</b> September 6, 2026</li><li><b>Data Privacy Act of 2012</b> (RA 10173)</li><li><b>Animal Welfare Act</b> (RA 8485 / RA 10631)</li><li><b>Google API Services</b> User Data Policy</li></ul>
     </div>
 
-    <div class="policy-section">
-      <h2>1. Overview &amp; Data Controller</h2>
-      <p><strong>PawTrack</strong> (&quot;we&quot;, &quot;our&quot;, or &quot;the System&quot;) operates a unified pet recovery, NFC transponder identification, and municipal animal pound intake tracking platform. This Privacy Policy informs pet guardians, shelter staff, and community members regarding how personal and pet telemetry information is collected, processed, protected, and shared.</p>
-    </div>
+    <div class="pc-layout">
+      <nav class="pc-toc" aria-label="On this page">
+        <h2>On this page</h2>
+        <ol>
+          <li><a href="#overview"><span>1</span>Overview &amp; Data Controller</a></li>
+          <li><a href="#google"><span>2</span>Google OAuth &amp; Account Authorization</a></li>
+          <li><a href="#nfc"><span>3</span>NFC Transponder &amp; Pet Identification Data</a></li>
+          <li><a href="#holding"><span>4</span>72-Hour Municipal Holding Countdown &amp; Pound Alerts</a></li>
+          <li><a href="#location"><span>5</span>Location Privacy Shielding</a></li>
+          <li><a href="#rights"><span>6</span>Your Rights &amp; Data Deletion</a></li>
+          <li><a href="#contact"><span>7</span>Contact Us</a></li>
+        </ol>
+      </nav>
 
-    <div class="policy-section">
-      <h2>2. Google OAuth &amp; Account Authorization</h2>
-      <p>When you choose to authenticate using <strong>Google Sign-In</strong> or Google Identity Services, PawTrack requests access only to the minimum required scopes:</p>
-      <ul>
-        <li><strong>Full Name (`profile` / `name`):</strong> Used exclusively to identify you as the verified legal guardian of your registered pets on recovery dossiers and shelter claims.</li>
-        <li><strong>Email Address (`email`):</strong> Used to deliver critical notifications, including automated Municipal Pound Intake Alerts, 72-Hour Legal Holding Countdown timers, and claim approvals.</li>
-        <li><strong>Profile Picture (`picture`):</strong> Rendered in your guardian portal header and profile pass for user interface personalization.</li>
-      </ul>
-      <p><strong>Google User Data Protection:</strong> PawTrack complies strictly with the <a href="https://developers.google.com/terms/api-services-user-data-policy" target="_blank" style="color:#8ab4f8;">Google API Services User Data Policy</a>. We do not sell, rent, or transfer your Google user data to third-party advertisers, data brokers, or artificial intelligence training models.</p>
-    </div>
+      <div class="pc-doc">
+      <section class="pc-sec" id="overview" aria-labelledby="overview-h">
+        <h2 id="overview-h"><span class="pc-num" aria-hidden="true">1</span>Overview &amp; Data Controller</h2>
+        <p><strong>PawTrack</strong> (&quot;we&quot;, &quot;our&quot;, or &quot;the System&quot;) operates a unified pet recovery, NFC transponder identification, and municipal animal pound intake tracking platform. This Privacy Policy informs pet guardians, shelter staff, and community members regarding how personal and pet telemetry information is collected, processed, protected, and shared.</p>
+      </section>
 
-    <div class="policy-section">
-      <h2>3. NFC Transponder &amp; Pet Identification Data</h2>
-      <p>When you register a pet on PawTrack, we store:</p>
-      <ul>
-        <li>Pet Details (Name, Species, Breed, Gender, Color, Medical Notes, Photo).</li>
-        <li>NFC Tag ID and Microchip Serial Numbers.</li>
-        <li>Guardian Contact Phone and Registered Municipality/Barangay.</li>
-      </ul>
-    </div>
+      <section class="pc-sec" id="google" aria-labelledby="google-h">
+        <h2 id="google-h"><span class="pc-num" aria-hidden="true">2</span>Google OAuth &amp; Account Authorization</h2>
+        <p>When you choose to authenticate using <strong>Google Sign-In</strong> or Google Identity Services, PawTrack requests access only to the minimum required scopes:</p><ul><li><strong>Full Name (<code>profile</code> / <code>name</code>):</strong> Used exclusively to identify you as the verified legal guardian of your registered pets on recovery dossiers and shelter claims.</li><li><strong>Email Address (<code>email</code>):</strong> Used to deliver critical notifications, including automated Municipal Pound Intake Alerts, 72-Hour Legal Holding Countdown timers, and claim approvals.</li><li><strong>Profile Picture (<code>picture</code>):</strong> Rendered in your guardian portal header and profile pass for user interface personalization.</li></ul><div class="pc-note"><p><strong>Google User Data Protection:</strong> PawTrack complies strictly with the <a href="https://developers.google.com/terms/api-services-user-data-policy" target="_blank" rel="noopener">Google API Services User Data Policy</a>. We do not sell, rent, or transfer your Google user data to third-party advertisers, data brokers, or artificial intelligence training models.</p></div>
+      </section>
 
-    <div class="policy-section">
-      <h2>4. 72-Hour Municipal Holding Countdown &amp; Pound Alerts</h2>
-      <p>Under Republic Act No. 8485 and city municipal animal control ordinances, impounded pets are held for a mandatory 72-hour holding window before being eligible for adoption. When an animal shelter or pound scans your pet's NFC tag, PawTrack triggers immediate SMS and Email alerts to help you claim your pet promptly.</p>
-    </div>
+      <section class="pc-sec" id="nfc" aria-labelledby="nfc-h">
+        <h2 id="nfc-h"><span class="pc-num" aria-hidden="true">3</span>NFC Transponder &amp; Pet Identification Data</h2>
+        <p>When you register a pet on PawTrack, we store:</p><ul><li>Pet Details (Name, Species, Breed, Gender, Color, Medical Notes, Photo).</li><li>NFC Tag ID and Microchip Serial Numbers.</li><li>Guardian Contact Phone and Registered Municipality/Barangay.</li></ul>
+      </section>
 
-    <div class="policy-section">
-      <h2>5. Location Privacy Shielding</h2>
-      <p>PawTrack shields your precise residential address. Public sighting map markers display approximate barangay/vicinity coordinates without exposing your exact home location.</p>
-    </div>
+      <section class="pc-sec" id="holding" aria-labelledby="holding-h">
+        <h2 id="holding-h"><span class="pc-num" aria-hidden="true">4</span>72-Hour Municipal Holding Countdown &amp; Pound Alerts</h2>
+        <p>Under Republic Act No. 8485 and city municipal animal control ordinances, impounded pets are held for a mandatory 72-hour holding window before being eligible for adoption. When an animal shelter or pound scans your pet's NFC tag, PawTrack triggers immediate SMS and Email alerts to help you claim your pet promptly.</p>
+      </section>
 
-    <div class="policy-section">
-      <h2>6. Your Rights &amp; Data Deletion</h2>
-      <p>You have full control over your data:</p>
-      <ul>
-        <li>You can view, edit, or delete registered pet records at any time.</li>
-        <li>You may disconnect your Google account and revoke access via your <a href="https://myaccount.google.com/permissions" target="_blank" style="color:#8ab4f8;">Google Security Settings</a>.</li>
-        <li>You can request complete account erasure by contacting our Data Protection Officer.</li>
-      </ul>
-    </div>
+      <section class="pc-sec" id="location" aria-labelledby="location-h">
+        <h2 id="location-h"><span class="pc-num" aria-hidden="true">5</span>Location Privacy Shielding</h2>
+        <p>PawTrack shields your precise residential address. Public sighting map markers display approximate barangay/vicinity coordinates without exposing your exact home location.</p>
+      </section>
 
-    <div class="policy-section">
-      <h2>7. Contact Us</h2>
-      <p>For inquiries regarding privacy, data protection, or shelter verification, please contact the PawTrack Data Compliance Team at <strong>privacy@pawtrack.com</strong>.</p>
+      <section class="pc-sec" id="rights" aria-labelledby="rights-h">
+        <h2 id="rights-h"><span class="pc-num" aria-hidden="true">6</span>Your Rights &amp; Data Deletion</h2>
+        <p>You have full control over your data:</p><ul><li>You can view, edit, or delete registered pet records at any time.</li><li>You may disconnect your Google account and revoke access via your <a href="https://myaccount.google.com/permissions" target="_blank" rel="noopener">Google Security Settings</a>.</li><li>You can request complete account erasure by contacting our Data Protection Officer.</li></ul>
+      </section>
+
+      <section class="pc-sec" id="contact" aria-labelledby="contact-h">
+        <h2 id="contact-h"><span class="pc-num" aria-hidden="true">7</span>Contact Us</h2>
+        <p>For inquiries regarding privacy, data protection, or shelter verification, please contact the PawTrack Data Compliance Team at <strong>privacy@pawtrack.com</strong>.</p>
+      </section>
+
+      <a class="pc-next" href="terms.html"><span><small>Also read: the rules for using PawTrack</small><strong>Terms of Service</strong></span><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
+      </div>
     </div>
-  </div>
+  </main>
+
+  <footer class="pc-foot">
+    <span>&copy; PawTrack NFC Pet Recovery</span>
+    <span><a href="index.html#owner">Back to portal</a> &middot; <a href="#top" onclick="window.scrollTo({top:0});return false;">Back to top</a></span>
+  </footer>
 </body>
 </html>
