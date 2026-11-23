@@ -46,24 +46,8 @@ window.ImpoundmentsView = {
 
   // Shown until the admin has added the one facility they run
   renderNoFacility(container) {
-    container.innerHTML = `
-      <div class="view-header">
-        <div class="view-header-titles">
-          <h1>Impoundments</h1>
-          <div class="subtitle"><span>Animals in the 72-hour holding window</span></div>
-        </div>
-      </div>
-      <div class="nock-card tm-empty">
-        <h2>Set up your impound facility</h2>
-        <p>Impoundments belong to the facility you work for, and each account belongs to one. Register yours and you become its manager, or join with the invite code your manager shares.</p>
-        <div class="tm-empty-actions">
-          <button class="btn btn-primary" id="imp-add-facility">Register your facility</button>
-          <button class="btn btn-secondary" id="imp-join-facility">Join with invite code</button>
-        </div>
-      </div>`;
-    const reload = () => window.adminApp.renderView('impoundments');
-    container.querySelector('#imp-add-facility').addEventListener('click', () => window.SheltersView.openShelterModal(null, { onCreated: reload }));
-    container.querySelector('#imp-join-facility').addEventListener('click', () => window.SheltersView.openJoinModal({ onJoined: reload }));
+    // Same fallback as the Claims, Dashboard and Heatmap pages
+    window.AdminNoFacility.render(container, 'Impoundments', 'This page lists the animals in the 72-hour holding window at your facility.');
   },
 
   render(container) {

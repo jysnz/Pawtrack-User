@@ -52,9 +52,9 @@ window.SettingsView = {
             <dl class="acct-hero-facts">
               <div><dt>Email</dt><dd>${esc(account.email)}</dd></div>
               <div><dt>Member since</dt><dd>${esc(this.day(account.created_at))}</dd></div>
-              <div class="acct-hero-out"><button class="btn btn-secondary acct-signout" id="btn-account-signout">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg>
-              Sign out
+              <div class="acct-hero-out"><button class="btn btn-secondary acct-signout" id="btn-account-signout">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg>
+              Sign out
             </button></div>
             </dl>
           </aside>
@@ -566,7 +566,7 @@ window.SettingsView = {
 
     $('#sec-back').addEventListener('click', () => {
       clearInterval(timer);
-      step2.hidden = true; step1.hidden = false; setStep(1); setStatus('');
+      step2.hidden = true; step1.classList.add('is-back'); step1.hidden = false; setStep(1); setStatus('');
       setTimeout(() => (isEmail ? $('#sec-email') : $('#sec-send')).focus(), 50);
     });
     $('#sec-resend').addEventListener('click', async () => {
@@ -704,7 +704,7 @@ window.SettingsView = {
       if (!res.ok) {
         if (res.data.expired) {
           // The verified code timed out: start again from the first step
-          $('#sec-step3').hidden = true; step1.hidden = false; setStep(1);
+          $('#sec-step3').hidden = true; step1.classList.add('is-back'); step1.hidden = false; setStep(1);
           setStatus('That confirmation expired. Request a new code.', true);
           return;
         }

@@ -181,8 +181,15 @@ window.ClaimsView = {
   async decide(id, status, note) {
     const store = window.adminStore;
     const claim = store.getClaims().find((c) => c.id === id);
+    // The row leaves the "Waiting" tab once decided: let it slide out first instead of vanishing
+    const row = this.filter === 'pending' ? document.querySelector(`[data-claim-open="${CSS.escape(id)}"]`) : null;
+    const reduced = window.AdminMotion && window.AdminMotion.reducedMotion && window.AdminMotion.reducedMotion();
+    if (row && !reduced) {
+      row.classList.add('is-leaving');
+      await new Promise((r) => setTimeout(r, 170));
+    }
     const result = await store.decideClaim(id, status, note || '');
-    if (!result.ok) return;
+    if (!result.ok) { if (row) row.classList.remove('is-leaving'); return; }
     const accepted = status === 'accepted';
     window.adminApp.showDialog({
       tone: accepted ? 'success' : 'info',

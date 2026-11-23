@@ -461,6 +461,12 @@ window.ActivationView = {
       return seg;
     }).join('');
 
+    // Quick facts under the donut: how many are overdue, and how long the animals have been here on average
+    const speciesLate = active.filter((i) => { const d = deadlineOf(i); return d != null && d < now; }).length;
+    const stayMs = active.map((i) => (i.intakeDate ? now - new Date(i.intakeDate).getTime() : null)).filter((v) => v != null && v >= 0);
+    const avgStay = stayMs.length ? this.formatDuration(stayMs.reduce((a, b) => a + b, 0) / stayMs.length) : '—';
+    const longestStay = stayMs.length ? this.formatDuration(Math.max(...stayMs)) : '—';
+
     // ---- Holding now: who is closest to their claim deadline ----
     const holdingRows = active.slice()
       .sort((x, y) => (deadlineOf(x) ?? Infinity) - (deadlineOf(y) ?? Infinity))
@@ -559,9 +565,12 @@ window.ActivationView = {
             <div class="dash-attention-list">
               ${attention.map((a, idx) => `
                 <button class="dash-attention-item tone-${a.tone}" data-go="${a.route}" style="--i:${idx}">
-                  ${a.tone === 'danger' ? '<span class="dash-pulse" aria-hidden="true"></span>' : ''}<b>${a.n}</b><span>${escHtml(a.label)}</span><i aria-hidden="true">→</i>
+                  <span class="dash-att-badge"><b>${a.n}</b>${a.tone === 'danger' ? '<span class="dash-pulse" aria-hidden="true"></span>' : ''}</span>
+                  <span class="dash-att-text"><span class="dash-att-label">${escHtml(a.label)}</span><small>${{ danger: 'Act now', warn: 'Coming up', info: 'In progress' }[a.tone]}</small></span>
+                  <i aria-hidden="true">→</i>
                 </button>`).join('')}
-            </div>` : `
+            </div>
+            <button type="button" class="dash-att-all" data-go="impoundments">Open impoundments <span aria-hidden="true">→</span></button>` : `
             <div class="dash-clear">
               <svg class="dash-check" width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7"/></svg>
               <b>Nothing needs attention</b>
@@ -626,8 +635,19 @@ window.ActivationView = {
                 <div class="dash-donut-center"><b>${active.length}</b><span>in holding</span></div>
               </div>
               <ul class="dash-legend-list">
-                ${speciesSlices.map(([label, n, color]) => `<li><i style="background: ${color}"></i><span>${escHtml(label)}</span><b>${n}</b></li>`).join('')}
+                ${speciesSlices.map(([label, n, color], idx) => {
+                  const pct = Math.round((n / active.length) * 100);
+                  return `<li style="--c:${color}; --i:${idx}">
+                    <div class="dash-legend-top"><i style="background: ${color}"></i><span>${escHtml(label)}</span><b>${n}</b><em>${pct}%</em></div>
+                    <div class="dash-legend-bar"><div style="width:${pct}%; background:${color}"></div></div>
+                  </li>`;
+                }).join('')}
               </ul>
+            </div>
+            <div class="dash-species-stats">
+              <div class="${speciesLate ? 'is-late' : ''}" style="--i:0"><b>${speciesLate}</b><span>Past deadline</span></div>
+              <div style="--i:1"><b>${escHtml(String(avgStay))}</b><span>Avg. stay</span></div>
+              <div style="--i:2"><b>${escHtml(String(longestStay))}</b><span>Longest stay</span></div>
             </div>` : `
             <div class="dash-empty"><div class="dash-empty-title">Nobody in holding</div>The species of the animals you are holding appear here.</div>`}
         </div>

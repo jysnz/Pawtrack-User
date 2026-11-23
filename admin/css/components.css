@@ -3492,6 +3492,8 @@ body.hm-no-scroll { overflow: hidden; }
 
 /* Reports table */
 .hm-table-card { padding: 20px 22px; }
+/* A short list should hug its rows instead of leaving a blank band under them */
+.hm-table-card .data-table-wrapper { min-height: 0; }
 .hm-count { margin-left: 8px; padding: 1px 8px; border-radius: 999px; background: var(--bg-hover); font-size: 11.5px; font-weight: 600; color: var(--ink-secondary); }
 .hm-sort { display: inline-flex; align-items: center; font-size: 11.5px; color: var(--ink-muted); }
 .hm-table th { font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase; }
