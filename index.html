@@ -85,6 +85,7 @@
   <!-- Google Identity Services -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
   <script src="js/supabase-config.js"></script>
+  <script src="js/species.js"></script>
   <script src="js/google-maps.js"></script>
   <script src="js/google-map-adapter.js"></script>
   <script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit" async defer></script>
@@ -100,6 +101,7 @@
   <link rel="stylesheet" href="css/impound.css" />
   <link rel="stylesheet" href="css/violations.css" />
   <link rel="stylesheet" href="css/settings.css" />
+  <link rel="stylesheet" href="css/chat.css" />
   <link rel="stylesheet" href="css/landing.css" />
   <link rel="stylesheet" href="css/navigation.css" />
 </head>
@@ -368,6 +370,17 @@
     <!-- View content is injected here dynamically -->
   </main>
 
+  <div class="chat-widget" id="chat-widget" hidden>
+    <div class="chat-popover" id="chat-popover" hidden></div>
+    <button type="button" class="chat-launcher" id="chat-launcher" aria-controls="chat-popover" aria-expanded="false"
+      title="PawTrack Assistant" aria-label="PawTrack Assistant" data-i18n-title="chat.title" data-i18n-aria="chat.title">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+        stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M21 11.5a8.4 8.4 0 0 1-.9 3.8A8.5 8.5 0 0 1 12.5 20a8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7a8.4 8.4 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.4 8.4 0 0 1 3.8-.9h.5a8.5 8.5 0 0 1 8 8z"/>
+      </svg>
+    </button>
+  </div>
+
   <!-- ==================== MODALS ==================== -->
 
   <!-- 1. Register Pet Modal -->
@@ -392,6 +405,10 @@
               <select id="reg-pet-species" required>
                 <option value="Dog" data-i18n="modal.speciesDog">Dog</option>
                 <option value="Cat" data-i18n="modal.speciesCat">Cat</option>
+                <option value="Bird" data-i18n="modal.speciesBird">Bird</option>
+                <option value="Rabbit" data-i18n="modal.speciesRabbit">Rabbit</option>
+                <option value="Small mammal" data-i18n="modal.speciesSmallMammal">Small mammal</option>
+                <option value="Reptile" data-i18n="modal.speciesReptile">Reptile</option>
                 <option value="Other" data-i18n="modal.speciesOther">Other</option>
               </select>
             </div>
@@ -399,7 +416,7 @@
 
           <div class="form-group" id="reg-pet-species-other-group" hidden>
             <label class="form-label" for="reg-pet-species-other">Which species? *</label>
-            <input type="text" id="reg-pet-species-other" maxlength="40" placeholder="e.g. Rabbit, Hamster, Parrot" />
+            <input type="text" id="reg-pet-species-other" maxlength="40" placeholder="e.g. Pig, Goat, Duck" />
           </div>
 
           <div class="form-row">
@@ -614,6 +631,11 @@
               <select id="found-species" required>
                 <option value="Dog" data-i18n="modal.speciesDog">Dog</option>
                 <option value="Cat" data-i18n="modal.speciesCat">Cat</option>
+                <option value="Bird" data-i18n="modal.speciesBird">Bird</option>
+                <option value="Rabbit" data-i18n="modal.speciesRabbit">Rabbit</option>
+                <option value="Small mammal" data-i18n="modal.speciesSmallMammal">Small mammal</option>
+                <option value="Reptile" data-i18n="modal.speciesReptile">Reptile</option>
+                <option value="Other" data-i18n="modal.speciesOther">Other</option>
               </select>
             </div>
             <div class="form-group">
@@ -1033,7 +1055,7 @@
               <div class="guide-step-main">
                 <div class="guide-step-title" data-i18n="guide.phase1Step1Title">Register Pet & Attach NFC Tag</div>
                 <div class="guide-step-text" data-i18n="guide.phase1Step1Text">
-                  Add your dog or cat into the PawTrack registry with full details: breed, age, distinct color markings, medical notes, and a clear front-facing photo. Attach a PawTrack NFC collar tag to your pet.
+                  Add your pet into the PawTrack registry with full details: breed, age, distinct color markings, medical notes, and a clear front-facing photo. Attach a PawTrack NFC collar tag to your pet.
                 </div>
                 <div class="guide-step-tip">
                   <i data-lucide="info" style="width:14px; height:14px; color:#38bdf8; flex-shrink:0;"></i>
@@ -1443,6 +1465,10 @@
                   <select class="form-control" id="report-found-species" required style="padding: 7px 10px; font-size: 0.85rem;" onchange="const b = document.getElementById('report-found-breed'); if(this.value==='Cat') b.value='Domestic Shorthair'; else if(this.value==='Dog') b.value='Aspin';">
                     <option value="Dog" data-i18n="report.speciesDog">Dog</option>
                     <option value="Cat" data-i18n="report.speciesCat">Cat</option>
+                    <option value="Bird" data-i18n="report.speciesBird">Bird</option>
+                    <option value="Rabbit" data-i18n="report.speciesRabbit">Rabbit</option>
+                    <option value="Small mammal" data-i18n="report.speciesSmallMammal">Small mammal</option>
+                    <option value="Reptile" data-i18n="report.speciesReptile">Reptile</option>
                     <option value="Other" data-i18n="report.speciesOther">Other Pet</option>
                   </select>
                 </div>
@@ -1465,7 +1491,7 @@
 
               <div class="form-group" style="margin-bottom: 8px;">
                 <label class="form-label" style="font-size: 0.78rem;" for="report-found-caption">Post caption <span style="font-weight:400; color:var(--text-muted);">(optional)</span></label>
-                <textarea class="form-control" id="report-found-caption" rows="2" maxlength="300" placeholder="e.g. Found this friendly dog near the park entrance. Is he yours?" style="padding: 7px 10px; font-size: 0.85rem; resize: vertical;"></textarea>
+                <textarea class="form-control" id="report-found-caption" rows="2" maxlength="300" placeholder="e.g. Found this friendly pet near the park entrance. Is it yours?" style="padding: 7px 10px; font-size: 0.85rem; resize: vertical;"></textarea>
                 <small style="font-size: 0.72rem; color: var(--text-muted);">Shown with your post on the Sightings page.</small>
               </div>
 
@@ -1528,6 +1554,10 @@
                     <option value="">Choose one</option>
                     <option value="Dog">Dog</option>
                     <option value="Cat">Cat</option>
+                    <option value="Bird">Bird</option>
+                    <option value="Rabbit">Rabbit</option>
+                    <option value="Small mammal">Small mammal</option>
+                    <option value="Reptile">Reptile</option>
                     <option value="Other">Other</option>
                   </select>
                 </div>
@@ -1785,7 +1815,7 @@
           <div class="form-group">
             <textarea id="sighting-notes-input" rows="2" placeholder="e.g. Pet seemed nervous, moving toward the gate, wearing a faded brown collar..."></textarea>
             <label class="form-label" for="sighting-caption-input" style="margin-top:10px; font-size:0.8rem;">Post caption <em class="sighting-tag is-optional">Optional</em></label>
-            <textarea id="sighting-caption-input" rows="2" maxlength="300" placeholder="Words for your post, e.g. Saw this dog by the gate. Does anyone know him?"></textarea>
+            <textarea id="sighting-caption-input" rows="2" maxlength="300" placeholder="Words for your post, e.g. Saw this pet by the gate. Does anyone know them?"></textarea>
             <div class="sighting-chips" role="group" aria-label="Quick notes">
               <button type="button" class="sighting-chip" onclick="window.reportManager.addSightingNote('Looked healthy and calm.')">Healthy and calm</button>
               <button type="button" class="sighting-chip" onclick="window.reportManager.addSightingNote('Seemed scared or nervous.')">Scared</button>
@@ -1899,7 +1929,7 @@
 
             <div class="verification-detail-row">
               <span class="verification-detail-label">Species & Breed (as reported)</span>
-              <span class="verification-detail-val" id="verify-sight-breed">Dog</span>
+              <span class="verification-detail-val" id="verify-sight-breed">Pet</span>
             </div>
             <div class="verification-detail-row">
               <span class="verification-detail-label">Spotted Location</span>
@@ -2990,6 +3020,7 @@
   <script src="js/nfc-reminders.js"></script>
   <script src="js/views/my-violations-view.js"></script>
   <script src="js/views/settings-view.js"></script>
+  <script src="js/views/chat-view.js"></script>
   <script src="js/report-manager.js"></script>
   <script src="js/penalty-prompt.js"></script>
   <script src="js/app.js"></script>

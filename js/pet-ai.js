@@ -1,7 +1,58 @@
 /**
- * AI-written pet descriptions. The text comes from the generate-pet-description Supabase Edge Function,
- * which asks Google Gemini; the API key never reaches the browser.
+ * Pet photo analysis and descriptions. Gemini reads the image through Supabase Edge Functions,
+ * and the browser ranks missing pets from the observed traits.
  */
+
+const PHOTO_MATCH_WEIGHTS = { color: 40, breed: 30, markings: 20, pattern: 10 };
+const MIN_PHOTO_MATCH_SCORE = 30;
+const PHOTO_COLORS = 'black|white|brown|grey|gray|golden|gold|cream|orange|ginger|tan|yellow|red|chocolate|rust|blue|green|pink|purple|silver|beige';
+const PHOTO_COLOR_ALIASES = { gray: 'grey', gold: 'golden', ginger: 'orange', chocolate: 'brown' };
+const PHOTO_PATTERN_ALIASES = {
+  solid: 'solid', spotted: 'spotted', speckled: 'spotted', patched: 'patched', patchy: 'patched',
+  striped: 'striped', tabby: 'striped', tricolor: 'tricolor', calico: 'calico', brindle: 'brindle',
+  bicolor: 'bicolor', merle: 'merle', tortoiseshell: 'tortoiseshell', tuxedo: 'tuxedo'
+};
+const PHOTO_ACCESSORIES = 'collar|tag|harness|leash|bandana|bow';
+const photoColorWords = new RegExp(`\\b(?:${PHOTO_COLORS})\\b`, 'g');
+const photoAccessoryColors = new RegExp(`\\b(?:${PHOTO_COLORS})(?:(?: and | )(?:${PHOTO_COLORS}))* (?:${PHOTO_ACCESSORIES})s?\\b`, 'g');
+const photoMarkingPhrases = new RegExp(
+  `\\b(?:${PHOTO_COLORS}|floppy|upright|curled|cropped|docked|left|right) (?:${PHOTO_ACCESSORIES}|patch(?:es)?|spot|ear|tail|paw|chest|muzzle|face|nose)s?\\b|\\b(?:scars?|socks|freckles)\\b`, 'g'
+);
+
+function photoTraitText(value) {
+  return String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+}
+
+// Shared values divided by all observed values. Extra colors and conflicting traits reduce the score.
+function photoTraitOverlap(observed, reported) {
+  const shared = [...observed].filter((value) => reported.has(value)).length;
+  return shared ? shared / new Set([...observed, ...reported]).size : 0;
+}
+
+function photoColors(text) {
+  return new Set((text.replace(photoAccessoryColors, '').match(photoColorWords) || [])
+    .map((color) => PHOTO_COLOR_ALIASES[color] || color));
+}
+
+function photoBreed(text) {
+  if (text === 'n a' || /\b(?:unknown|unsure|unidentified)\b/.test(text)) return new Set();
+  const words = text.split(' ').filter((word) => word && !/^(breed|the|other|none|na)$/.test(word))
+    .map((word) => /^(mixed|cross|crossbreed)$/.test(word) ? 'mix' : word);
+  return words.some((word) => word !== 'mix') ? new Set(words) : new Set();
+}
+
+function photoPatterns(text) {
+  return new Set(text.replace(/\b(tri|bi) (?:color|colour)\b/g, '$1color').split(' ')
+    .filter((word) => Object.hasOwn(PHOTO_PATTERN_ALIASES, word)).map((word) => PHOTO_PATTERN_ALIASES[word]));
+}
+
+function photoMarkings(text) {
+  const visible = text.replace(/\b(?:no|without) (?:visible )?(?:scars?|socks|freckles)\b/g, '');
+  return new Set((visible.match(photoMarkingPhrases) || []).map((marking) => marking
+    .replace(photoColorWords, (color) => PHOTO_COLOR_ALIASES[color] || color)
+    .replace(/\b(ear|tail|paw|spot|tag|collar|bandana|bow|scar)s\b/g, '$1')
+    .replace(/\bpatches\b/g, 'patch')));
+}
 
 class PetAI {
   client() {
@@ -152,19 +203,44 @@ class PetAI {
     return parts.join(' ').slice(0, 600);
   }
 
-  // Ranks the pets already reported missing against what the photo shows. Their descriptions are part of the comparison.
-  matchMissing(traits, limit = 3) {
+  matchMissing(traits, limit = 3, { includeOwn = false } = {}) {
     const store = window.pawStore;
-    const missing = store.getMapPets().filter((p) => p.status === 'lost' && !store.isMyPet(p));
-    const colors = (traits.colors || []).join(' ');
-    const sighting = {
-      species: traits.species && traits.species !== 'Unknown' ? traits.species : '',
-      breed: traits.breed && traits.breed !== 'Unknown' ? traits.breed : '',
-      color: [colors, traits.coatPattern || ''].join(' ').trim(),
-      distinctMarkings: traits.distinctMarkings || '',
-      comments: `${colors} ${traits.distinctMarkings || ''}`.trim()
+    const missing = store.getMapPets().filter((pet) => pet.status === 'lost' && (includeOwn || !store.isMyPet(pet)));
+    if (traits.isPet === false) return { matches: [], checked: missing.length };
+
+    const species = window.PawSpecies.normalize(traits.species);
+    const colors = photoTraitText(Array.isArray(traits.colors) ? traits.colors.join(' ') : '');
+    const breed = photoTraitText(traits.breed);
+    const observed = {
+      color: photoColors(colors),
+      breed: photoBreed(breed),
+      markings: photoMarkings(photoTraitText(traits.distinctMarkings)),
+      pattern: photoPatterns(`${colors} ${photoTraitText(traits.coatPattern)}`)
     };
-    const matches = store.runAiPetMatch(sighting, missing).filter((m) => m.confidenceScore > 0).slice(0, limit);
+
+    const matches = missing.flatMap((pet) => {
+      const reportedSpecies = window.PawSpecies.normalize(pet.species);
+      if (species !== 'Other' && reportedSpecies !== 'Other' && species !== reportedSpecies) return [];
+
+      const color = photoTraitText(pet.coatColor || pet.color);
+      const description = photoTraitText(pet.description);
+      const appearance = `${color} ${description}`;
+      const reportedColors = photoColors(color);
+      const reportedBreed = photoBreed(photoTraitText(pet.breed));
+      const breedSimilarity = !reportedBreed.size && observed.breed.size && ` ${description} `.includes(` ${breed} `)
+        ? .75 : photoTraitOverlap(observed.breed, reportedBreed);
+      const similarity = {
+        color: photoTraitOverlap(observed.color, reportedColors.size ? reportedColors : photoColors(description)),
+        breed: breedSimilarity,
+        markings: photoTraitOverlap(observed.markings, photoMarkings(appearance)),
+        pattern: photoTraitOverlap(observed.pattern, photoPatterns(appearance))
+      };
+      // Keep the denominator fixed. Unknown traits earn zero points, so one known trait cannot score 100%.
+      const score = Object.entries(PHOTO_MATCH_WEIGHTS).reduce((sum, [trait, weight]) => sum + similarity[trait] * weight, 0);
+      return score >= MIN_PHOTO_MATCH_SCORE ? [{ pet, score }] : [];
+    }).sort((a, b) => b.score - a.score).slice(0, limit)
+      .map(({ pet, score }) => ({ pet, confidenceScore: Math.round(score) }));
+
     return { matches, checked: missing.length };
   }
 

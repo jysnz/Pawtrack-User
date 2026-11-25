@@ -52,6 +52,7 @@ breakpoints.forEach(bp => {
 console.log('\n--- 3. Testing HTML View Generation ---');
 // Mock store
 global.window = global;
+require(require('path').join(__dirname, '..', '..', 'js', 'species.js'));
 global.window.adminStore = {
   getPets: () => [
     { id: 'pet-1', name: 'Luna', species: 'Dog', breed: 'Husky', status: 'safe', rfidTag: 'RFID-1001', microchipNo: '985141001', owner: { name: 'Maria Santos', phone: '+63 917 123 4567' }, registeredDate: '2026-08-20' }

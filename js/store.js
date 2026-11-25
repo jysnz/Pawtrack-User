@@ -883,7 +883,7 @@ class Store {
     const photoUrl = await this.uploadPhoto(s.photoUrl || s.photo, 'sightings');
     const { data: saved, error } = await sb.from('community_sightings').insert({
       missing_pet_id: reportId,
-      species: ['Dog', 'Cat', 'Other'].includes(s.species) ? s.species : 'Other',
+      species: window.PawSpecies.normalize(s.species),
       breed: s.breed || null,
       color: s.color || null,
       photo_url: photoUrl,
@@ -1235,6 +1235,7 @@ class Store {
       description: r.description || '', // what the reporter wrote: breed or mix, size, colours, collar
       gender: r.gender || '',
       color: r.description || r.color || '',
+      coatColor: r.color || '',
       status: 'lost',
       photoUrl: r.photoUrl || r.photo,
       photo: r.photo || r.photoUrl,
@@ -1329,7 +1330,7 @@ class Store {
     const { data, error } = await sb.from('missing_pets').insert({
       pet_id: petId,
       pet_name: String(reportData.petName || 'Missing pet').slice(0, 80),
-      species: ['Dog', 'Cat', 'Other'].includes(reportData.species) ? reportData.species : 'Other',
+      species: window.PawSpecies.normalize(reportData.species),
       breed: reportData.breed || null,
       gender: ['Male', 'Female'].includes(reportData.gender) ? reportData.gender : null,
       color: reportData.color || null,
@@ -1565,7 +1566,7 @@ class Store {
       } else if ((sighting.species || '').toLowerCase() === (pet.species || '').toLowerCase()) {
         speciesScore = 100;
       } else {
-        speciesScore = 0; // completely different species (e.g. Dog vs Cat)
+        speciesScore = 0; // completely different species (e.g. Dog vs Bird)
       }
 
       if (speciesScore === 0) {

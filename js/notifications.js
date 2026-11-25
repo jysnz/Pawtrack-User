@@ -831,7 +831,7 @@ class NotificationManager {
     if (pet) {
       if (verifyRegPhoto) verifyRegPhoto.src = pet.photoUrl;
       if (verifyRegName) verifyRegName.textContent = pet.name;
-      if (verifyRegBreed) verifyRegBreed.textContent = `${pet.species || 'Dog'} · ${pet.breed || 'Breed'}`;
+      if (verifyRegBreed) verifyRegBreed.textContent = `${pet.species || 'Pet'} · ${pet.breed || 'Breed'}`;
       if (verifyRegColor) verifyRegColor.textContent = `${pet.gender || 'Unknown'} · ${pet.color || 'Standard markings'}`;
       if (verifyRegNfc) verifyRegNfc.textContent = pet.nfcTag ? `NFC: ${pet.nfcTag}` : 'No NFC recorded';
       if (verifyRegLastSeen) verifyRegLastSeen.textContent = pet.lastSeenLocation || (pet.owner ? pet.owner.address : 'Metro Manila');
@@ -839,7 +839,7 @@ class NotificationManager {
     } else {
       if (verifyRegPhoto) verifyRegPhoto.src = 'https://images.unsplash.com/photo-1543466835-00a7907e9de1?auto=format&fit=crop&w=400&q=80';
       if (verifyRegName) verifyRegName.textContent = sighting.breed || 'Registered Pet';
-      if (verifyRegBreed) verifyRegBreed.textContent = `${sighting.species || 'Dog'} · ${sighting.breed || 'Mixed'}`;
+      if (verifyRegBreed) verifyRegBreed.textContent = `${sighting.species || 'Pet'} · ${sighting.breed || 'Mixed'}`;
       if (verifyRegColor) verifyRegColor.textContent = sighting.color || 'Observed coat color';
       if (verifyRegNfc) verifyRegNfc.textContent = 'NFC verification pending';
       if (verifyRegLastSeen) verifyRegLastSeen.textContent = 'Community Alert';

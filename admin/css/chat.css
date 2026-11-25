@@ -1,0 +1,85 @@
+.admin-chat {
+  --chat-width: 520px;
+  --chat-height: 680px;
+  --primary: var(--brand-terracotta);
+  --primary-hover: var(--brand-terracotta-hover);
+  --primary-light: var(--brand-terracotta-subtle);
+  --bg-surface: var(--bg-card);
+  --bg-surface-elevated: var(--bg-card-subtle);
+  --bg-main: var(--bg-input);
+  --border-glass: var(--border-main);
+  --border-subtle: var(--border-light);
+  --danger-light: var(--color-red-light);
+  --text-main: var(--ink-primary);
+  --text-muted: var(--ink-secondary);
+  --text-dim: var(--ink-secondary);
+  --text-inverse: var(--ink-inverse);
+  --font-heading: var(--font-sans);
+  --font-body: var(--font-sans);
+  --radius-xl: var(--radius-lg);
+  z-index: 800;
+  color: var(--ink-primary);
+}
+
+html[data-theme="dark"] .admin-chat {
+  --text-inverse: var(--bg-app);
+}
+
+.admin-chat .chat-header {
+  padding: 12px 8px 12px 16px;
+  background: var(--bg-card-subtle);
+}
+
+.admin-chat .chat-header h2 {
+  font-size: 16px;
+}
+
+.admin-chat .chat-header p,
+.admin-chat .chat-privacy {
+  font-size: 12px;
+}
+
+.admin-chat .chat-transcript {
+  min-height: 0;
+  padding: 16px;
+}
+
+.admin-chat .chat-empty h3 {
+  font-size: 22px;
+}
+
+.admin-chat .chat-suggestions button {
+  padding: 10px 12px;
+  font-size: 14px;
+}
+
+.admin-chat .chat-message {
+  font-size: 15px;
+}
+
+.admin-chat .chat-form {
+  padding: 12px 16px;
+}
+
+.admin-chat .chat-composer textarea {
+  font-size: 16px;
+}
+
+.admin-chat .chat-composer textarea::placeholder {
+  color: var(--text-muted);
+}
+
+@media (max-height: 620px) {
+  .admin-chat .chat-transcript {
+    padding-block: 12px;
+  }
+
+  .admin-chat .chat-empty {
+    align-content: safe center;
+  }
+
+  .admin-chat .chat-empty h3 {
+    font-size: 18px;
+  }
+}
+

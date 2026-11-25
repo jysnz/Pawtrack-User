@@ -18,7 +18,8 @@ const STORAGE_KEYS = {
   SHELTER_EXTRAS: 'pawtrack_shelter_extras',
   TICKETS: 'pawtrack_penalty_tickets',
   EXTRA_MAINS: 'pawtrack_extra_main_ids',
-  CLAIMS: 'pawtrack_impound_claims'
+  CLAIMS: 'pawtrack_impound_claims',
+  REHAB: 'pawtrack_rehab_cases'
 };
 
 // Bumped when the cached lists change meaning; older caches are cleared on load (v1: Supabase replaces the
@@ -59,7 +60,7 @@ class AdminStore {
     // Lists cached from the old local JSON database are cleared once; Supabase fills them again
     if (localStorage.getItem('pawtrack_admin_data_source') !== DATA_SOURCE_VERSION) {
       [STORAGE_KEYS.PETS, STORAGE_KEYS.IMPOUNDMENTS, STORAGE_KEYS.NOTIFICATIONS, STORAGE_KEYS.SHELTERS,
-        STORAGE_KEYS.RFID_TAGS, STORAGE_KEYS.SIGHTINGS, STORAGE_KEYS.CASES, STORAGE_KEYS.TICKETS].forEach((key) => localStorage.setItem(key, '[]'));
+        STORAGE_KEYS.RFID_TAGS, STORAGE_KEYS.SIGHTINGS, STORAGE_KEYS.CASES, STORAGE_KEYS.TICKETS, STORAGE_KEYS.REHAB].forEach((key) => localStorage.setItem(key, '[]'));
       localStorage.setItem('pawtrack_admin_data_source', DATA_SOURCE_VERSION);
     }
     // Safe initialization: Only set defaults if keys do not exist in localStorage
@@ -284,7 +285,7 @@ class AdminStore {
         }
         return { data: rows };
       };
-      const [pets, reports, sightings, impounded, shelters, tags, notifs, tickets, extraMains, claims] = await Promise.all([
+      const [pets, reports, sightings, impounded, shelters, tags, notifs, tickets, extraMains, claims, rehab] = await Promise.all([
         pageAll('registered_pets', 'created_at'),
         pageAll('missing_pets', 'created_at'),
         sb.from('community_sightings').select('*').order('created_at', { ascending: false }).limit(1000),
@@ -294,7 +295,8 @@ class AdminStore {
         sb.from('notifications').select('*').order('created_at', { ascending: false }).limit(300),
         pageAll('penalty_tickets', 'created_at'),
         sb.from('facility_extra_mains').select('shelter_id'),
-        sb.from('impound_claims').select('*').order('created_at', { ascending: false }).limit(500)
+        sb.from('impound_claims').select('*').order('created_at', { ascending: false }).limit(500),
+        pageAll('rehab_cases', 'started_at')
       ].map((p) => Promise.resolve(p).catch((error) => ({ error }))));
 
       // Every core list failed: the database cannot be reached. Keep what we have, show it, and back off.
@@ -331,6 +333,11 @@ class AdminStore {
       put(STORAGE_KEYS.CLAIMS, claims && !claims.error ? (claims.data || []).map((r) => this.fromClaimRow(r)) : []);
       // The ticket table may not exist yet on an older database: then there are simply no tickets
       put(STORAGE_KEYS.TICKETS, tickets.error ? [] : (tickets.data || []).map((t) => this.fromTicketRow(t)));
+      // Rehabilitation cases: a database without the table simply has none, and the page says so
+      const wasRehabReady = this.rehabReady;
+      this.rehabReady = !!rehab && !rehab.error;
+      if (wasRehabReady !== this.rehabReady) changed = true; // the Rehabilitation page redraws once it knows
+      put(STORAGE_KEYS.REHAB, this.rehabReady ? (rehab.data || []).map((r) => this.fromRehabRow(r)) : []);
       // Facility settings that only newer databases have (the penalty amount): used to show or hide those fields
       this.penaltyReady = !shelters.error && (shelters.data || []).some((r) => 'penalty_php' in r);
       // Pickup pins: only sent once the database has the columns (checked once)
@@ -443,7 +450,7 @@ class AdminStore {
     return {
       id: s.id,
       missing_report_id: s.missing_pet_id || null,
-      species: s.species || 'Other',
+      species: window.PawSpecies.normalize(s.species),
       breed: s.breed || '',
       color: s.color || '',
       location: s.location,
@@ -494,6 +501,7 @@ class AdminStore {
       claimDeadline: i.claim_deadline,
       status: i.status === 'in_holding' ? 'active_impounded' : i.status,
       closedAt: i.closed_at,
+      euthanasia: i.status === 'euthanized' ? { reason: i.euthanasia_reason || '', vet: i.euthanasia_vet || '', license: i.euthanasia_license || '', notes: i.euthanasia_notes || '', at: i.euthanized_at || i.closed_at } : null,
       notificationSent: true
     };
   }
@@ -525,6 +533,17 @@ class AdminStore {
       cityPlaceId: s.city_place_id || '',
       cityBounds: s.city_bounds || null,
       coverage: Array.isArray(s.coverage_barangays) ? s.coverage_barangays : []
+    };
+  }
+
+  fromRehabRow(r) {
+    return {
+      id: r.id, impoundId: r.impound_id, shelterId: r.shelter_id, stage: r.stage === 'assessment' ? 'medical' : r.stage, // the assessment stage was removed
+      checklist: r.checklist && typeof r.checklist === 'object' ? r.checklist : {},
+      notes: r.stage_notes && typeof r.stage_notes === 'object' ? r.stage_notes : {},
+      withdrawnReason: r.withdrawn_reason || '',
+      condition: { overall: r.condition_overall || 'stable', tags: Array.isArray(r.condition_tags) ? r.condition_tags : [], note: r.condition_note || '' },
+      startedAt: r.started_at, stageChangedAt: r.stage_changed_at, readyAt: r.ready_at || null, updatedAt: r.updated_at
     };
   }
 
@@ -707,7 +726,7 @@ class AdminStore {
     const owner = petData.owner || {};
     const row = {
       name: petData.name,
-      species: ['Dog', 'Cat', 'Other'].includes(petData.species) ? petData.species : 'Other',
+      species: window.PawSpecies.normalize(petData.species),
       breed: petData.breed || null,
       gender: ['Male', 'Female'].includes(petData.gender) ? petData.gender : null,
       color: petData.color || null,
@@ -825,7 +844,7 @@ class AdminStore {
       pet_id: this.isDbId(record.petId) ? record.petId : null,
       shelter_id: record.shelterId,
       pet_name: record.petName || 'Unknown pet',
-      species: ['Dog', 'Cat', 'Other'].includes(record.species) ? record.species : 'Other',
+      species: window.PawSpecies.normalize(record.species),
       breed: record.breed || null,
       photo_url: /^https:\/\//.test(record.photoUrl || '') ? record.photoUrl : null,
       nfc_tag: record.rfidTag || null,
@@ -871,6 +890,52 @@ class AdminStore {
       this.notify('impoundment_claimed');
     }
     return imp;
+  }
+
+  // ----- Euthanasia of an animal nobody claimed during its claim period (the database enforces the same rules) -----
+  // '' when it may be euthanized, otherwise the reason it may not (shown to the admin)
+  euthanasiaBlock(imp) {
+    if (!imp) return 'Animal not found.';
+    if (imp.status === 'euthanized') return 'Already euthanized.';
+    if (imp.status !== 'active_impounded' && imp.status !== 'forfeited') return 'Only an animal that was never claimed can be euthanized.';
+    const deadline = new Date(imp.claimDeadline).getTime();
+    if (imp.status === 'active_impounded' && Number.isFinite(deadline) && deadline > Date.now()) {
+      return `Available after the claim period ends, ${new Date(deadline).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}.`;
+    }
+    if (imp.transferStatus === 'pending') return 'It is being moved to another facility.';
+    if (this.getClaims().some((c) => c.impoundId === imp.id && c.status === 'pending')) return 'An owner has a claim waiting on it. Decide the claim first.';
+    const rehab = this.getRehabForImpound ? this.getRehabForImpound(imp.id) : null;
+    if (rehab && rehab.stage !== 'withdrawn') return 'It is in rehabilitation. Withdraw it first.';
+    return '';
+  }
+
+  // details: { reason, vet, license, notes, at (ISO) }. Waits for the database: it cannot be undone, so the screen
+  // only changes once the record is really saved. Resolves true on success.
+  async euthanizeImpoundment(impoundId, details) {
+    const imp = this.getImpoundmentById(impoundId);
+    const blocked = this.euthanasiaBlock(imp);
+    if (blocked) { this.dbError('Could not record the euthanasia', { message: blocked }); return false; }
+    if (!this.isDbId(impoundId)) { this.dbError('Could not record the euthanasia', { message: 'this case is not saved in the database yet' }); return false; }
+    const at = details.at || new Date().toISOString();
+    const sb = await this.waitForClient(5000);
+    if (!sb) { this.dbError('Could not record the euthanasia', { message: 'no connection to the database' }); return false; }
+    const { error } = await sb.from('impounded_pets').update({
+      status: 'euthanized', closed_at: at, euthanized_at: at,
+      euthanasia_reason: details.reason, euthanasia_vet: (details.vet || '').trim(),
+      euthanasia_license: (details.license || '').trim() || null, euthanasia_notes: (details.notes || '').trim() || null
+    }).eq('id', impoundId);
+    if (error) { this.dbError('Could not record the euthanasia', error); return false; }
+    const list = this.getImpoundments();
+    const rec = list.find((i) => i.id === impoundId);
+    if (rec) {
+      rec.status = 'euthanized'; rec.closedAt = at;
+      rec.euthanasia = { reason: details.reason, vet: (details.vet || '').trim(), license: (details.license || '').trim(), notes: (details.notes || '').trim(), at };
+      localStorage.setItem(STORAGE_KEYS.IMPOUNDMENTS, JSON.stringify(list));
+    }
+    this.logAction('Euthanasia recorded', `${imp.petName} (${imp.species}) was euthanized by ${(details.vet || '').trim()}. Reason: ${details.reason}`);
+    this.notify('impoundment_euthanized');
+    this.syncFromSupabase().catch(() => {});
+    return true;
   }
 
   // Removes an impound case for good (its penalty tickets and claims go with it in the database)
@@ -1131,6 +1196,78 @@ class AdminStore {
   }
 
   // ----- Penalty tickets: owners of missing pets pay a penalty to the main facility -----
+  // ----- Rehabilitation: unclaimed animals prepared for adoption in stages (see supabase/migrations/20261146_rehabilitation.sql) -----
+  getRehabCases() {
+    try {
+      const list = JSON.parse(localStorage.getItem(STORAGE_KEYS.REHAB));
+      return Array.isArray(list) ? list : [];
+    } catch {
+      return [];
+    }
+  }
+
+  getRehabForImpound(impoundId) {
+    return this.getRehabCases().find((c) => c.impoundId === impoundId) || null;
+  }
+
+  // Puts an animal on the rehabilitation track, at the first stage
+  // condition: { overall, tags, note }, what the admin says is wrong (or not) with the animal, asked before it starts
+  async startRehab(impoundId, condition = {}) {
+    const imp = this.getImpoundments().find((i) => i.id === impoundId);
+    if (!imp || !this.isDbId(impoundId)) return null;
+    if (this.getRehabForImpound(impoundId)) return this.getRehabForImpound(impoundId);
+    const rows = await this.write('Could not start rehabilitation', (sb) => sb.from('rehab_cases').insert({ impound_id: impoundId, condition_overall: condition.overall || 'stable', condition_tags: condition.tags || [], condition_note: (condition.note || '').trim() || null }).select('*'));
+    if (!rows || !rows[0]) return null;
+    const created = this.fromRehabRow(rows[0]);
+    localStorage.setItem(STORAGE_KEYS.REHAB, JSON.stringify([created, ...this.getRehabCases().filter((c) => c.id !== created.id)]));
+    this.logAction('Rehabilitation started', `${imp.petName} (${imp.species}) entered rehabilitation. Condition: ${created.condition.overall}${created.condition.tags.length ? ` (${created.condition.tags.join(', ')})` : ''}`);
+    this.notify('rehab_started');
+    return created;
+  }
+
+  // patch: { stage?, checklist?, notes?, withdrawnReason? }. The screen updates at once; the database confirms
+  saveRehab(caseId, patch) {
+    const list = this.getRehabCases();
+    const c = list.find((x) => x.id === caseId);
+    if (!c) return null;
+    const row = {};
+    if (patch.stage !== undefined) { c.stage = patch.stage; row.stage = patch.stage; c.stageChangedAt = new Date().toISOString(); if (patch.stage !== 'withdrawn') c.withdrawnReason = ''; }
+    if (patch.checklist !== undefined) { c.checklist = patch.checklist; row.checklist = patch.checklist; }
+    if (patch.notes !== undefined) { c.notes = patch.notes; row.stage_notes = patch.notes; }
+    if (patch.condition !== undefined) { c.condition = patch.condition; row.condition_overall = patch.condition.overall; row.condition_tags = patch.condition.tags || []; row.condition_note = (patch.condition.note || '').trim() || null; }
+    if (patch.withdrawnReason !== undefined) { c.withdrawnReason = patch.withdrawnReason; row.withdrawn_reason = patch.withdrawnReason || null; }
+    if (c.stage === 'ready') c.readyAt = c.readyAt || new Date().toISOString(); else c.readyAt = null;
+    localStorage.setItem(STORAGE_KEYS.REHAB, JSON.stringify(list));
+    if (this.isDbId(caseId)) this.write('Could not save the rehabilitation case', (sb) => sb.from('rehab_cases').update(row).eq('id', caseId));
+    if (patch.stage !== undefined) {
+      const imp = this.getImpoundments().find((i) => i.id === c.impoundId);
+      this.logAction('Rehabilitation stage', `${imp ? imp.petName : 'Animal'} moved to ${patch.stage}`);
+    }
+    this.notify('rehab_updated');
+    return c;
+  }
+
+  // Sets an animal as rehabilitated. The database only lets "ready" follow final clearance, so it goes through that
+  // step first. Resolves true when the database accepted it.
+  async finishRehab(caseId) {
+    const list = this.getRehabCases();
+    const c = list.find((x) => x.id === caseId);
+    if (!c || !this.isDbId(caseId)) return false;
+    const sb = await this.waitForClient(5000);
+    if (!sb) { this.dbError('Could not mark the animal as rehabilitated', { message: 'no connection to the database' }); return false; }
+    let { error } = await sb.from('rehab_cases').update({ stage: 'clearance' }).eq('id', caseId);
+    if (!error) ({ error } = await sb.from('rehab_cases').update({ stage: 'ready' }).eq('id', caseId));
+    if (error) { this.dbError('Could not mark the animal as rehabilitated', error); return false; }
+    c.stage = 'ready';
+    c.readyAt = c.readyAt || new Date().toISOString();
+    localStorage.setItem(STORAGE_KEYS.REHAB, JSON.stringify(list));
+    const imp = this.getImpoundments().find((i) => i.id === c.impoundId);
+    this.logAction('Rehabilitated', `${imp ? imp.petName : 'Animal'} finished rehabilitation and is ready for adoption`);
+    this.notify('rehab_ready');
+    this.syncFromSupabase().catch(() => {});
+    return true;
+  }
+
   getTickets() {
     try {
       const list = JSON.parse(localStorage.getItem(STORAGE_KEYS.TICKETS));
@@ -1523,7 +1660,7 @@ class AdminStore {
     const statuses = ['possible_sighting', 'confirmed_sighting', 'dismissed', 'archived'];
     const row = {
       missing_pet_id: this.isDbId(sightingData.missing_report_id) ? sightingData.missing_report_id : null,
-      species: ['Dog', 'Cat', 'Other'].includes(sightingData.species) ? sightingData.species : 'Other',
+      species: window.PawSpecies.normalize(sightingData.species),
       breed: sightingData.breed || null,
       color: sightingData.color || null,
       photo_url: /^https:\/\//.test(sightingData.photoUrl || '') ? sightingData.photoUrl : null,
@@ -1589,7 +1726,7 @@ class AdminStore {
   // database is deleted.
   resetToDefaults() {
     [STORAGE_KEYS.PETS, STORAGE_KEYS.IMPOUNDMENTS, STORAGE_KEYS.NOTIFICATIONS, STORAGE_KEYS.SHELTERS,
-      STORAGE_KEYS.RFID_TAGS, STORAGE_KEYS.SIGHTINGS, STORAGE_KEYS.CASES, STORAGE_KEYS.TICKETS].forEach((key) => localStorage.setItem(key, '[]'));
+      STORAGE_KEYS.RFID_TAGS, STORAGE_KEYS.SIGHTINGS, STORAGE_KEYS.CASES, STORAGE_KEYS.TICKETS, STORAGE_KEYS.REHAB].forEach((key) => localStorage.setItem(key, '[]'));
     localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(SEED_SETTINGS));
     this.logAction('Reset Console', 'Cleared this device\'s cached data and settings; reloading from Supabase.');
     this.notify('factory_reset');

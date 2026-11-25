@@ -13,7 +13,7 @@ window.HeatmapView = {
   // State filters
   selectedDateRange: '30d', // 'all' | 'today' | '7d' | '30d' | 'custom'. Opens on the last 30 days: old cases are history, not today's hotspots
   selectedLayer: 'roadmap', // 'roadmap' | 'satellite' | 'terrain'
-  selectedAnimal: 'all', // 'all' | 'dog' | 'cat' | 'other'
+  selectedAnimal: 'all', // 'all' or a species key from js/species.js
   selectedStatus: 'all', // 'all' | 'lost' | 'sighting' | 'found' | 'impounded'
   selectedDistrict: 'all', // 'all' | 'District 1' | 'District 2' | ...
   searchQuery: '',
@@ -260,7 +260,7 @@ window.HeatmapView = {
         date: when ? when.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—',
         time: when ? when.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : '',
         hour,
-        avatar: species === 'Dog' ? '🐕' : species === 'Cat' ? '🐈' : '🐾',
+        avatar: window.PawSpecies.icon(species),
         color: base.status === 'lost' ? '#ea580c' : '#2563eb'
       };
     };
@@ -316,12 +316,8 @@ window.HeatmapView = {
   getFilteredIncidents() {
     let list = this.applyDateRange([...this.incidentsData]);
 
-    if (this.selectedAnimal === 'dog') {
-      list = list.filter(i => (i.species || '').toLowerCase() === 'dog');
-    } else if (this.selectedAnimal === 'cat') {
-      list = list.filter(i => (i.species || '').toLowerCase() === 'cat');
-    } else if (this.selectedAnimal === 'other') {
-      list = list.filter(i => !['dog', 'cat'].includes((i.species || '').toLowerCase()));
+    if (this.selectedAnimal && this.selectedAnimal !== 'all') {
+      list = list.filter(i => window.PawSpecies.normalize(i.species) === this.selectedAnimal);
     }
 
     if (this.selectedStatus && this.selectedStatus !== 'all') {
@@ -378,8 +374,6 @@ window.HeatmapView = {
         return {
           barangay: name,
           city: cityLabel || (district === 'Outside QC' ? 'Outside Quezon City' : `Quezon City (${district})`),
-          dogs: items.filter(i => (i.species || '').toLowerCase() === 'dog').length,
-          cats: items.filter(i => (i.species || '').toLowerCase() === 'cat').length,
           riskLevel: level[0], riskClass: level[1], totalReports: total,
           lat: items.reduce((a, i) => a + i.lat, 0) / total,
           lng: items.reduce((a, i) => a + i.lng, 0) / total
@@ -480,7 +474,7 @@ window.HeatmapView = {
           <div class="hm-field">
             <span class="hm-label">Animal</span>
             <select id="select-animal-filter" class="hm-select" aria-label="Animal">
-              ${[['all', 'All animals'], ['dog', 'Dogs'], ['cat', 'Cats'], ['other', 'Other']].map(([v, l]) => `<option value="${v}" ${this.selectedAnimal === v ? 'selected' : ''}>${l}</option>`).join('')}
+              ${window.PawSpecies.filterOptions('all').map(([v, l]) => `<option value="${v}" ${this.selectedAnimal === v ? 'selected' : ''}>${l}</option>`).join('')}
             </select>
           </div>
           <div class="hm-field">
@@ -567,8 +561,8 @@ window.HeatmapView = {
     const total = filtered.length;
     const hotspots = this.getHotspots(filtered);
     const lost = filtered.filter(i => i.status === 'lost');
-    const dogs = lost.filter(i => (i.species || '').toLowerCase() === 'dog').length;
-    const cats = lost.filter(i => (i.species || '').toLowerCase() === 'cat').length;
+    const lostMix = window.PawSpecies.count(lost).sort((a, b) => b.n - a.n).slice(0, 3)
+      .map(s => `${s.n} ${(s.n === 1 ? s.label : s.plural).toLowerCase()}`).join(' · ');
     const others = filtered.length - filtered.filter(i => i.status === 'lost').length;
     const top = hotspots[0];
     const peak = this.peakWindow(filtered);
@@ -617,7 +611,7 @@ window.HeatmapView = {
       </div>`;
     root.querySelector('#hm-kpis').innerHTML = [
       kpi('Reports in view', total, total ? `${lost.length} lost · ${others} sighting / found` : 'Nothing matches these filters'),
-      kpi('Active lost pets', lost.length, lost.length ? `${dogs} ${dogs === 1 ? 'dog' : 'dogs'} · ${cats} ${cats === 1 ? 'cat' : 'cats'}` : 'None right now', lost.length ? 'down' : 'up'),
+      kpi('Active lost pets', lost.length, lost.length ? lostMix : 'None right now', lost.length ? 'down' : 'up'),
       kpi('Top hotspot', top ? this.esc(top.barangay) : '—', top ? `${top.totalReports} ${top.totalReports === 1 ? 'report' : 'reports'} · ${top.riskLevel.toLowerCase()}` : 'No hotspots yet'),
       kpi('Busiest time', total ? peak.range : '—', total ? peak.desc : 'No timed reports')
     ].join('');
@@ -1283,7 +1277,7 @@ window.HeatmapView = {
           lat: inc.lat,
           lng: inc.lng,
           id: inc.id,
-          icon: (inc.species || '').toLowerCase() === 'cat' ? '🐈' : '🐕'
+          icon: window.PawSpecies.icon(inc.species)
         });
       }
     });

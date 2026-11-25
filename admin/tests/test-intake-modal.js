@@ -3,6 +3,7 @@
 const path = require('path');
 const fs = require('fs');
 global.window = global;
+require(require('path').join(__dirname, '..', '..', 'js', 'species.js'));
 let shown = null, closed = 0; const toasts = []; const saved = [];
 const stub = () => ({ addEventListener() {}, focus() {}, value: '', dataset: {}, setAttribute() {}, hidden: true, querySelector: stub, querySelectorAll: () => [] });
 const body = { set innerHTML(v) { box._html = v; }, get innerHTML() { return box._html; }, querySelector: stub, querySelectorAll: () => [] };

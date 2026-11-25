@@ -19,7 +19,7 @@ const TRAIT_SCHEMA = {
   type: 'OBJECT',
   properties: {
     isPet: { type: 'BOOLEAN' },
-    species: { type: 'STRING', enum: ['Dog', 'Cat', 'Other', 'Unknown'] },
+    species: { type: 'STRING', enum: ['Dog', 'Cat', 'Bird', 'Rabbit', 'Small mammal', 'Reptile', 'Other', 'Unknown'] },
     breed: { type: 'STRING' },
     colors: { type: 'ARRAY', items: { type: 'STRING' } },
     coatPattern: { type: 'STRING' },
@@ -32,7 +32,7 @@ const TRAIT_SCHEMA = {
 
 const PROMPT = `You are helping a lost-pet recovery service in Metro Manila match a photo against missing pet reports.
 Describe the main animal in this photo.
-- species: Dog, Cat, Other, or Unknown.
+- species: Dog, Cat, Bird, Rabbit, Small mammal (hamster, guinea pig, ferret and the like), Reptile, Other, or Unknown.
 - breed: most likely breed or mix (e.g. "Aspin", "Puspin", "Golden Retriever Mix"). Use "Unknown" if unsure.
 - colors: simple lowercase color words for the coat (e.g. "golden", "white", "black", "brown", "orange", "grey", "tan", "brindle", "calico", "tricolor", "cream").
 - coatPattern: e.g. solid, spotted, patched, striped, tricolor.

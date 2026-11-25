@@ -8,7 +8,7 @@ window.ReportsView = {
   draft: '',         // what is typed in the box
   status: 'all',     // 'all' | 'lost' | 'sighting' | 'found'
   source: 'all',     // 'all' | 'owner' | 'community'
-  animal: 'all',     // 'all' | 'dog' | 'cat' | 'other'
+  animal: 'all',     // 'all' or a species key from js/species.js
   period: 'all',     // 'all' | 'today' | '7d' | '30d'
   sortBy: 'date',    // 'date' | 'name' | 'location' | 'status'
   page: 1,
@@ -30,7 +30,7 @@ window.ReportsView = {
     const list = all.filter(i =>
       (this.status === 'all' || i.status === this.status) &&
       (this.source === 'all' || this.sourceOf(i) === this.source) &&
-      (this.animal === 'all' || (this.animal === 'other' ? !['dog', 'cat'].includes(species(i)) : species(i) === this.animal)) &&
+      (this.animal === 'all' || window.PawSpecies.normalize(i.species) === this.animal) &&
       (from == null || (i.ts != null && i.ts >= from)) &&
       window.PawSearch.matches(this.query, [i.name, i.breed, i.species, i.location, i.barangay, i.district, i.contact, i.status, i.id]));
     const by = {
@@ -97,7 +97,7 @@ window.ReportsView = {
       this.status !== 'all' && ['Status', STATUS_LABEL[this.status] || this.status, 'status'],
       this.query.trim() && ['Search', `\u201c${this.query.trim()}\u201d`, 'query'],
       this.source !== 'all' && ['Source', this.source === 'owner' ? 'Owner report' : 'Community report', 'source'],
-      this.animal !== 'all' && ['Animal', { dog: 'Dogs', cat: 'Cats', other: 'Other' }[this.animal], 'animal'],
+      this.animal !== 'all' && ['Animal', window.PawSpecies.plural(this.animal), 'animal'],
       this.period !== 'all' && ['Reported', { today: 'Today', '7d': 'Last 7 days', '30d': 'Last 30 days' }[this.period], 'period']
     ].filter(Boolean);
 
@@ -133,7 +133,7 @@ window.ReportsView = {
             </div>
           </form>
           ${select('rp-status', 'Status', this.status, [['all', `All (${base.length})`], ['lost', `Lost (${n('lost')})`], ['sighting', `Sighting (${n('sighting')})`], ['found', `Found (${n('found')})`]])}
-          ${select('rp-animal', 'Animal', this.animal, [['all', 'All animals'], ['dog', 'Dogs'], ['cat', 'Cats'], ['other', 'Other']])}
+          ${select('rp-animal', 'Animal', this.animal, window.PawSpecies.filterOptions('all'))}
           ${select('rp-source', 'Source', this.source, [['all', 'All sources'], ['owner', 'Owner report'], ['community', 'Community report']])}
           ${select('rp-period', 'Reported', this.period, [['all', 'Any time'], ['today', 'Today'], ['7d', 'Last 7 days'], ['30d', 'Last 30 days']])}
           ${select('rp-sort', 'Sort by', this.sortBy, [['date', 'Newest'], ['name', 'Name'], ['location', 'Location'], ['status', 'Status']])}

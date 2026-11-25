@@ -7,17 +7,15 @@
  */
 
 window.BreakdownView = {
-  filter: 'all', // all | Dog | Cat | Other
+  filter: 'all', // 'all' or a species key from js/species.js
 
   speciesMeta: {
-    Dog: { label: 'Dogs (Aso)', short: 'Dogs', color: 'var(--brand-terracotta)' },
-    Cat: { label: 'Cats (Pusa)', short: 'Cats', color: 'var(--color-blue)' },
-    Other: { label: 'Other animals', short: 'Other', color: 'var(--color-purple)' },
+    ...Object.fromEntries(window.PawSpecies.LIST.map((s) => [s.key, { label: s.plural, short: s.plural, color: s.color }])),
     Unknown: { label: 'Not recorded', short: 'Unknown', color: 'var(--ink-subtle)' }
   },
 
   ageBrackets: [
-    { key: 'baby', label: 'Under 1 yr', long: 'Puppy / kitten (under 1 yr)', color: 'var(--color-amber)' },
+    { key: 'baby', label: 'Under 1 yr', long: 'Baby animal (under 1 yr)', color: 'var(--color-amber)' },
     { key: 'young', label: '1–3 yrs', long: 'Young (1–3 yrs)', color: 'var(--brand-terracotta)' },
     { key: 'adult', label: '4–7 yrs', long: 'Adult (4–7 yrs)', color: 'var(--color-blue)' },
     { key: 'senior', label: '8+ yrs', long: 'Senior (8+ yrs)', color: 'var(--color-purple)' },
@@ -25,11 +23,8 @@ window.BreakdownView = {
   ],
 
   normalizeSpecies(value) {
-    const s = String(value || '').toLowerCase();
-    if (!s) return 'Unknown';
-    if (/dog|aso|canine|puppy/.test(s)) return 'Dog';
-    if (/cat|pusa|feline|kitten/.test(s)) return 'Cat';
-    return 'Other';
+    if (!String(value || '').trim()) return 'Unknown';
+    return window.PawSpecies.normalize(value);
   },
 
   normalizeBreed(value) {
@@ -104,19 +99,40 @@ window.BreakdownView = {
     return `<div class="breakdown-empty">${text}</div>`;
   },
 
-  info(text) {
-    return `<span class="bd-info" tabindex="0" aria-label="${this.esc(text)}" title="${this.esc(text)}">i</span>`;
+  // The same tap-to-read-the-formula button as the Dashboard (see ActivationView.INFO)
+  info(key) {
+    return `<button type="button" class="dash-info" data-info="${key}" aria-label="What does this show?" title="What does this show?">i</button>`;
+  },
+
+  sec(title, note) {
+    return `<header class="dd-sec"><h2>${title}</h2>${note ? `<p>${note}</p>` : ''}</header>`;
   },
 
   card(title, right, body, opts = {}) {
     return `
       <section class="nock-card bd-card ${opts.cls || ''}">
         <div class="nock-card-head">
-          <span class="nock-card-title">${title}${opts.help ? this.info(opts.help) : ''}</span>
+          <span class="nock-card-title">${title}${opts.info ? this.info(opts.info) : ''}</span>
           <span class="nock-card-right">${right || ''}</span>
         </div>
         ${body}
       </section>`;
+  },
+
+  // One bar split by species, with a legend: the first thing the Breakdown says about who the animals are
+  ribbon(rows, total) {
+    const shown = rows.filter(r => r.count > 0);
+    const spoken = shown.map(r => `${r.label} ${Math.round((r.count / total) * 100)}%`).join(', ');
+    return `
+      <div class="bd-ribbon-wrap">
+        <p class="bd-ribbon-title">Species${this.info('bdSpecies')}</p>
+        <div class="bd-ribbon" role="img" aria-label="Species: ${this.esc(spoken)}">
+          ${shown.map(r => `<u style="flex:${r.count}; background:${r.color}" title="${this.esc(r.label)}: ${r.count} (${Math.round((r.count / total) * 100)}%)"></u>`).join('')}
+        </div>
+        <ul class="bd-ribbon-key">
+          ${shown.map(r => `<li><i style="background:${r.color}"></i><b>${this.esc(r.label)}</b><span>${r.count}</span><em>${Math.round((r.count / total) * 100)}%</em></li>`).join('')}
+        </ul>
+      </div>`;
   },
 
   // rows: [{label, count, color, hint?}]. Ring with the total in the middle plus a legend.
@@ -183,21 +199,12 @@ window.BreakdownView = {
     }).join('')}</div>`;
   },
 
-  kpi(label, value, sub, tone) {
-    return `
-      <div class="kpi-card bd-kpi">
-        <div class="kpi-label"><span>${label}</span></div>
-        <div class="kpi-value">${value}</div>
-        <div class="kpi-delta ${tone || 'neutral'}">${sub}</div>
-      </div>`;
-  },
-
   // ---------- Render ----------
 
   renderNoFacility(container) {
     container.innerHTML = `
       <div class="bd-page dash-pro">
-        <div class="view-header"><div class="view-header-titles"><div class="dash-eyebrow bd-eyebrow">Insights</div><h1>Breakdown</h1>
+        <div class="view-header"><div class="view-header-titles"><h1>Breakdown</h1>
           <div class="subtitle"><span>Which animals your facility takes in, and how their cases end</span></div></div></div>
         <div class="nock-card tm-empty">
           <h2>Set up your impound facility</h2>
@@ -221,7 +228,7 @@ window.BreakdownView = {
     const total = cases.length;
 
     // --- Species & breed ---
-    const speciesCounts = { Dog: 0, Cat: 0, Other: 0, Unknown: 0 };
+    const speciesCounts = { ...Object.fromEntries(window.PawSpecies.KEYS.map((k) => [k, 0])), Unknown: 0 };
     const breedStats = {};
     cases.forEach(c => {
       const species = this.normalizeSpecies(c.species);
@@ -273,56 +280,68 @@ window.BreakdownView = {
           { label: 'Unregistered animals', hint: 'Strays or animals without a PawTrack record', color: 'var(--color-amber)', count: cases.filter(c => !c.registered).length }
         ];
 
-    const chip = (key, label) => `<button class="${f === key ? 'active' : ''}" data-bd-filter="${key}" role="tab" aria-selected="${f === key}">${label}</button>`;
     const filterLabel = f === 'all' ? 'all animals' : this.speciesMeta[f].short.toLowerCase();
+    const animalWord = (n) => (n === 1 ? 'animal' : 'animals');
+    const mainsMore = tree.filter(s => !s.parentId).length - 1;
+    const subsN = tree.filter(s => s.parentId).length;
+    const scopeLine = hasSubs ? `${mainsMore ? `${mainsMore} more main and ` : ''}${subsN} sub-${subsN === 1 ? 'facility' : 'facilities'}` : 'Main facility';
+
+    // Penalty tickets of these animals (money, so it sits with how cases end)
+    const caseIds = new Set(impoundments.map(i => i.id));
+    const tickets = store.penaltyReady && typeof store.getTickets === 'function' ? (store.getTickets() || []).filter(t => caseIds.has(t.impoundId)) : [];
+    const sumPhp = (list) => list.reduce((a, t) => a + (Number(t.amount) || 0), 0);
+    const pen = tickets.length ? {
+      unpaid: tickets.filter(t => t.status === 'unpaid').length, unpaidPhp: sumPhp(tickets.filter(t => t.status === 'unpaid')),
+      paid: tickets.filter(t => t.status === 'paid').length, paidPhp: sumPhp(tickets.filter(t => t.status === 'paid')),
+      waived: tickets.filter(t => t.status === 'waived').length
+    } : null;
+    const php = (n) => `PHP ${Number(n).toLocaleString('en-US')}`;
+
+    // What the formula pop-ups use for their worked examples
+    this._live = {
+      total, unidentified, unidentifiedPct, closed: closed.length, released: reunitedCount, pen,
+      withAge: total - ageCounts.unknown,
+      topSpecies: topSpecies && topSpecies[1] ? { label: this.speciesMeta[topSpecies[0]].short, n: topSpecies[1] } : null
+    };
 
     container.innerHTML = `
-      <div class="bd-page dash-pro">
+      <div class="bd-page dash-pro dd">
         <div class="view-header">
           <div class="view-header-titles">
-            <div class="dash-eyebrow bd-eyebrow">${this.esc(mineShelter.name)}${hasSubs ? ` + ${tree.filter(s => !s.parentId).length - 1 ? `${tree.filter(s => !s.parentId).length - 1} more main and ` : ''}${tree.filter(s => s.parentId).length} sub-${tree.filter(s => s.parentId).length === 1 ? 'facility' : 'facilities'}` : ''}</div>
             <h1>Breakdown</h1>
             <div class="subtitle"><span>Which animals your facility takes in, and how their cases end</span></div>
+            <div class="dd-where"><b>${this.esc(mineShelter.name)}</b><span>${this.esc(scopeLine)}</span></div>
           </div>
           <div class="view-header-actions">
-            <div class="dash-segmented" role="tablist" aria-label="Filter by species">
-              ${chip('all', 'All')}${chip('Dog', 'Dogs')}${chip('Cat', 'Cats')}${chip('Other', 'Other')}
+            <div class="hm-field">
+              <label class="hm-label" for="bd-species">Animal</label>
+              <select id="bd-species" class="hm-select" aria-label="Filter by species">
+                ${window.PawSpecies.filterOptions('all').map(([v, l]) => `<option value="${v}" ${f === v ? 'selected' : ''}>${l}</option>`).join('')}
+              </select>
             </div>
           </div>
         </div>
 
-        <div class="kpi-grid bd-kpis">
-          ${this.kpi('Animals taken in', total, total ? `Showing ${filterLabel}` : 'No intakes yet', 'neutral')}
-          ${this.kpi('Most affected', topSpecies && topSpecies[1] ? this.speciesMeta[topSpecies[0]].short : '—',
-            topSpecies && topSpecies[1] ? `${Math.round((topSpecies[1] / total) * 100)}% of intakes` : 'No data', 'neutral')}
-          ${this.kpi('Without chip or tag', total ? `${unidentifiedPct}%` : '—',
-            total ? `${unidentified} of ${total} could not be identified` : 'No data', unidentifiedPct >= 50 ? 'down' : 'up')}
-        </div>
+        <section class="dd-now dd-hero bd-now">
+          <div class="dd-now-main">
+            <p class="dd-lead"><b class="dd-big">${total}</b><span>${animalWord(total)} taken in${f === 'all' ? '' : `, ${filterLabel}`}</span></p>
+          </div>
+          <dl class="dd-facts">
+            <div>
+              <dt>Without a chip or tag${total ? this.info('bdChip') : ''}</dt>
+              <dd>${total ? `${unidentifiedPct}%` : '—'}</dd>
+              <small>${total ? `${unidentified} of ${total} ${total === 1 ? 'animal' : 'animals'}` : 'No intakes yet'}</small>
+            </div>
+          </dl>
+          ${total ? this.ribbon(speciesRows, total) : ''}
+        </section>
 
-        <div class="bd-section-label">Who your facility takes in</div>
+        ${this.sec('Ages and breeds', 'How old they are, and the breeds you see most')}
         <div class="bd-grid">
-          ${this.card('Species', '',
-            total === 0 ? this.emptyState('No intakes recorded yet.') : this.donut(speciesRows, 'animals'),
-            { cls: 'bd-span-6' })}
           ${this.card('Age', ageCounts.unknown ? `${total - ageCounts.unknown} of ${total} have an age` : '',
             total === 0 ? this.emptyState('No intakes recorded yet.') : this.columns(ageRows.filter(r => r.label !== 'Not recorded')),
-            { cls: 'bd-span-6' })}
-        </div>
-
-        <div class="bd-section-label">How cases are handled</div>
-        <div class="bd-grid">
-          ${this.card('How impound cases end', closed.length ? `${closed.length} closed` : '',
-            closed.length === 0 ? this.emptyState('No impound cases have been closed yet.') : this.donut(outcomeRows, 'closed')
-              + (stillHolding.length > 0 ? `<div class="breakdown-note">${stillHolding.length} still in holding${pastWindow > 0 ? `, ${pastWindow} past the 72-hour window` : ''}.</div>` : ''),
-            { cls: 'bd-span-6' })}
-          ${this.card(hasSubs ? 'Intakes by facility' : 'Registered or not', '',
-            total === 0 ? this.emptyState('No intakes recorded yet.') : this.hbars(sourceRows, total),
-            { cls: 'bd-span-6' })}
-        </div>
-
-        <div class="bd-section-label">Where to focus</div>
-        <div class="bd-grid">
-          ${this.card('Breeds your facility takes in most', topBreeds.length ? `Top ${topBreeds.length}` : '',
+            { cls: 'bd-span-5', info: 'bdAge' })}
+          ${this.card('Breeds', topBreeds.length ? `The ${topBreeds.length} most common` : '',
             topBreeds.length === 0 ? this.emptyState('No breeds recorded on these intakes.') : `
               <table class="breakdown-table bd-table">
                 <thead>
@@ -338,14 +357,37 @@ window.BreakdownView = {
                     </tr>`).join('')}
                 </tbody>
               </table>`,
-            { cls: 'bd-span-12' })}
+            { cls: 'bd-span-7', info: 'bdBreeds' })}
+        </div>
+
+        ${this.sec('Where they came from, and how their cases ended', 'The facility that took each animal in, and what happened next')}
+        <div class="bd-grid">
+          ${this.card(hasSubs ? 'Intakes by facility' : 'Registered or not', '',
+            total === 0 ? this.emptyState('No intakes recorded yet.') : this.hbars(sourceRows, total),
+            { cls: 'bd-span-6', info: 'bdSource' })}
+          ${this.card('How cases end', closed.length ? `${closed.length} closed` : '',
+            (closed.length === 0 ? this.emptyState('No impound cases have been closed yet.') : this.donut(outcomeRows, 'closed'))
+              + (stillHolding.length > 0 ? `<div class="breakdown-note">${stillHolding.length} ${stillHolding.length === 1 ? 'case is' : 'cases are'} still in holding and not counted here.</div>` : ''),
+            { cls: 'bd-span-6 bd-tall', info: 'bdOutcomes' })}
+          ${pen ? this.card('Penalty tickets', '', `
+            <div class="bd-pen">
+              <dl>
+                <div><dt>Unpaid</dt><dd>${pen.unpaid} <small>${php(pen.unpaidPhp)}</small></dd></div>
+                <div><dt>Paid</dt><dd>${pen.paid} <small>${php(pen.paidPhp)}</small></dd></div>
+                <div><dt>Waived</dt><dd>${pen.waived}</dd></div>
+              </dl>
+            </div>`, { cls: 'bd-span-6', info: 'bdPenalties' }) : ''}
         </div>
       </div>
     `;
 
-    container.querySelectorAll('[data-bd-filter]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        this.filter = btn.getAttribute('data-bd-filter');
+    container.querySelectorAll('.dash-info').forEach(btn => btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (window.ActivationView) window.ActivationView.openInfo(btn.getAttribute('data-info'), this._live);
+    }));
+    container.querySelectorAll('#bd-species').forEach(sel => {
+      sel.addEventListener('change', () => {
+        this.filter = sel.value;
         this.render(container);
       });
     });

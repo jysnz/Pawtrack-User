@@ -321,6 +321,7 @@ class AdminApp {
     const lockConsole = (panel) => {
       document.documentElement.classList.remove('auth-resuming');
       this.currentAdmin = null;
+      window.adminChatView?.setUser(null);
       if (screen) screen.style.display = 'flex';
       document.body.classList.add('auth-locked');
       showPanel(panel);
@@ -987,6 +988,7 @@ class AdminApp {
 
     this.supabase.auth.onAuthStateChange((event, newSession) => {
       session = newSession;
+      if (newSession?.user.id !== this.currentAdmin?.id) window.adminChatView?.setUser(null);
       if (event === 'SIGNED_OUT') clearCredFields();
       if (window.pawSentry) window.pawSentry.setUser(newSession && newSession.user ? newSession.user.id : null);
       if (event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') return;
@@ -1014,6 +1016,7 @@ class AdminApp {
     }
     const alreadyIn = !!this.currentAdmin && this.currentAdmin.id === account.id && !document.body.classList.contains('auth-locked');
     this.currentAdmin = account;
+    window.adminChatView?.setUser(account.id);
     const screen = document.getElementById('admin-login-screen');
     if (screen) screen.style.display = 'none';
     document.body.classList.remove('auth-locked');
@@ -1239,7 +1242,7 @@ class AdminApp {
     // browser's Back button steps through pages and opened details like any other website
     const fullHash = window.location.hash || '#activation';
     const [rawHash, ...detail] = fullHash.replace('#', '').split('/');
-    const validRoutes = ['activation', 'breakdown', 'heatmap', 'reports', 'impoundments', 'shelters', 'notifs', 'claims', 'violations', 'settings'];
+    const validRoutes = ['activation', 'breakdown', 'heatmap', 'reports', 'impoundments', 'rehab', 'shelters', 'notifs', 'claims', 'violations', 'settings'];
     // The Shelter Terminal was merged into Impoundments: keep old bookmarks working
     if (rawHash === 'terminal') { window.location.replace('#impoundments'); return; }
     this.currentRoute = validRoutes.includes(rawHash) ? rawHash : 'activation';
@@ -1309,6 +1312,9 @@ class AdminApp {
           break;
         case 'impoundments':
           if (window.ImpoundmentsView) window.ImpoundmentsView.render(container);
+          break;
+        case 'rehab':
+          if (window.RehabView) window.RehabView.render(container);
           break;
         case 'shelters':
           if (window.SheltersView) window.SheltersView.render(container);
@@ -2012,6 +2018,7 @@ class AdminApp {
       { label: 'Impoundments: pets in holding and claim deadlines', route: 'impoundments', cat: 'Navigation' },
       { label: 'Scan Tag & Log Intake (Impoundments)', route: 'impoundments', cat: 'Navigation' },
       { label: 'Facilities: Add and Manage', route: 'shelters', cat: 'Navigation' },
+      { label: 'Rehabilitation: prepare unclaimed animals for adoption', route: 'rehab', cat: 'Navigation' },
       { label: 'Review owner claims', route: 'claims', cat: 'Navigation' },
       { label: 'Violations: ordinance provisions and fines', route: 'violations', cat: 'Navigation' },
       { label: 'Municipal Settings & JSON Backup', route: 'settings', cat: 'Navigation' },

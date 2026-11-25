@@ -237,7 +237,7 @@ class FoundView {
   missingPets() {
     const q = this.query.trim().toLowerCase();
     return this.othersMissing()
-      .filter((p) => !this.species || (this.species === 'Other' ? !['Dog', 'Cat'].includes(p.species) : p.species === this.species))
+      .filter((p) => !this.species || window.PawSpecies.normalize(p.species) === this.species)
       .filter((p) => !q || [p.name, p.species, p.breed, p.color, p.lastSeenLocation].filter(Boolean).join(' ').toLowerCase().includes(q))
       .sort((a, b) => (new Date(b.lastSeenDate).getTime() || 0) - (new Date(a.lastSeenDate).getTime() || 0));
   }
@@ -314,7 +314,7 @@ class FoundView {
           <label class="found-species-select" for="found-species">
             <span>Show</span>
             <select id="found-species" aria-label="Filter by pet type">
-              ${[['', 'All'], ['Dog', 'Dogs'], ['Cat', 'Cats'], ['Other', 'Other']].map(([k, l]) => `<option value="${k}"${this.species === k ? ' selected' : ''}>${l}</option>`).join('')}
+              ${[['', 'All'], ...window.PawSpecies.filterOptions().slice(1)].map(([k, l]) => `<option value="${k}"${this.species === k ? ' selected' : ''}>${l}</option>`).join('')}
               <option value="__none">Other pet (not registered)</option>
             </select>
           </label>
@@ -407,7 +407,7 @@ class FoundView {
           ${pet ? '' : `<div class="form-group">
             <label class="form-label" for="found-species">What kind of pet is it?</label>
             <select class="form-control" id="found-species">
-              ${['Dog', 'Cat', 'Other'].map((o) => `<option value="${o}"${(this.form.species || '') === o ? ' selected' : ''}>${o === 'Other' ? 'Other / not sure' : o}</option>`).join('')}
+              ${window.PawSpecies.KEYS.map((o) => `<option value="${o}"${(this.form.species || '') === o ? ' selected' : ''}>${o === 'Other' ? 'Other / not sure' : o}</option>`).join('')}
             </select>
             <small class="found-fine">Pick the closest one.</small>
           </div>
@@ -427,7 +427,7 @@ class FoundView {
           </div>
           <div class="form-group found-wide">
             <label class="form-label" for="found-caption">Post caption <span class="found-optional">(optional)</span></label>
-            <textarea class="form-control" id="found-caption" rows="2" maxlength="300" placeholder="Words for your post, e.g. Found this friendly dog near the park gate. Is he yours?">${this.esc(this.form.caption)}</textarea>
+            <textarea class="form-control" id="found-caption" rows="2" maxlength="300" placeholder="Words for your post, e.g. Found this friendly pet near the park gate. Is he yours?">${this.esc(this.form.caption)}</textarea>
             <small class="found-fine">Shown with your post on the Sightings page.</small>
           </div>
           <label class="found-anon found-wide" for="found-anonymous">

@@ -10,7 +10,7 @@ const CORS = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 
-const SPECIES = ['Dog', 'Cat', 'Other'];
+const SPECIES = ['Dog', 'Cat', 'Bird', 'Rabbit', 'Small mammal', 'Reptile', 'Other']; // keep in step with js/species.js
 const IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 const MAX_IMAGE_BASE64 = 4_000_000; // about 3 MB of image
 

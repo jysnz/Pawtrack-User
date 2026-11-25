@@ -71,8 +71,7 @@ window.IntakeModal = {
   },
 
   speciesOf(v) {
-    const s = String(v || '').toLowerCase();
-    return /dog|aso|canine/.test(s) ? 'Dog' : /cat|pusa|feline/.test(s) ? 'Cat' : s ? 'Other' : 'Dog';
+    return window.PawSpecies.normalize(v, 'Dog');
   },
 
   // The smallest "Cage N" that nobody in that facility is using
@@ -253,9 +252,9 @@ window.IntakeModal = {
           <div class="trm-sec">Pet details</div>
           <div class="trm-row">
             <div class="form-group"><label class="form-label" for="in-name">Name or identifier <span class="trm-req" aria-hidden="true">*</span></label>
-              <input type="text" class="form-control" id="in-name" name="petName" value="${this.esc(d.petName)}" placeholder="e.g. Unidentified dog" required /></div>
+              <input type="text" class="form-control" id="in-name" name="petName" value="${this.esc(d.petName)}" placeholder="e.g. Unidentified stray" required /></div>
             <div class="form-group"><label class="form-label" for="in-species">Species</label>
-              <select class="form-control" id="in-species" name="species">${['Dog', 'Cat', 'Other'].map(s => `<option value="${s}" ${d.species === s ? 'selected' : ''}>${s}</option>`).join('')}</select></div>
+              <select class="form-control" id="in-species" name="species">${window.PawSpecies.KEYS.map(s => `<option value="${s}" ${d.species === s ? 'selected' : ''}>${s}</option>`).join('')}</select></div>
           </div>
           <div class="trm-row">
             <div class="form-group"><label class="form-label" for="in-breed">Breed <span class="trm-opt">optional</span></label>

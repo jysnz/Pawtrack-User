@@ -52,7 +52,7 @@ class ImpoundView {
   shelters() { return (window.pawStore && window.pawStore.getShelters()) || []; }
   impounds() { return (window.pawStore && window.pawStore.getImpoundments()) || []; }
   isHolding(i) { return i.status === 'active_impounded' || i.status === 'active'; }
-  speciesOf(i) { return ['Dog', 'Cat'].includes(i.species) ? i.species : 'Other'; }
+  speciesOf(i) { return window.PawSpecies.normalize(i.species); }
   safePhoto(url) { return /^https:\/\//.test(url || '') ? url : ''; }
   reduced() { try { return window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { return false; } }
   matches(query, fields) {
@@ -346,8 +346,8 @@ class ImpoundView {
     };
     fill(this.container.querySelector('#ip-pstatus'), [['holding', 'In holding', sc.holding], ['soon', 'Closing soon', sc.soon], ['released', 'Released', sc.released], ['all', 'All', sc.all]], this.pStatus);
     const forSpecies = base('species');
-    const spc = { all: forSpecies.length, Dog: forSpecies.filter((i) => this.speciesOf(i) === 'Dog').length, Cat: forSpecies.filter((i) => this.speciesOf(i) === 'Cat').length, Other: forSpecies.filter((i) => this.speciesOf(i) === 'Other').length };
-    fill(this.container.querySelector('#ip-pspecies'), [['all', 'All animals', spc.all], ['Dog', 'Dogs', spc.Dog], ['Cat', 'Cats', spc.Cat], ['Other', 'Other', spc.Other]], this.pSpecies);
+    const spcRows = window.PawSpecies.LIST.map((sp) => [sp.key, sp.plural, forSpecies.filter((i) => this.speciesOf(i) === sp.key).length]);
+    fill(this.container.querySelector('#ip-pspecies'), [['all', 'All animals', forSpecies.length], ...spcRows.filter((r) => r[2] > 0 || r[0] === this.pSpecies)], this.pSpecies);
 
     let list = base();
     list = list.slice().sort((a, b) => {
@@ -405,12 +405,12 @@ class ImpoundView {
       if (h <= 0) claim = '<span class="ip-chip is-late">Claim window ended</span>';
       else claim = `<span class="ip-chip ${h <= 24 ? 'is-soon' : 'is-ok'}">${h >= 48 ? `${Math.floor(h / 24)} days left to claim` : `${h}h left to claim`}</span>`;
     }
-    const status = holding ? '' : `<span class="ip-chip is-done">${i.status === 'claimed' ? 'Returned to owner' : 'Released'}</span>`;
+    const status = holding ? '' : `<span class="ip-chip is-done">${i.status === 'claimed' ? 'Returned to owner' : i.status === 'euthanized' ? 'Case closed' : 'Released'}</span>`;
     const open = this.expanded.has(i.id);
     const name = i.petName || 'Unidentified animal';
     const kennel = i.kennel || i.cageNumber;
     const where = i.impoundLocation || i.location;
-    const icon = this.speciesOf(i) === 'Cat' ? '🐈' : this.speciesOf(i) === 'Dog' ? '🐕' : '🐾';
+    const icon = window.PawSpecies.icon(i.species);
     return `
       <article class="ip-pet ${open ? 'is-open' : ''} ${this.closingSoon(i) ? 'is-urgent' : ''}" data-id="${this.esc(i.id)}" style="--i:${Math.min(n, 11)}">
         ${photo

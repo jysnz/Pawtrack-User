@@ -211,7 +211,7 @@
       petSelect: 'Pick a pet that is already registered in PawTrack to fill in its details and alert its guardian. Leave it on "Unregistered / stray animal" when there is no PawTrack record.',
       petName: 'The name this animal is recorded under. For a stray, use a short description such as "Brown dog, torn left ear".',
       rfidTag: 'The code on the collar tag or implant. It links the intake to the pet\'s record. Leave it empty when there is no tag.',
-      species: 'The kind of animal. Choose Other for anything that is not a dog or a cat.',
+      species: 'The kind of animal. Choose Other when it is not one of the listed species.',
       breed: 'The breed, if you can tell. "Aspin" or "mixed" is fine.',
       age: 'Your best estimate, for example "2 years" or "6 months".',
       facilityDisplay: 'The facility you work for. Every intake is recorded against it, and it can\'t be changed here.',

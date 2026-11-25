@@ -2060,6 +2060,7 @@ class App {
 
   updateGoogleAuthUI() {
     const user = window.pawStore ? window.pawStore.getGoogleUser() : null;
+    window.chatView?.setUser(user?.id ?? null);
     const loginBtn = document.getElementById('header-login-btn');
     const userBtn = document.getElementById('header-user-btn');
     const nameEl = document.getElementById('header-user-name');
@@ -2455,7 +2456,7 @@ class App {
 
         const name = (document.getElementById('reg-pet-name')?.value || '').trim() || 'Pet';
         const species = document.getElementById('reg-pet-species')?.value || 'Dog';
-        // The database only knows Dog, Cat and Other, so the species the owner typed is kept in front of the breed
+        // "Other" is the catch-all species in the database, so the species the owner typed is kept in front of the breed
         const otherSpecies = species === 'Other' ? (document.getElementById('reg-pet-species-other')?.value || '').trim() : '';
         const breedText = (document.getElementById('reg-pet-breed')?.value || '').trim() || 'Mixed';
         const breed = otherSpecies ? `${otherSpecies} (${breedText})` : breedText;
@@ -2495,7 +2496,7 @@ class App {
           color,
           age,
           ageMonths,
-          photoUrl: document.getElementById('reg-pet-photo')?.value || defaultPhotos[species] || defaultPhotos.Dog,
+          photoUrl: document.getElementById('reg-pet-photo')?.value || defaultPhotos[species] || defaultPhotos.Other,
           owner: { name: ownerName, phone: ownerPhone, email: ownerEmail, address: ownerAddress }
         });
       });

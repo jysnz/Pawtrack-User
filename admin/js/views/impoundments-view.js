@@ -8,7 +8,8 @@ window.IMPOUND_OUTCOMES = {
   claimed: { label: 'Reunited with owner', pill: 'status-safe', color: 'var(--color-green)' },
   forfeited: { label: 'Unclaimed / forfeited', pill: 'status-impounded', color: 'var(--color-amber)' },
   transferred: { label: 'Transferred', pill: 'status-reunited', color: 'var(--color-blue)' },
-  deceased: { label: 'Deceased in holding', pill: 'status-lost', color: 'var(--color-red)' }
+  deceased: { label: 'Deceased in holding', pill: 'status-lost', color: 'var(--color-red)' },
+  euthanized: { label: 'Euthanized', pill: 'status-euthanized', color: '#57534e' }
 };
 
 window.ImpoundmentsView = {
@@ -19,10 +20,19 @@ window.ImpoundmentsView = {
   setFacility(id) { this.facilityFilter = id; },
   pendingIntake: false,    // open the Scan & intake dialog as soon as the page has drawn
   query: '',               // the search that is applied (set by the Search button or Enter)
-  speciesFilter: 'all',    // 'all' | 'Dog' | 'Cat' | 'Other'
+  speciesFilter: 'all',    // 'all' or a species key from js/species.js
   periodFilter: 'all',     // when the animal was taken in: 'all' | 'today' | '7d' | '30d'
   deadlineFilter: 'all',   // claim window: 'all' | 'overdue' | 'soon' (due within 24 hours)
   _listed: [],             // the rows currently shown (what Export CSV saves)
+  filtersOpen: false,      // the filter panel on a phone
+
+  // Why an animal nobody claimed may be euthanized. Also the options of the dialog.
+  EUTH_REASONS: [
+    { key: 'untreatable', label: 'Severe illness or injury that cannot be treated', hint: 'On a veterinarian\'s advice.' },
+    { key: 'dangerous', label: 'Dangerous behavior that cannot be managed safely', hint: 'It is a risk to people or to other animals.' },
+    { key: 'contagious', label: 'Contagious disease that puts other animals at risk', hint: 'It cannot be isolated or treated here.' },
+    { key: 'other', label: 'Another reason', hint: 'Explain it below.' }
+  ],
 
   esc(v) {
     return String(v == null ? '' : v).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -86,7 +96,7 @@ window.ImpoundmentsView = {
     const now = Date.now();
     const asTime = (v) => { const t = v ? new Date(v).getTime() : NaN; return Number.isFinite(t) ? t : null; };
     if (this.speciesFilter !== 'all') {
-      filtered = filtered.filter(i => (['Dog', 'Cat'].includes(i.species) ? i.species : 'Other') === this.speciesFilter);
+      filtered = filtered.filter(i => window.PawSpecies.normalize(i.species) === this.speciesFilter);
     }
     if (this.periodFilter !== 'all') {
       const since = this.periodFilter === 'today' ? new Date().setHours(0, 0, 0, 0) : now - (this.periodFilter === '7d' ? 7 : 30) * 86400000;
@@ -103,11 +113,132 @@ window.ImpoundmentsView = {
     const filtersOn = this.speciesFilter !== 'all' || this.periodFilter !== 'all' || this.deadlineFilter !== 'all' || !!q;
     this._listed = filtered;
 
-    const counts = {
-      all: impoundments.length,
-      active: impoundments.filter(i => i.status === 'active_impounded').length,
-      claimed: impoundments.filter(i => i.status === 'claimed').length,
+    // ---- numbers for the summary tiles (the whole facility, whatever tab or filter is on) ----
+    const holding = impoundments.filter(i => i.status === 'active_impounded');
+    const overdueN = holding.filter(i => { const d = asTime(i.claimDeadline); return d != null && d < now; }).length;
+    const soonN = holding.filter(i => { const d = asTime(i.claimDeadline); return d != null && d >= now && d - now < 86400000; }).length;
+    const closedN = impoundments.length - holding.length;
+    const filterCount = [this.speciesFilter, this.periodFilter, this.deadlineFilter].filter(v => v !== 'all').length;
+
+    const fmtDate = (v) => { const t = asTime(v); return t == null ? '' : new Date(t).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' }); };
+    const fmtDateTime = (v) => { const t = asTime(v); return t == null ? '' : new Date(t).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }); };
+    // "5h" up to two days, then "3 days"
+    const span = (hours) => { const h = Math.abs(hours); return h >= 48 ? `${Math.floor(h / 24)} days` : `${h}h`; };
+    const icon = (path) => `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${path}</svg>`;
+    const ICONS = {
+      release: icon('<path d="M20 6 9 17l-5-5"/>'),
+      cage: icon('<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16M15 4v16"/>'),
+      clock: icon('<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>'),
+      heart: icon('<path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8l1 1.1L12 21l7.8-7.5 1-1.1a5.5 5.5 0 0 0 0-7.8z"/>'),
+      edit: icon('<path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/>'),
+      euth: icon('<path d="M12 3v18"/><path d="M5 8h14"/><path d="M5 8l-2 6a3 3 0 0 0 4 0L5 8z"/><path d="M19 8l-2 6a3 3 0 0 0 4 0l-2-6z"/>'),
+      more: '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg>',
+      file: icon('<path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M8 13h8M8 17h5"/>')
     };
+
+    // Plain information, not controls: the tabs below are the filters
+    const tile = (label, n, tone) => `<div class="ic-stat ${tone}"><b>${n}</b><span>${label}</span></div>`;
+
+    // ---- one animal ----
+    const card = (imp) => {
+      const deadlineMs = asTime(imp.claimDeadline);
+      const intakeMs = asTime(imp.intakeDate);
+      const open = imp.status === 'active_impounded';
+      const diffHours = deadlineMs == null ? null : Math.round((deadlineMs - now) / 3600000);
+      const expired = open && diffHours != null && diffHours <= 0;
+      const windowMs = deadlineMs != null && intakeMs != null ? deadlineMs - intakeMs : 0;
+      const pct = windowMs > 0 ? Math.max(0, Math.min(100, Math.round(((deadlineMs - now) / windowMs) * 100))) : 0;
+      const tone = pct <= 25 ? 'is-low' : pct <= 50 ? 'is-mid' : '';
+      const outcome = window.IMPOUND_OUTCOMES[imp.status];
+      const name = imp.petName || 'Unidentified Pet';
+      const tstat = imp.transferStatus;
+      const transferNote = tstat === 'pending' ? `<span class="status-pill status-impounded" title="Not collected in time: being moved to the main facility">Moving to ${this.esc(shelterName(imp.transferToId))}</span>`
+        : tstat === 'not_arrived' ? '<span class="status-pill status-lost" title="The main facility reported that this pet did not arrive">Did not arrive</span>'
+        : tstat === 'received' ? `<span class="status-pill status-reunited">Moved from ${this.esc(shelterName(imp.originShelterId))}</span>` : '';
+      const ticket = store.getTicketForImpound ? store.getTicketForImpound(imp.id) : null;
+      const unpaid = !!ticket && ticket.status === 'unpaid';
+      const mineToCollect = !!ticket && ticket.payeeShelterId === myId;
+      const penalty = !ticket ? ''
+        : ticket.status === 'unpaid' ? `<span class="status-pill status-lost">PHP ${this.esc(ticket.amount)} unpaid</span><span class="ic-tk">${this.esc(ticket.ticketNo)}</span>${mineToCollect ? `<button class="btn btn-sm btn-secondary btn-ticket-pay" data-ticket-id="${this.esc(ticket.id)}">Record payment</button>${isManager ? `<button class="btn btn-sm btn-secondary btn-ticket-waive" data-ticket-id="${this.esc(ticket.id)}">Waive</button>` : ''}` : `<span class="ic-tk">Pay to ${this.esc(shelterName(ticket.payeeShelterId))}</span>`}`
+        : ticket.status === 'paid' ? `<span class="status-pill status-safe">Penalty paid</span><span class="ic-tk">${this.esc(ticket.ticketNo)}${ticket.reference ? ' · ' + this.esc(ticket.reference) : ''}</span>`
+        : `<span class="status-pill status-reunited" title="${this.esc(ticket.waivedReason)}">Penalty waived</span><span class="ic-tk">${this.esc(ticket.ticketNo)}</span>`;
+
+      // Rehabilitation and euthanasia: only for animals nobody claimed
+      const rehabCase = store.getRehabForImpound ? store.getRehabForImpound(imp.id) : null;
+      const canRehab = !rehabCase && window.RehabView && window.RehabView.isCandidate(imp) && store.rehabReady !== false;
+      const euthBlock = store.euthanasiaBlock ? store.euthanasiaBlock(imp) : 'Not available.';
+      const euthShown = open || imp.status === 'forfeited';
+
+      const statusPill = outcome ? `<span class="status-pill ${outcome.pill}">${outcome.label}</span>`
+        : expired ? '<span class="status-pill status-lost">Unclaimed</span>'
+        : diffHours == null ? '' : `<span class="status-pill status-impounded">${span(diffHours)} left</span>`;
+
+      let windowHtml;
+      if (imp.status === 'euthanized') {
+        const e = imp.euthanasia || {};
+        windowHtml = `<div class="ic-window is-euth"><span class="ic-wl">Euthanized</span><b>${this.esc(fmtDateTime(e.at || imp.closedAt) || 'Date not recorded')}</b><small>${this.esc((this.EUTH_REASONS.find(r => r.key === e.reason) || {}).label || '')}</small></div>`;
+      } else if (outcome) {
+        windowHtml = `<div class="ic-window"><span class="ic-wl">Case closed</span><b>${this.esc(outcome.label)}</b><small>${this.esc(fmtDate(imp.closedAt || imp.claimedAt) || '')}</small></div>`;
+      } else if (expired) {
+        windowHtml = `<div class="ic-window is-late"><span class="ic-wl">Claim period over</span><b>Overdue by ${span(diffHours)}</b><i class="imp-bar is-low" aria-hidden="true"><u style="width:100%"></u></i><small>Was due ${this.esc(fmtDateTime(imp.claimDeadline))}</small></div>`;
+      } else {
+        windowHtml = `<div class="ic-window"><span class="ic-wl">Claim period</span><b>${deadlineMs == null ? 'No deadline' : 'Claim by ' + this.esc(fmtDateTime(imp.claimDeadline))}</b>${deadlineMs == null ? '' : `<i class="imp-bar ${tone}" aria-hidden="true"><u style="width:${pct}%"></u></i>`}</div>`;
+      }
+
+      const releaseAttrs = unpaid ? `disabled title="Penalty ticket ${this.esc(ticket.ticketNo)} is unpaid. Record the payment (or waive it) first."` : 'title="Hand the pet back to its owner and close the case"';
+      let primary = '';
+      let releaseInMenu = open;
+      if (imp.status === 'euthanized') {
+        primary = `<button type="button" class="btn btn-sm btn-secondary btn-euth-record" data-impound-id="${imp.id}" title="Who, why and when">${ICONS.file}Euthanasia record</button>`;
+      } else if (rehabCase) {
+        primary = `<button class="btn btn-sm btn-secondary btn-open-rehab" data-rehab-case="${rehabCase.id}" title="Open its rehabilitation">${rehabCase.stage === 'ready' ? 'Rehabilitated' : rehabCase.stage === 'withdrawn' ? 'Rehab withdrawn' : 'In rehabilitation'}</button>`;
+      } else if (canRehab) {
+        primary = `<button class="btn btn-sm chip-green btn-start-rehab" data-impound-id="${imp.id}" title="Prepare this animal for adoption">Rehabilitate</button>`;
+      } else if (open) {
+        primary = `<button class="btn btn-sm chip-green btn-claim-impound" data-impound-id="${imp.id}" ${releaseAttrs}>${ICONS.release}Release to owner</button>`;
+        releaseInMenu = false;
+      }
+
+      const item = (cls, ico, label, attrs = '', sub = '') => `<button type="button" role="menuitem" class="ic-mi ${cls}" data-impound-id="${imp.id}" ${attrs}>${ico}<span><b>${label}</b>${sub ? `<small>${this.esc(sub)}</small>` : ''}</span></button>`;
+      const menu = [
+        releaseInMenu ? item('btn-claim-impound', ICONS.release, 'Release to owner', releaseAttrs) : '',
+        open ? item('btn-extend-deadline', ICONS.clock, '+24h to claim', 'title="Give the owner 24 more hours to claim"') : '',
+        item('btn-care-guide', ICONS.heart, 'Care guide', 'title="Care guide for this animal"'),
+        item('btn-edit-impound', ICONS.edit, imp.status === 'euthanized' ? 'View case' : 'Edit case', 'title="Edit this case"'),
+        euthShown ? `<div class="ic-sep" role="separator"></div>${item('btn-euthanize is-danger', ICONS.euth, 'Euthanize', euthBlock ? `aria-disabled="true" data-reason="${this.esc(euthBlock)}"` : 'title="Record the euthanasia of an animal nobody claimed"', euthBlock)}` : ''
+      ].join('');
+
+      const hasExtra = !!transferNote || !!penalty;
+      return `
+        <li class="ic-card ${imp.status === 'euthanized' ? 'is-euth' : outcome ? 'is-closed' : expired ? 'is-late' : (diffHours != null && diffHours < 24 ? 'is-soon' : '')}" data-impound-id="${imp.id}">
+          <div class="ic-main" role="button" tabindex="0" aria-label="Open the case of ${this.esc(name)}" data-impound-id="${imp.id}">
+            <img src="${this.esc(/^https:\/\//.test(imp.photoUrl || '') ? imp.photoUrl : 'https://images.unsplash.com/photo-1543466835-00a7907e9de1?auto=format&fit=crop&w=150&q=80')}" class="ic-thumb" alt="" loading="lazy" />
+            <div class="ic-id">
+              <div class="ic-title"><b class="ic-name" title="${this.esc(name)}">${hl(name)}</b>${statusPill}</div>
+              <div class="ic-sub">${this.esc(window.PawSpecies.icon(imp.species))} ${this.esc([imp.species, imp.breed].filter(Boolean).join(' · '))}</div>
+              <div class="ic-meta">
+                <span class="mono-tag imp-tag">${hl(imp.rfidTag || 'NO TAG')}</span>
+                <span class="ic-chip">${ICONS.cage}${hl(imp.cageNumber || 'No cage yet')}</span>
+                <span class="ic-chip">${this.esc(imp.shelterName || 'Municipal Shelter')}</span>
+                <span class="ic-chip">In since ${this.esc(fmtDate(imp.intakeDate))}</span>
+              </div>
+            </div>
+          </div>
+          ${windowHtml}
+          <div class="ic-actions">
+            ${primary}
+            <div class="ic-more">
+              <button type="button" class="btn btn-sm btn-secondary ic-more-btn" aria-haspopup="menu" aria-expanded="false" aria-label="More actions for ${this.esc(name)}">${ICONS.more}</button>
+              <div class="ic-menu" role="menu" aria-label="Actions for ${this.esc(name)}" hidden>${menu}</div>
+            </div>
+          </div>
+          ${hasExtra ? `<div class="ic-extra">${transferNote}${penalty}</div>` : ''}
+          <p class="ic-note" title="${this.esc(imp.healthCondition || '')}">${this.esc(imp.healthCondition || 'No condition issues noted upon intake.')} <span class="imp-officer">· ${this.esc(imp.intakeOfficer || 'ACO Officer')}</span></p>
+        </li>`;
+    };
+
+    const emptyTitle = filtersOn ? 'No animals match' : this.currentTab === 'closed' ? 'No closed cases yet' : this.currentTab === 'all' ? 'No animals yet' : 'No animals in holding';
+    const emptyText = filtersOn ? 'Try a different search, or clear the filters.' : this.currentTab === 'closed' ? 'Animals leave holding when they are released, transferred, rehabilitated or euthanized.' : 'Tap “Scan & intake” when an animal arrives at the facility.';
 
     container.innerHTML = `
       <div class="view-header">
@@ -138,37 +269,11 @@ window.ImpoundmentsView = {
         </div>
       </div>` : ''}
 
-      <!-- Quick Status Strip -->
-      <div class="kpi-grid kpi-grid-3">
-        <div class="kpi-card">
-          <div class="kpi-label">In Holding Now</div>
-          <div class="kpi-body">
-            <div>
-              <div class="kpi-value">${counts.active} Cases</div>
-              <div class="kpi-delta neutral">Within the 72-hour window</div>
-            </div>
-          </div>
-        </div>
-
-        <div class="kpi-card">
-          <div class="kpi-label">Claimed by Owners</div>
-          <div class="kpi-body">
-            <div>
-              <div class="kpi-value">${counts.claimed} Claims</div>
-              <div class="kpi-delta neutral">Released after verification</div>
-            </div>
-          </div>
-        </div>
-
-        <div class="kpi-card">
-          <div class="kpi-label">Closed Cases</div>
-          <div class="kpi-body">
-            <div>
-              <div class="kpi-value">${counts.all - counts.active} Closed</div>
-              <div class="kpi-delta neutral">Released, forfeited or transferred</div>
-            </div>
-          </div>
-        </div>
+      <div class="ic-stats" role="group" aria-label="Summary">
+        ${tile('In holding', holding.length, '')}
+        ${tile('Claim period over', overdueN, overdueN ? 'is-danger' : '')}
+        ${tile('Due in 24 hours', soonN, soonN ? 'is-warn' : '')}
+        ${tile('Closed cases', closedN, '')}
       </div>
 
       ${incoming.length ? `
@@ -187,160 +292,50 @@ window.ImpoundmentsView = {
         </ul>
       </div>` : ''}
 
-      <!-- Table Section -->
-      <div class="table-container">
-        <div class="table-toolbar">
-          ${facilityIds.length > 1 ? `<label class="imp-facility-filter"><span class="hm-label">Facility</span>
-            <select id="imp-facility-select" class="hm-select">
-              ${facilityIds.map(id => `<option value="${this.esc(id)}" ${this.facilityFilter === id ? 'selected' : ''}>${this.esc(shelterName(id))}</option>`).join('')}
-            </select></label>` : ''}
-          <div class="table-filters imp-tabs-field">
-            <label class="hm-label" for="imp-tab">Show</label>
-            <select id="imp-tab" class="hm-select">
-              ${[['active', 'Active Holding'], ['closed', 'Closed Cases'], ['all', 'Full History']].map(([v, l]) => `<option value="${v}" ${this.currentTab === v ? 'selected' : ''}>${l}</option>`).join('')}
-            </select>
-          </div>
-          <div class="imp-tools">
-            <form id="imp-search-form" class="imp-search" role="search">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-              <input type="text" id="imp-search" placeholder="Pet, tag, cage or breed  ( / )" value="${this.esc(this.query)}" aria-label="Search impounded pets" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="imp-suggest" aria-autocomplete="list" />
-              <button type="button" class="rp-clear-x" id="imp-clear-x" aria-label="Clear search" ${this.query ? '' : 'hidden'}>×</button>
-              <button type="submit" class="btn btn-primary btn-sm" id="imp-search-btn">Search</button>
-              <div class="rp-suggest" id="imp-suggest" role="listbox" hidden></div>
-            </form>
-          </div>
-          <div class="imp-filterbar">
-            ${[
-              ['imp-species', 'Animal', this.speciesFilter, [['all', 'All animals'], ['Dog', 'Dogs'], ['Cat', 'Cats'], ['Other', 'Other']]],
-              ['imp-period', 'Taken in', this.periodFilter, [['all', 'Any time'], ['today', 'Today'], ['7d', 'Last 7 days'], ['30d', 'Last 30 days']]],
-              ['imp-deadline', 'Claim window', this.deadlineFilter, [['all', 'Any'], ['overdue', 'Past deadline'], ['soon', 'Due within 24h']]]
-            ].map(([id, label, cur, opts]) => `
-              <div class="hm-field"><label class="hm-label" for="${id}">${label}</label>
-                <select id="${id}" class="hm-select">${opts.map(([v, l]) => `<option value="${v}" ${cur === v ? 'selected' : ''}>${l}</option>`).join('')}</select></div>`).join('')}
-            ${filtersOn ? '<button type="button" class="btn btn-secondary btn-sm" id="imp-clear-filters">Clear filters</button>' : ''}
-            <div class="imp-resultbar">
-              <span class="imp-count" aria-live="polite">${filtered.length} ${filtered.length === 1 ? 'result' : 'results'}</span>
-              <button type="button" class="btn btn-secondary btn-sm imp-export-btn" id="imp-export" ${filtered.length ? '' : 'disabled'}>
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/></svg>Export CSV
-              </button>
-            </div>
-          </div>
+      <div class="ic-toolbar">
+        <div class="ic-seg" role="tablist" aria-label="Show">
+          ${[['active', 'In holding', holding.length], ['closed', 'Closed', closedN], ['all', 'All', impoundments.length]].map(([v, l, n]) => `<button type="button" role="tab" class="ic-seg-btn" data-imp-tab="${v}" aria-selected="${this.currentTab === v}"><span>${l}</span><em>${n}</em></button>`).join('')}
         </div>
-
-        <div class="data-table-wrapper">
-          <table class="data-table imp-table">
-            <thead>
-              <tr>
-                <th>Pet</th>
-                <th>Facility & Cage</th>
-                <th>Taken in</th>
-                <th>Claim window (72h)</th>
-                <th>Penalty</th>
-                <th>Notes</th>
-                <th style="text-align: right;">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${filtered.length === 0 ? `
-                <tr>
-                  <td colspan="7" class="imp-empty" style="text-align: center; padding: 48px 24px; color: var(--ink-muted);">
-                    <div style="font-weight: 700; color: var(--ink-primary); font-size: 14px; margin-bottom: 4px;">No animals in holding</div>
-                    <div style="font-size: 12px; max-width: 480px; margin: 0 auto; line-height: 1.5; color: var(--ink-muted);">
-                      Tap “Scan &amp; intake” when an animal arrives at the facility.
-                    </div>
-                  </td>
-                </tr>
-              ` : filtered.map(imp => {
-                const deadlineMs = new Date(imp.claimDeadline).getTime();
-                const nowMs = Date.now();
-                const diffHours = Math.round((deadlineMs - nowMs) / (3600 * 1000));
-                const isExpired = diffHours <= 0;
-                const windowMs = deadlineMs - new Date(imp.intakeDate).getTime();
-                const pct = windowMs > 0 ? Math.max(0, Math.min(100, Math.round(((deadlineMs - nowMs) / windowMs) * 100))) : 0;
-                const tone = pct <= 25 ? 'is-low' : pct <= 50 ? 'is-mid' : '';
-                const outcome = window.IMPOUND_OUTCOMES[imp.status];
-                const tstat = imp.transferStatus;
-                const transferNote = tstat === 'pending' ? `<span class="status-pill status-impounded" title="Not collected in time: being moved to the main facility">Moving to ${this.esc(shelterName(imp.transferToId))}</span>`
-                  : tstat === 'not_arrived' ? '<span class="status-pill status-lost" title="The main facility reported that this pet did not arrive">Did not arrive</span>'
-                  : tstat === 'received' ? `<span class="status-pill status-reunited">Moved from ${this.esc(shelterName(imp.originShelterId))}</span>` : '';
-                const ticket = store.getTicketForImpound(imp.id);
-                const mineToCollect = !!ticket && ticket.payeeShelterId === myId;
-                const penaltyCell = !ticket ? '<span class="mono-tag">—</span>'
-                  : ticket.status === 'unpaid' ? `<span class="status-pill status-lost">PHP ${this.esc(ticket.amount)} unpaid</span><div class="imp-tk">${this.esc(ticket.ticketNo)}</div>${mineToCollect ? `<div class="imp-tk-actions"><button class="btn btn-sm btn-secondary btn-ticket-pay" data-ticket-id="${this.esc(ticket.id)}">Record payment</button>${isManager ? `<button class="btn btn-sm btn-secondary btn-ticket-waive" data-ticket-id="${this.esc(ticket.id)}">Waive</button>` : ''}</div>` : `<div class="imp-tk">Pay to ${this.esc(shelterName(ticket.payeeShelterId))}</div>`}`
-                  : ticket.status === 'paid' ? `<span class="status-pill status-safe">Paid</span><div class="imp-tk">${this.esc(ticket.ticketNo)}${ticket.reference ? ' · ' + this.esc(ticket.reference) : ''}</div>`
-                  : `<span class="status-pill status-reunited" title="${this.esc(ticket.waivedReason)}">Waived</span><div class="imp-tk">${this.esc(ticket.ticketNo)}</div>`;
-
-                return `
-                  <tr data-impound-id="${imp.id}">
-                    <td class="imp-c-pet" data-label="Pet">
-                      <div class="pet-cell">
-                        <img src="${this.esc(/^https:\/\//.test(imp.photoUrl || '') ? imp.photoUrl : 'https://images.unsplash.com/photo-1543466835-00a7907e9de1?auto=format&fit=crop&w=150&q=80')}" class="pet-thumb" alt="" />
-                        <div class="pet-meta">
-                          <span class="pet-name">${hl(imp.petName || 'Unidentified Pet')}</span>
-                          <span class="mono-tag imp-tag">${hl(imp.rfidTag || 'NO TAG')}</span>
-                        </div>
-                      </div>
-                    </td>
-                    <td data-label="Facility &amp; cage">
-                      <div class="imp-fac">
-                        <b>${this.esc(imp.shelterName || 'Municipal Shelter')}</b>
-                        <span class="imp-cage"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16M15 4v16"/></svg>${hl(imp.cageNumber || 'No cage yet')}</span>
-                      </div>
-                    </td>
-                    <td data-label="Taken in">
-                      <div class="imp-when">
-                        <b>${new Date(imp.intakeDate).toLocaleDateString()}</b>
-                        <span>${new Date(imp.intakeDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                      </div>
-                    </td>
-                    <td data-label="Claim window">
-                      ${transferNote}
-                      ${outcome ? `
-                        <div class="imp-claim">
-                          <span class="status-pill ${outcome.pill}">${outcome.label}</span>
-                          <span class="imp-claim-by">${imp.closedAt || imp.claimedAt ? new Date(imp.closedAt || imp.claimedAt).toLocaleDateString() : 'Case closed'}</span>
-                        </div>
-                      ` : isExpired ? `
-                        <div class="imp-claim">
-                          <span class="status-pill status-lost">Overdue by ${Math.abs(diffHours)}h</span>
-                          <i class="imp-bar is-low" aria-hidden="true"><u style="width:100%"></u></i>
-                          <span class="imp-claim-by">Was due ${new Date(imp.claimDeadline).toLocaleDateString()} ${new Date(imp.claimDeadline).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                        </div>
-                      ` : `
-                        <div class="imp-claim">
-                          <span class="status-pill status-impounded">${diffHours}h left</span>
-                          <i class="imp-bar ${tone}" aria-hidden="true"><u style="width:${pct}%"></u></i>
-                          <span class="imp-claim-by">Claim by ${new Date(imp.claimDeadline).toLocaleDateString()} ${new Date(imp.claimDeadline).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                        </div>
-                      `}
-                    </td>
-                    <td data-label="Penalty">${penaltyCell}</td>
-                    <td data-label="Notes">
-                      <div class="imp-note" title="${this.esc(imp.healthCondition || '')}">${this.esc(imp.healthCondition || 'No condition issues noted upon intake.')}</div>
-                      <span class="imp-officer"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>${this.esc(imp.intakeOfficer || 'ACO Officer')}</span>
-                    </td>
-                    <td class="imp-c-actions" style="text-align: right;">
-                      <div class="imp-actions" style="display: flex; justify-content: flex-end; gap: 6px;">
-                        ${!outcome ? `
-                          <button class="btn btn-sm chip-green btn-claim-impound" data-impound-id="${imp.id}" ${ticket && ticket.status === 'unpaid' ? `disabled title="Penalty ticket ${this.esc(ticket.ticketNo)} is unpaid. Record the payment (or waive it) first."` : 'title="Hand the pet back to its owner and close the case"'}>
-                            Release to owner
-                          </button>
-                          <button class="btn btn-sm btn-secondary btn-extend-deadline" data-impound-id="${imp.id}" title="Give the owner 24 more hours to claim">
-                            +24h
-                          </button>
-                        ` : ''}
-                        <button class="btn btn-sm btn-secondary btn-edit-impound imp-ico" data-impound-id="${imp.id}" title="Edit this case" aria-label="Edit this case">
-                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                `;
-              }).join('')}
-            </tbody>
-          </table>
+        <div class="imp-tools">
+          <form id="imp-search-form" class="imp-search" role="search">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+            <input type="text" id="imp-search" placeholder="Pet, tag, cage or breed  ( / )" value="${this.esc(this.query)}" aria-label="Search impounded pets" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="imp-suggest" aria-autocomplete="list" />
+            <button type="button" class="rp-clear-x" id="imp-clear-x" aria-label="Clear search" ${this.query ? '' : 'hidden'}>×</button>
+            <button type="submit" class="btn btn-primary btn-sm" id="imp-search-btn">Search</button>
+            <div class="rp-suggest" id="imp-suggest" role="listbox" hidden></div>
+          </form>
         </div>
+        <button type="button" class="btn btn-secondary ic-filter-toggle" id="imp-filters-toggle" aria-expanded="${this.filtersOpen}" aria-controls="imp-filter-panel">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 5h18M6 12h12M10 19h4"/></svg>
+          Filters${filterCount ? ` <em>${filterCount}</em>` : ''}
+        </button>
       </div>
+
+      <div class="ic-filter-panel${this.filtersOpen ? ' is-open' : ''}" id="imp-filter-panel">
+        ${facilityIds.length > 1 ? `<label class="imp-facility-filter"><span class="hm-label">Facility</span>
+          <select id="imp-facility-select" class="hm-select">
+            ${facilityIds.map(id => `<option value="${this.esc(id)}" ${this.facilityFilter === id ? 'selected' : ''}>${this.esc(shelterName(id))}</option>`).join('')}
+          </select></label>` : ''}
+        ${[
+          ['imp-species', 'Animal', this.speciesFilter, window.PawSpecies.filterOptions('all')],
+          ['imp-period', 'Taken in', this.periodFilter, [['all', 'Any time'], ['today', 'Today'], ['7d', 'Last 7 days'], ['30d', 'Last 30 days']]],
+          ['imp-deadline', 'Claim window', this.deadlineFilter, [['all', 'Any'], ['overdue', 'Past deadline'], ['soon', 'Due within 24h']]]
+        ].map(([id, label, cur, opts]) => `
+          <div class="hm-field"><label class="hm-label" for="${id}">${label}</label>
+            <select id="${id}" class="hm-select">${opts.map(([v, l]) => `<option value="${v}" ${cur === v ? 'selected' : ''}>${l}</option>`).join('')}</select></div>`).join('')}
+        ${filtersOn ? '<button type="button" class="btn btn-secondary btn-sm" id="imp-clear-filters">Clear filters</button>' : ''}
+      </div>
+
+      <div class="ic-resultbar">
+        <span class="imp-count" aria-live="polite">${filtered.length} ${filtered.length === 1 ? 'result' : 'results'}</span>
+        <button type="button" class="btn btn-secondary btn-sm imp-export-btn" id="imp-export" ${filtered.length ? '' : 'disabled'}>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/></svg>Export CSV
+        </button>
+      </div>
+
+      ${filtered.length === 0 ? `
+        <div class="ic-empty imp-empty"><b>${emptyTitle}</b><span>${emptyText}</span></div>
+      ` : `<ul class="ic-list">${filtered.map(card).join('')}</ul>`}
     `;
 
     this.attachEvents(container);
@@ -445,11 +440,28 @@ window.ImpoundmentsView = {
   attachEvents(container) {
     const store = window.adminStore;
 
-    // Tabs
-    container.querySelector('#imp-tab')?.addEventListener('change', (e) => {
-      this.currentTab = e.target.value;
+    // Tabs and the filter panel on a phone
+    container.querySelectorAll('[data-imp-tab]').forEach(btn => btn.addEventListener('click', () => {
+      this.currentTab = btn.getAttribute('data-imp-tab');
       this.render(container);
+    }));
+    container.querySelector('#imp-filters-toggle')?.addEventListener('click', (e) => {
+      this.filtersOpen = !this.filtersOpen;
+      e.currentTarget.setAttribute('aria-expanded', String(this.filtersOpen));
+      container.querySelector('#imp-filter-panel')?.classList.toggle('is-open', this.filtersOpen);
     });
+    this.bindMenus(container);
+
+    // Euthanasia: the dialog for an animal nobody claimed, and the record of one that was
+    container.querySelectorAll('.btn-euthanize').forEach(btn => btn.addEventListener('click', () => {
+      if (btn.getAttribute('aria-disabled') === 'true') { window.adminApp.showToast(btn.getAttribute('data-reason') || 'This animal cannot be euthanized right now.', 'info', 4200); return; }
+      const imp = store.getImpoundmentById(btn.getAttribute('data-impound-id'));
+      if (imp) this.openEuthanizeModal(imp);
+    }));
+    container.querySelectorAll('.btn-euth-record').forEach(btn => btn.addEventListener('click', () => {
+      const imp = store.getImpoundmentById(btn.getAttribute('data-impound-id'));
+      if (imp) this.openEuthanasiaRecord(imp);
+    }));
 
     // Intake modal trigger
     container.querySelector('#btn-intake-modal')?.addEventListener('click', () => {
@@ -523,6 +535,27 @@ window.ImpoundmentsView = {
       });
     });
 
+    // Rehabilitate: the prompt says what will happen, then the animal moves to the Rehabilitation page
+    container.querySelectorAll('.btn-start-rehab').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (window.RehabView) window.RehabView.askStart(e.currentTarget.getAttribute('data-impound-id'));
+      });
+    });
+    container.querySelectorAll('.btn-open-rehab').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (window.RehabView) window.RehabView.goTo(e.currentTarget.getAttribute('data-rehab-case'));
+      });
+    });
+
+    // Care guide: the standard care protocol for this animal's species and condition
+    container.querySelectorAll('.btn-care-guide').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        if (window.RehabView) window.RehabView.openCareGuide(e.currentTarget.getAttribute('data-impound-id'));
+      });
+    });
+
     // Edit button
     container.querySelectorAll('.btn-edit-impound').forEach(btn => {
       btn.addEventListener('click', (e) => {
@@ -532,15 +565,234 @@ window.ImpoundmentsView = {
       });
     });
 
-    // Tapping a pet's row opens its edit page (the buttons inside a row keep doing their own thing)
-    container.querySelectorAll('tr[data-impound-id]').forEach(tr => {
-      tr.classList.add('is-clickable');
-      tr.addEventListener('click', (e) => {
-        if (e.target.closest('button, a, input, select, textarea, label')) return;
-        const imp = store.getImpoundmentById(tr.getAttribute('data-impound-id'));
-        if (imp) this.openEditModal(imp);
+    // Tapping the animal's photo or name opens its case
+    container.querySelectorAll('.ic-main').forEach(el => {
+      const open = () => { const imp = store.getImpoundmentById(el.getAttribute('data-impound-id')); if (imp) this.openEditModal(imp); };
+      el.addEventListener('click', open);
+      el.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); } });
+    });
+  },
+
+  // The "More" menu of each card: a popover on a computer, a bottom sheet on a phone
+  bindMenus(container) {
+    const close = () => container.querySelectorAll('.ic-more.is-open').forEach(m => {
+      m.classList.remove('is-open');
+      const menu = m.querySelector('.ic-menu'); if (menu) menu.hidden = true;
+      m.querySelector('.ic-more-btn')?.setAttribute('aria-expanded', 'false');
+    });
+    container.querySelectorAll('.ic-more-btn').forEach(btn => btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const wrap = btn.closest('.ic-more');
+      const wasOpen = wrap.classList.contains('is-open');
+      close();
+      if (wasOpen) return;
+      const menu = wrap.querySelector('.ic-menu');
+      wrap.classList.add('is-open');
+      menu.hidden = false;
+      btn.setAttribute('aria-expanded', 'true');
+      const r = btn.getBoundingClientRect();
+      menu.classList.toggle('is-up', window.innerHeight - r.bottom < menu.offsetHeight + 16 && r.top > menu.offsetHeight + 16);
+      menu.querySelector('.ic-mi:not([disabled])')?.focus({ preventScroll: true });
+    }));
+    container.querySelectorAll('.ic-menu').forEach(menu => {
+      menu.addEventListener('click', () => close());
+      menu.addEventListener('keydown', (e) => {
+        if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+        e.preventDefault();
+        const items = [...menu.querySelectorAll('.ic-mi:not([disabled])')];
+        const at = items.indexOf(document.activeElement);
+        items[(at + (e.key === 'ArrowDown' ? 1 : items.length - 1)) % items.length]?.focus();
       });
     });
+    if (this._menuOff) { this._menuOff(); this._menuOff = null; }
+    if (typeof document === 'undefined' || !document.addEventListener) return;
+    const onDoc = (e) => { if (!e.target.closest || !e.target.closest('.ic-more')) close(); };
+    const onKey = (e) => {
+      if (e.key !== 'Escape') return;
+      const open = container.querySelector('.ic-more.is-open');
+      if (open) { open.querySelector('.ic-more-btn')?.focus(); close(); }
+    };
+    document.addEventListener('click', onDoc);
+    document.addEventListener('keydown', onKey);
+    this._menuOff = () => { document.removeEventListener('click', onDoc); document.removeEventListener('keydown', onKey); };
+  },
+
+  // ----- Euthanasia of an animal nobody claimed during its claim period -----
+  openEuthanizeModal(imp) {
+    const store = window.adminStore;
+    const blocked = store.euthanasiaBlock(imp);
+    if (blocked) { window.adminApp.showToast(blocked, 'info', 4200); return; }
+    const name = (imp.petName || '').trim();
+    const word = name || 'EUTHANIZE';
+    const deadline = new Date(imp.claimDeadline).getTime();
+    const over = Number.isFinite(deadline) ? Math.max(0, Math.floor((Date.now() - deadline) / 86400000)) : null;
+    const nowLocal = (() => { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 16); })();
+    const modal = window.adminApp.openModalContent(`
+      <div class="modal-header">
+        <div class="nock-card-title">Euthanize ${this.esc(name || 'this animal')}?</div>
+        <button class="icon-btn-subtle" id="eu-x" aria-label="Close">&times;</button>
+      </div>
+      <div class="modal-body eu-body">
+        <div class="eu-warn" role="alert">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21.7 18-8-14a2 2 0 0 0-3.5 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.7-3z"/><path d="M12 9v4M12 17h.01"/></svg>
+          <div><b>This is permanent.</b><span>It cannot be undone, and the record cannot be changed afterwards.</span></div>
+        </div>
+        <dl class="eu-facts">
+          <div><dt>Animal</dt><dd>${this.esc([imp.petName || 'Unidentified', imp.species, imp.breed].filter(Boolean).join(' · '))}</dd></div>
+          <div><dt>Claim period</dt><dd>Ended ${this.esc(new Date(imp.claimDeadline).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }))}${over != null ? ` (${over === 0 ? 'today' : over + (over === 1 ? ' day ago' : ' days ago')})` : ''}</dd></div>
+          <div><dt>Owner claims</dt><dd>None waiting</dd></div>
+        </dl>
+        <form id="eu-form" class="eu-form" novalidate>
+          <fieldset class="eu-fs">
+            <legend>Why? <em>choose one</em></legend>
+            <div class="eu-reasons" role="radiogroup" aria-label="Reason">
+              ${this.EUTH_REASONS.map(r => `<label class="eu-reason"><input type="radio" name="reason" value="${r.key}" /><span><b>${this.esc(r.label)}</b><small>${this.esc(r.hint)}</small></span></label>`).join('')}
+            </div>
+          </fieldset>
+          <div class="form-group form-full">
+            <label class="form-label" for="eu-notes" id="eu-notes-label">Notes <span class="eu-opt">(optional)</span></label>
+            <textarea class="form-control" id="eu-notes" name="notes" rows="2" maxlength="1000" placeholder="What the veterinarian found, or what happened."></textarea>
+          </div>
+          <div class="eu-grid">
+            <div class="form-group">
+              <label class="form-label" for="eu-vet">Veterinarian *</label>
+              <input type="text" class="form-control" id="eu-vet" name="vet" maxlength="120" autocomplete="off" placeholder="Full name" />
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="eu-license">License no. <span class="eu-opt">(optional)</span></label>
+              <input type="text" class="form-control" id="eu-license" name="license" maxlength="60" autocomplete="off" />
+            </div>
+            <div class="form-group form-full">
+              <label class="form-label" for="eu-at">Performed on *</label>
+              <input type="datetime-local" class="form-control" id="eu-at" name="at" value="${nowLocal}" max="${nowLocal}" />
+            </div>
+          </div>
+          <label class="eu-check"><input type="checkbox" name="humane" /><span>A licensed veterinarian performs, or has performed, this euthanasia humanely.</span></label>
+          <div class="form-group form-full">
+            <label class="form-label" for="eu-confirm">Type <b class="eu-word">${this.esc(word)}</b> to confirm *</label>
+            <input type="text" class="form-control" id="eu-confirm" name="confirm" autocomplete="off" autocapitalize="off" spellcheck="false" />
+          </div>
+        </form>
+        <div class="fm-error" id="eu-error" role="alert" hidden></div>
+      </div>
+      <div class="modal-footer">
+        <span class="eu-hint" id="eu-hint" role="status"></span>
+        <button class="btn btn-secondary" id="eu-cancel">Cancel</button>
+        <button class="btn btn-danger" id="eu-save" disabled>Euthanize</button>
+      </div>`);
+    const form = modal.querySelector('#eu-form');
+    const save = modal.querySelector('#eu-save');
+    const hint = modal.querySelector('#eu-hint');
+    const val = () => ({
+      reason: (form.querySelector('input[name="reason"]:checked') || {}).value || '',
+      notes: form.elements.notes.value.trim(), vet: form.elements.vet.value.trim(), license: form.elements.license.value.trim(),
+      at: form.elements.at.value, humane: form.elements.humane.checked, confirm: form.elements.confirm.value.trim()
+    });
+    // Says what is still missing, in the order a person fills it in
+    const missing = (d) => !d.reason ? 'Choose a reason'
+      : (d.reason === 'other' && d.notes.length < 5) ? 'Explain the reason'
+      : d.vet.length < 2 ? 'Enter the veterinarian'
+      : !d.at ? 'Enter when it was done'
+      : !d.humane ? 'Confirm it is done humanely'
+      : d.confirm.toLowerCase() !== word.toLowerCase() ? `Type ${word} to confirm` : '';
+    const sync = () => {
+      const d = val();
+      const lab = modal.querySelector('#eu-notes-label');
+      if (lab) lab.innerHTML = d.reason === 'other' ? 'Explain the reason *' : 'Notes <span class="eu-opt">(optional)</span>';
+      const m = missing(d);
+      save.disabled = !!m;
+      if (hint) hint.textContent = m;
+    };
+    form.addEventListener('input', sync);
+    form.addEventListener('change', sync);
+    sync();
+    modal.querySelector('#eu-x')?.addEventListener('click', () => window.adminApp.closeModal());
+    modal.querySelector('#eu-cancel')?.addEventListener('click', () => window.adminApp.closeModal());
+    save.addEventListener('click', async () => {
+      const d = val();
+      if (missing(d)) return;
+      const when = new Date(d.at);
+      if (Number.isNaN(when.getTime()) || when.getTime() > Date.now() + 5 * 60000) {
+        const err = modal.querySelector('#eu-error'); err.textContent = 'The time cannot be in the future.'; err.hidden = false; return;
+      }
+      save.disabled = true; save.textContent = 'Saving…';
+      const ok = await store.euthanizeImpoundment(imp.id, { reason: d.reason, notes: d.notes, vet: d.vet, license: d.license, at: when.toISOString() });
+      if (!ok) { save.textContent = 'Euthanize'; sync(); return; }
+      window.adminApp.closeModal();
+      window.adminApp.showToast(`Euthanasia recorded for ${name || 'the animal'}.`, 'success');
+      window.adminApp.renderView('impoundments');
+    });
+  },
+
+  // What was recorded: read only, with a PDF to keep
+  openEuthanasiaRecord(imp) {
+    const e = imp.euthanasia || {};
+    const reason = (this.EUTH_REASONS.find(r => r.key === e.reason) || {}).label || 'Not recorded';
+    const when = (v) => { const t = v ? new Date(v) : null; return t && !Number.isNaN(t.getTime()) ? t.toLocaleString([], { dateStyle: 'long', timeStyle: 'short' }) : 'Not recorded'; };
+    const modal = window.adminApp.openModalContent(`
+      <div class="modal-header">
+        <div class="nock-card-title">Euthanasia record: ${this.esc(imp.petName || 'Unidentified animal')}</div>
+        <button class="icon-btn-subtle" id="er-x" aria-label="Close">&times;</button>
+      </div>
+      <div class="modal-body eu-body">
+        <div class="eu-seal"><b>Euthanized</b><span>${this.esc(when(e.at || imp.closedAt))}</span></div>
+        <dl class="eu-facts">
+          <div><dt>Animal</dt><dd>${this.esc([imp.petName || 'Unidentified', imp.species, imp.breed].filter(Boolean).join(' · '))}</dd></div>
+          <div><dt>Tag</dt><dd>${this.esc(imp.rfidTag || 'No tag')}</dd></div>
+          <div><dt>Facility</dt><dd>${this.esc(imp.shelterName || '')}${imp.cageNumber ? ' · ' + this.esc(imp.cageNumber) : ''}</dd></div>
+          <div><dt>Taken in</dt><dd>${this.esc(when(imp.intakeDate))}</dd></div>
+          <div><dt>Claim period ended</dt><dd>${this.esc(when(imp.claimDeadline))}</dd></div>
+          <div><dt>Reason</dt><dd>${this.esc(reason)}</dd></div>
+          <div><dt>Veterinarian</dt><dd>${this.esc(e.vet || 'Not recorded')}${e.license ? ` <small>(License ${this.esc(e.license)})</small>` : ''}</dd></div>
+          ${e.notes ? `<div><dt>Notes</dt><dd>${this.esc(e.notes)}</dd></div>` : ''}
+        </dl>
+        <p class="rh-help">A recorded euthanasia is final. It cannot be changed or undone.</p>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" id="er-close">Close</button>
+        <button class="btn btn-primary" id="er-pdf">Download PDF</button>
+      </div>`);
+    modal.querySelector('#er-x')?.addEventListener('click', () => window.adminApp.closeModal());
+    modal.querySelector('#er-close')?.addEventListener('click', () => window.adminApp.closeModal());
+    modal.querySelector('#er-pdf')?.addEventListener('click', () => this.downloadEuthanasiaPdf(imp));
+  },
+
+  downloadEuthanasiaPdf(imp) {
+    const JsPDF = window.jspdf && window.jspdf.jsPDF;
+    if (!JsPDF) { window.adminApp.showToast('The PDF tool could not load. Check your connection and try again.', 'error'); return; }
+    const e = imp.euthanasia || {};
+    const reason = (this.EUTH_REASONS.find(r => r.key === e.reason) || {}).label || 'Not recorded';
+    const clean = (t) => String(t == null ? '' : t).replace(/[^\x20-\x7E]/g, '-');
+    const when = (v) => { const t = v ? new Date(v) : null; return t && !Number.isNaN(t.getTime()) ? t.toLocaleString([], { dateStyle: 'long', timeStyle: 'short' }) : 'Not recorded'; };
+    const doc = new JsPDF({ unit: 'pt', format: 'a4' });
+    const M = 48; let y = 64;
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(194, 65, 12); doc.text('PAWTRACK  |  IMPOUNDMENT', M, y); y += 26;
+    doc.setFontSize(22); doc.setTextColor(28, 25, 23); doc.text('Euthanasia record', M, y); y += 14;
+    doc.setDrawColor(226, 223, 220); doc.line(M, y, 595 - M, y); y += 26;
+    const rows = [
+      ['Animal', [imp.petName || 'Unidentified', imp.species, imp.breed].filter(Boolean).join(' / ')],
+      ['Tag', imp.rfidTag || 'No tag'],
+      ['Facility', [imp.shelterName, imp.cageNumber].filter(Boolean).join(' / ')],
+      ['Taken in', when(imp.intakeDate)],
+      ['Claim period ended', when(imp.claimDeadline)],
+      ['Euthanized on', when(e.at || imp.closedAt)],
+      ['Reason', reason],
+      ['Veterinarian', [e.vet, e.license ? 'License ' + e.license : ''].filter(Boolean).join(', ') || 'Not recorded'],
+      ['Notes', e.notes || '-']
+    ];
+    rows.forEach(([k, val]) => {
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(110, 104, 99); doc.text(clean(k).toUpperCase(), M, y);
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(11); doc.setTextColor(28, 25, 23);
+      const lines = doc.splitTextToSize(clean(val), 595 - M * 2 - 140);
+      doc.text(lines, M + 140, y); y += Math.max(1, lines.length) * 15 + 8;
+    });
+    y += 40;
+    doc.setDrawColor(120, 113, 108);
+    doc.line(M, y, M + 200, y); doc.line(M + 260, y, M + 460, y); y += 14;
+    doc.setFontSize(9); doc.setTextColor(110, 104, 99);
+    doc.text('Veterinarian signature', M, y); doc.text('Facility officer signature', M + 260, y);
+    doc.setFontSize(8); doc.text('Generated by PawTrack. A recorded euthanasia cannot be changed.', M, 800);
+    doc.save(`euthanasia-record-${clean(imp.petName || 'animal').replace(/\s+/g, '-').toLowerCase()}.pdf`);
   },
 
   exportCsv(list) {
@@ -584,9 +836,9 @@ window.ImpoundmentsView = {
           </div>
           <div class="form-group">
             <label class="form-label">Case status</label>
-            <select class="form-control" name="status">
+            <select class="form-control" name="status" ${imp.status === 'euthanized' ? 'disabled title="A euthanasia record cannot be changed"' : ''}>
               <option value="active_impounded" ${imp.status === 'active_impounded' ? 'selected' : ''}>In holding</option>
-              ${Object.entries(window.IMPOUND_OUTCOMES).map(([value, o]) => `
+              ${Object.entries(window.IMPOUND_OUTCOMES).filter(([value]) => value !== 'euthanized' || imp.status === 'euthanized').map(([value, o]) => `
                 <option value="${value}" ${imp.status === value ? 'selected' : ''}>${o.label}</option>
               `).join('')}
             </select>
@@ -629,7 +881,7 @@ window.ImpoundmentsView = {
       const form = modal.querySelector('#edit-impound-form');
       const formData = new FormData(form);
 
-      const chosen = formData.get('status');
+      const chosen = formData.get('status') || imp.status; // a disabled field sends nothing
       // Build on the case as it is NOW: someone else may have released or moved it while this dialog was open
       const latest = (window.adminStore.getImpoundments ? window.adminStore.getImpoundments() : []).find((i) => i.id === imp.id) || imp;
       const status = chosen === imp.status ? latest.status : chosen; // untouched status field keeps whatever it is now

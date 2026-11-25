@@ -645,7 +645,7 @@ class FoundPage {
     // Public post: anonymous, no phone number, no map link text
     const publicNotes = (notes || '').replace(/\s*Map: https?:\/\/\S+/g, '').trim();
     return client.from('community_sightings').insert({
-      species: ['Dog', 'Cat', 'Other'].includes(this.pet.species) ? this.pet.species : 'Dog',
+      species: window.PawSpecies.normalize(this.pet.species, 'Dog'),
       breed: this.pet.breed || null,
       color: this.pet.color || null,
       photo_url: /^https:\/\//.test(this.pet.photo || '') ? this.pet.photo : null,

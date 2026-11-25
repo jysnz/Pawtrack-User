@@ -10,7 +10,7 @@ function testQCDistrictsBehavior() {
   const heatmapViewJs = fs.readFileSync(path.join(rootDir, 'js', 'views', 'heatmap-view.js'), 'utf8');
 
   // Load HeatmapView in virtual environment
-  const virtualWindow = {};
+  const virtualWindow = { PawSpecies: require(path.join(rootDir, '..', 'js', 'species.js')) };
   const fn = new Function('window', heatmapViewJs);
   fn(virtualWindow);
 

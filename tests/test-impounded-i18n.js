@@ -34,6 +34,7 @@ const sandbox = {
   console
 };
 sandbox.window.document = sandbox.document;
+sandbox.window.PawSpecies = require(path.join(__dirname, '..', 'js', 'species.js'));
 vm.createContext(sandbox);
 vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'js', 'views', 'impound-view.js'), 'utf8') + '\nthis.__View = ImpoundView;', sandbox);
 const view = new sandbox.__View();
@@ -56,7 +57,7 @@ assert(view.matches('max retr', ['Max', 'Golden Retriever']) === true, 'every wo
 assert(view.matches('max cat', ['Max', 'Golden Retriever']) === false, 'a word that is nowhere fails the match');
 console.log('[PASS] search matching');
 
-assert(view.speciesOf({ species: 'Dog' }) === 'Dog' && view.speciesOf({ species: 'Cat' }) === 'Cat' && view.speciesOf({ species: 'Rabbit' }) === 'Other', 'species buckets');
+assert(view.speciesOf({ species: 'Dog' }) === 'Dog' && view.speciesOf({ species: 'Cat' }) === 'Cat' && view.speciesOf({ species: 'Rabbit' }) === 'Rabbit' && view.speciesOf({ species: 'Bird' }) === 'Bird' && view.speciesOf({ species: 'Axolotl' }) === 'Other', 'species buckets');
 assert(view.safePhoto('https://x/y.jpg') === 'https://x/y.jpg' && view.safePhoto('javascript:alert(1)') === '' && view.safePhoto('http://x/y.jpg') === '', 'only https photos are used');
 assert(view.esc('<img src=x onerror=1>"\'&') === '&lt;img src=x onerror=1&gt;&quot;&#39;&amp;', 'text is escaped before it goes into the page');
 console.log('[PASS] photo and text safety');

@@ -574,7 +574,7 @@ class NfcLinkFlow {
     const { data, error } = await client.from('registered_pets').insert({
       owner_id: user.id,
       name: draft.name,
-      species: ['Dog', 'Cat', 'Other'].includes(draft.species) ? draft.species : 'Other',
+      species: window.PawSpecies.normalize(draft.species),
       breed: draft.breed,
       gender: draft.gender,
       color: draft.color,

@@ -274,6 +274,19 @@ class ReportManager {
       missingDateInput.value = now.toISOString().slice(0, 16);
     }
 
+    if (prefill.missingDraft && document.getElementById('report-missing-pet-select')?.value === String(petId)) {
+      const draft = prefill.missingDraft;
+      const fields = [
+        ['report-missing-location', draft.location, 300],
+        ['report-missing-date', draft.lastSeenAt, 16],
+        ['report-missing-custom-desc', draft.description, 300],
+        ['report-missing-condition', draft.condition, 400],
+      ];
+      for (const [id, value, limit] of fields) {
+        const field = document.getElementById(id);
+        if (field && typeof value === 'string' && value) field.value = value.slice(0, limit);
+      }
+    }
   }
 
   // Leaves the report page and goes back to where the person came from
@@ -827,7 +840,7 @@ class ReportManager {
         const pet = pets.find(p => String(p.id) === String(petId));
         if (pet) {
           if (speciesSelect && pet.species) {
-            speciesSelect.value = (pet.species === 'Cat' ? 'Cat' : pet.species === 'Dog' ? 'Dog' : 'Other');
+            speciesSelect.value = window.PawSpecies.normalize(pet.species);
           }
           if (breedInput && pet.breed) {
             breedInput.value = pet.breed;
@@ -841,7 +854,7 @@ class ReportManager {
         const pets = window.pawStore.getPets();
         if (pets && pets.length > 0) {
           const pet = pets[0];
-          if (speciesSelect && pet.species) speciesSelect.value = (pet.species === 'Cat' ? 'Cat' : pet.species === 'Dog' ? 'Dog' : 'Other');
+          if (speciesSelect && pet.species) speciesSelect.value = window.PawSpecies.normalize(pet.species);
           if (breedInput && pet.breed) breedInput.value = pet.breed;
           if (nfcInput && pet.nfcTag) nfcInput.value = pet.nfcTag;
         }
@@ -1700,7 +1713,7 @@ class ReportManager {
       return;
     }
 
-    const finalPhoto = this.uploadedPhotoData || (species === 'Cat' ? 'https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?w=500' : 'https://images.unsplash.com/photo-1543466835-00a7907e9de1?w=500');
+    const finalPhoto = this.uploadedPhotoData || (species === 'Cat' ? 'https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?w=500' : species === 'Dog' ? 'https://images.unsplash.com/photo-1543466835-00a7907e9de1?w=500' : 'https://images.unsplash.com/photo-1548767797-d8c844163c4c?w=500');
 
     const sightingId = 'SIGHT-' + Date.now().toString().slice(-6);
 

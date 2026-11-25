@@ -1507,9 +1507,10 @@ class PublicView {
   }
 
   // "Mark as found" for the guardian's own missing pet: confirm, then take it off the missing map
-  openMarkFound(petId) {
+  openMarkFound(petId, draft = {}) {
     const pet = window.pawStore.getMapPets().find(p => String(p.id) === String(petId));
     if (!pet || !window.pawStore.isMyPet(pet)) return;
+    if (draft.reportId && (pet.status !== 'lost' || pet.missingReportId !== draft.reportId)) return false;
     this.map?.closePopup();
     let modal = document.getElementById('mark-found-modal');
     if (!modal) {
@@ -1519,6 +1520,7 @@ class PublicView {
       modal.addEventListener('mousedown', (e) => { if (e.target === modal) window.notifManager.closeModal('mark-found-modal'); });
       document.body.appendChild(modal);
     }
+    modal.dataset.reportId = draft.reportId || '';
     const esc = (v) => String(v == null ? '' : v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
     const seen = pet.lastSeenDate ? this.getTimeAgo(pet.lastSeenDate) : '';
     modal.innerHTML = `
@@ -1548,7 +1550,7 @@ class PublicView {
               <span class="mf-num">1</span>
               <div><label for="mark-found-condition">How is ${esc(pet.name)} now? *</label><small>The condition it was found in, for finders and shelters.</small></div>
             </header>
-            <textarea id="mark-found-condition" rows="3" maxlength="400" placeholder="e.g. Safe and healthy, a little hungry, small scratch on the front paw."></textarea>
+            <textarea id="mark-found-condition" rows="3" maxlength="400" placeholder="e.g. Safe and healthy, a little hungry, small scratch on the front paw.">${esc(draft.condition || '')}</textarea>
           </section>
 
           <section class="mf-step" id="mark-found-photo-field">
@@ -1605,6 +1607,8 @@ class PublicView {
       reader.readAsDataURL(file);
     });
     if (window.lucide) window.lucide.createIcons({ root: modal });
+    if (draft.reportId) modal.querySelector('#mark-found-condition')?.focus();
+    return true;
   }
 
   markFoundError(msg) {
@@ -1628,12 +1632,20 @@ class PublicView {
     if (btn) btn.disabled = true;
 
     const reportId = pet.unregistered ? pet.missingReportId : ((store.getActiveMissingReportForPet(pet.id) || {}).id || pet.missingReportId);
+    const expectedReport = document.getElementById('mark-found-modal')?.dataset.reportId;
+    if (expectedReport && (reportId !== expectedReport || pet.status !== 'lost')) {
+      if (btn) btn.disabled = false;
+      this.markFoundError('This report has changed. Open the latest report and try again.');
+      return;
+    }
     const proofUrl = await store.uploadPhoto(this.markFoundPhoto, 'reunions');
     if (!proofUrl) { if (btn) btn.disabled = false; this.markFoundError('The photo could not be uploaded. Please try again.'); return; }
     const sb = window.pawApp && window.pawApp.supabase;
     if (sb && reportId && store.isDbId(reportId)) {
       // Saved first: closing the report copies these to its reunited record
-      const { error: proofError } = await sb.from('missing_pets').update({ found_condition: condition.slice(0, 500), reunion_photo_url: proofUrl }).eq('id', reportId);
+      let proof = sb.from('missing_pets').update({ found_condition: condition.slice(0, 500), reunion_photo_url: proofUrl }).eq('id', reportId);
+      if (expectedReport) proof = proof.in('status', ['missing', 'sighted']).select('id').single();
+      const { error: proofError } = await proof;
       if (proofError) { if (btn) btn.disabled = false; this.markFoundError(`Could not save the details: ${proofError.message}`); return; }
     }
 
@@ -1943,25 +1955,16 @@ class PublicView {
       return `<div style="font-size:13px; color:var(--text-muted); text-align:center; padding:12px;">No pet was detected in this photo. Try a clearer photo of the animal.</div>`;
     }
 
-    // Map the AI traits onto the sighting shape that runAiPetMatch() already scores
-    const colors = (traits.colors || []).join(' ');
-    const sighting = {
-      species: traits.species && traits.species !== 'Unknown' ? traits.species : '',
-      breed: traits.breed && traits.breed !== 'Unknown' ? traits.breed : '',
-      color: [colors, traits.coatPattern || ''].join(' ').trim(),
-      distinctMarkings: traits.distinctMarkings || '',
-      comments: `${colors} ${traits.distinctMarkings || ''}`.trim()
-    };
-    const missingPets = window.pawStore.getMapPets().filter(p => p.status === 'lost');
-    const matches = window.pawStore.runAiPetMatch(sighting, missingPets).slice(0, 5);
-    const checkedLabel = `${missingPets.length} missing pet${missingPets.length === 1 ? '' : 's'}`;
+    const { matches, checked } = window.petAI.matchMissing(traits, 5, { includeOwn: true });
+    const checkedLabel = `${checked} missing pet${checked === 1 ? '' : 's'}`;
+    const colors = Array.isArray(traits.colors) ? traits.colors.join(', ') : '';
 
     const summary = `
       <div style="background:var(--bg-surface, #23130a); border:1px solid var(--border-subtle, rgba(234, 157, 30, 0.2)); border-radius:10px; padding:10px 12px; font-size:12px; margin-bottom:10px;">
         <div style="font-weight:700; color:var(--text-main); margin-bottom:4px;">AI reading of your photo</div>
         <div style="color:var(--text-muted);">${this.escapeHtml(traits.summary || '')}</div>
         <div style="color:var(--text-muted); margin-top:4px;">
-          <strong>${this.escapeHtml(traits.species || 'Unknown')}</strong> · ${this.escapeHtml(traits.breed || 'Unknown breed')} · ${this.escapeHtml((traits.colors || []).join(', ') || 'unknown colors')}
+          <strong>${this.escapeHtml(traits.species || 'Unknown')}</strong> · ${this.escapeHtml(traits.breed || 'Unknown breed')} · ${this.escapeHtml(colors || 'unknown colors')}
         </div>
       </div>
     `;

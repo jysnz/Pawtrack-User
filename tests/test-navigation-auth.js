@@ -10,7 +10,7 @@ const path = require('path');
 
 console.log('=== Running Test: Navigation Auth Restriction ===\n');
 
-const appJs = fs.readFileSync(path.join(__dirname, '..', 'js', 'app.js'), 'utf8');
+const appJs = fs.readFileSync(path.join(__dirname, '..', 'js', 'app.js'), 'utf8').replace(/\r\n/g, '\n');
 const indexHtml = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
 
 // 1. Tabs in index.html
@@ -36,6 +36,7 @@ const App = new Function(`return class TestApp { ${methods} };`)();
 // 3. A small fake page
 let currentUser = null;
 let currentHash = '#owner';
+let chatUser;
 const toasts = [];
 const mkBtn = (view) => ({ dataset: { view }, style: { display: '' }, classList: { classes: new Set(), add(c) { this.classes.add(c); }, remove(c) { this.classes.delete(c); }, contains(c) { return this.classes.has(c); } }, querySelectorAll: () => [] });
 const tabs = navTabs.map(mkBtn);
@@ -47,6 +48,7 @@ const mockDom = {
 global.window = {
   location: { get hash() { return currentHash; }, set hash(v) { currentHash = v.startsWith('#') ? v : '#' + v; } },
   pawStore: { getGoogleUser: () => currentUser, getPets: () => [], getNotifications: () => [] },
+  chatView: { setUser(id) { chatUser = id; } },
   notifManager: { showToast: (msg, type) => toasts.push({ msg, type }) }
 };
 global.document = {
@@ -65,7 +67,8 @@ const visible = () => tabs.filter((b) => b.style.display !== 'none').map((b) => 
 // TEST 1: signed out
 console.log('\n--- Test 1: Logged-out tab visibility ---');
 currentUser = null;
-try { app.updateGoogleAuthUI(); } catch (e) { /* the avatar/greeting helpers are not under test */ }
+app.updateGoogleAuthUI();
+assert.equal(chatUser, null, 'The assistant receives no user when signed out');
 assert.deepStrictEqual(visible(), ['owner', 'found', 'impound'], `Signed-out visitors see Missing Pets, Found a Pet and Impound only (saw ${visible()})`);
 console.log('[PASS] Visible when logged out:', visible().join(', '));
 
@@ -90,8 +93,9 @@ console.log('[PASS] #owner, #found and #impound stay open to visitors');
 
 // TEST 3: signed in
 console.log('\n--- Test 3: Logged-in tab visibility and navigation ---');
-currentUser = { name: 'Dariush', shortName: 'Dariush', email: 'dariush@gmail.com', avatarInitial: 'D' };
-try { app.updateGoogleAuthUI(); } catch (e) { /* see above */ }
+currentUser = { id: 'guardian', name: 'Dariush', shortName: 'Dariush', email: 'dariush@gmail.com', avatarInitial: 'D' };
+app.updateGoogleAuthUI();
+assert.equal(chatUser, 'guardian', 'The assistant receives the active guardian ID');
 assert.strictEqual(visible().length, navTabs.length, `All ${navTabs.length} tabs are visible when logged in (saw ${visible()})`);
 ['pets', 'sightings', 'report', 'violations', 'settings'].forEach((view) => {
   currentHash = '#' + view; app.handleRoute();

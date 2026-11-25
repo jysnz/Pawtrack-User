@@ -300,7 +300,7 @@ class PetsView {
           </div>
           <div class="vax-field" id="pe-species-field">
             <label for="pe-species">Species *</label>
-            <select id="pe-species">${options(['Dog', 'Cat', 'Other'], pet.species)}</select>
+            <select id="pe-species">${options(window.PawSpecies.KEYS, window.PawSpecies.normalize(pet.species))}</select>
             <span class="vax-error">Choose the species.</span>
           </div>
         </div>

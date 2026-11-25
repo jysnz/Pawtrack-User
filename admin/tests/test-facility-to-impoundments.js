@@ -3,6 +3,7 @@
 const path = require('path');
 const fs = require('fs');
 global.window = global;
+require(require('path').join(__dirname, '..', '..', 'js', 'species.js'));
 const clicks = {};
 const stub = () => ({ addEventListener(ev, fn) { clicks[ev] = fn; }, focus() {}, querySelector: stub, querySelectorAll: () => [], classList: { toggle() {} } });
 const rows = [];
@@ -55,7 +56,7 @@ const check = (n, ok, x) => { console.log(`${ok ? '[PASS]' : '[FAIL]'} ${n}${!ok
   check('the facility chooser has that facility selected', /<option value="SUB" selected>Sub One<\/option>/.test(p) && /<option value="MAIN" >Main Shelter<\/option>/.test(p));
   check('it has a Facilities button and a Scan & intake button', /id="btn-facilities"[\s\S]*Facilities/.test(p) && /Scan &amp; intake/.test(p) && /href="#shelters"/.test(p));
   check('it shows that facility\'s pet', /Rex/.test(p));
-  check('plain column names, no jargon', /<th>Claim window \(72h\)<\/th>/.test(p) && /<th[^>]*>Actions<\/th>/.test(p) && !/Operations|Condition \/ Officer/.test(p));
+  check('plain wording, no jargon: the claim period and a More actions menu', /Claim period/.test(p) && /aria-label="More actions for/.test(p) && !/Operations|Condition \/ Officer/.test(p));
   check('release says what it does', /Release to owner/.test(p) && /Give the owner 24 more hours/.test(p));
   check('the facility chooser shows whenever there is more than one facility', /id="imp-facility-select"/.test(p));
 
@@ -83,8 +84,9 @@ const check = (n, ok, x) => { console.log(`${ok ? '[PASS]' : '[FAIL]'} ${n}${!ok
   global.document = { createElement: () => wrap, body: { appendChild: (n) => body.push(n) }, addEventListener: (ev, fn) => { keydown = fn; }, removeEventListener() {} };
   const src = read('../js/admin-app.js');
   const start = src.indexOf('  confirmDialog(');
-  const end = src.indexOf('  // A dialog can ask to be confirmed');
-  const fn = eval('(function(){ return { ' + src.slice(start, end).trim().replace(/,\s*$/, '') + ' } })()').confirmDialog;
+  const end = src.indexOf('  showDialog(');
+  // the slice stops before showDialog, so drop the comment lines that introduce it
+  const fn = eval('(function(){ return { ' + src.slice(start, end).trim().replace(/(\s*\/\/[^\n]*)+\s*$/, '').replace(/,\s*$/, '') + ' } })()').confirmDialog;
   let p1 = fn({ title: 'Leave <b>?', message: 'm', confirmLabel: 'Go', danger: true });
   check('the dialog is added to the page, escapes its text and marks danger', body.length === 1 && /Leave &lt;b&gt;\?/.test(wrap.innerHTML) && /btn-danger/.test(wrap.innerHTML));
   wrap.listeners.click({ target: { closest: () => ({ getAttribute: () => 'yes' }) } });
